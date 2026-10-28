@@ -1,6 +1,6 @@
 {
   "name": "@hopeplayer/vue",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Thin Vue 3 wrapper around <hope-player> (@hopeplayer/core) — prop/event bridge only, no state duplication",
   "repository": {
     "type": "git",

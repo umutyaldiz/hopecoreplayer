@@ -1,6 +1,6 @@
 {
   "name": "@hopeplayer/react",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Thin React wrapper around <hope-player> (@hopeplayer/core) — prop/event bridge only, no state duplication",
   "repository": {
     "type": "git",
