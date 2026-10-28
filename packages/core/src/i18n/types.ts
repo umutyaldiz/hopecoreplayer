@@ -33,6 +33,8 @@ export interface HopeLocaleStrings {
     errorDecode: string;
     errorSrcNotSupported: string;
     errorGeneric: string;
+    /** Hata ekranındaki kod satırının öneki (ör. "Hata kodu 4"). */
+    errorCode: string;
     countdownRemaining: string;
     geoDefaultWarning: string;
     geoUnknownCountry: string;
@@ -47,6 +49,9 @@ export interface HopeLocaleStrings {
     qrResumeMenuLabel: string;
     qrResumeOn: string;
     qrResumeOff: string;
+    pauseAdLabel: string;
+    pauseAdClose: string;
+    pauseAdResume: string;
     markerLearnMore: string;
     markerContinue: string;
     playlistTitle: string;

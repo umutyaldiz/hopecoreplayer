@@ -198,6 +198,109 @@ async function testSeekThumbAndHoverDot(browser) {
     await page.close();
 }
 
+async function testMediaElementIosAttrsAndErrors(browser) {
+    console.log('\n[1e] iOS: playsinline + webkit-playsinline, preload (vars. metadata), kaynaksız hata ekranı açmaz, "Tekrar dene" kaynağı yeniden yükler');
+    const page = await openBase(browser);
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1, { timeout: 5000 });
+    const attrs = await page.evaluate(() => {
+        const v = document.getElementById('player').shadowRoot.querySelector('video');
+        return { playsinline: v.hasAttribute('playsinline') && v.playsInline, webkit: v.hasAttribute('webkit-playsinline'), preload: v.preload };
+    });
+    ok(attrs.playsinline && attrs.webkit, `playsinline + webkit-playsinline var (${JSON.stringify(attrs)})`);
+    ok(attrs.preload === 'metadata', `preload varsayılanı "metadata" (${attrs.preload})`);
+    await page.evaluate(() => {
+        document.getElementById('player').options = { src: '/sample.mp4', muted: true, preload: 'none' };
+    });
+    await page.waitForTimeout(150);
+    ok((await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').preload)) === 'none', 'options.preload uygulanıyor ("none")');
+
+    const errorVisible = () => page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="error-screen"]').hasAttribute('data-visible'));
+    // Kaynak yokken gelen hata (iOS'ta kaynak değişimi sırasında kod 4) → ekran AÇILMAMALI.
+    await page.evaluate(() => {
+        const v = document.getElementById('player').shadowRoot.querySelector('video');
+        const src = v.getAttribute('src');
+        v.removeAttribute('src');
+        v.dispatchEvent(new Event('error'));
+        v.setAttribute('src', src);
+    });
+    ok(!(await errorVisible()), 'kaynak yokken gelen hata olayı hata ekranını açmıyor');
+    // Gerçek kaynak hatası → açılmalı; "Tekrar dene" kaynağı SourceManager üzerinden yeniden yüklemeli.
+    await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').dispatchEvent(new Event('error')));
+    ok(await errorVisible(), 'kaynak varken gelen hata ekranı açıyor');
+    const onTop = await page.evaluate(() => {
+        const host = document.getElementById('player');
+        const r = host.getBoundingClientRect();
+        const el = host.shadowRoot.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return !!el?.closest('[part="error-screen"]');
+    });
+    ok(onTop, 'hata ekranı merkez play butonunun/kontrollerin ÜSTÜNDE');
+    await page.evaluate(() => {
+        const root = document.getElementById('player').shadowRoot;
+        root.querySelector('video').removeAttribute('src');
+        root.querySelector('[part="error-screen"] button').click();
+    });
+    await page.waitForTimeout(200);
+    const after = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').getAttribute('src'));
+    ok(!(await errorVisible()) && /sample\.mp4$/.test(after ?? ''), `"Tekrar dene" ekranı kapatıp kaynağı yeniden yükledi (src=${after})`);
+    await page.close();
+}
+
+async function testChromeStaysWhileHovered(browser) {
+    console.log('\n[1f] İstek üzerine: fare player üzerindeyken kontroller gizlenmiyor, çıkınca gizleniyor');
+    const page = await openBase(browser);
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1, { timeout: 5000 });
+    const box = await page.evaluate(() => { const r = document.getElementById('player').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 3 }; });
+    await page.mouse.move(box.x, box.y);
+    await page.evaluate(async () => { const v = document.getElementById('player').shadowRoot.querySelector('video'); v.muted = true; await v.play().catch(() => {}); });
+    await page.waitForTimeout(2500);
+    const chromeOpacity = () => page.evaluate(() => getComputedStyle(document.getElementById('player').shadowRoot.querySelector('[part="control-bar"]').parentElement).opacity);
+    ok((await chromeOpacity()) === '1', 'fare üzerinde 2,5 sn dururken kontroller açık kaldı');
+    await page.mouse.move(2, 2);
+    await page.waitForTimeout(1900);
+    ok((await chromeOpacity()) === '0', 'fare çıkınca kontroller gizlendi');
+    await page.close();
+}
+
+async function testChromeStaysWhenPaused(browser) {
+    console.log('\n[1g] İstek üzerine: oynarken kurulan gizleme zamanlayıcısı varken durdurulursa kontroller açık kalıyor');
+    const page = await openBase(browser);
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1, { timeout: 5000 });
+    await page.mouse.move(2, 2);
+    await page.evaluate(async () => { const v = document.getElementById('player').shadowRoot.querySelector('video'); v.muted = true; await v.play().catch(() => {}); });
+    await page.waitForTimeout(600); // gizleme zamanlayıcısı (1200ms) beklemede
+    await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').pause());
+    await page.waitForTimeout(1500);
+    const opacity = await page.evaluate(() => getComputedStyle(document.getElementById('player').shadowRoot.querySelector('[part="control-bar"]').parentElement).opacity);
+    ok(opacity === '1', `durdurulunca kontroller açık kaldı (opacity ${opacity})`);
+    await page.close();
+}
+
+async function testFullscreenContainCentered(browser) {
+    console.log('\n[10b] İstek üzerine: tam ekranda video ekrana tam sığıyor (contain), dikeyde/yatayda ortalı, kontroller ekran içinde');
+    for (const [w, h, name] of [[390, 844, 'dikey'], [1600, 600, 'geniş yatay']]) {
+        const page = await browser.newPage({ viewport: { width: w, height: h } });
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video')?.readyState >= 1);
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[aria-label="Tam ekran"]').click());
+        await page.waitForTimeout(600);
+        const r = await page.evaluate(() => {
+            const root = document.getElementById('player').shadowRoot;
+            const v = root.querySelector('video');
+            const a = root.querySelector('.video-area').getBoundingClientRect();
+            const bar = root.querySelector('[part="control-bar"]').getBoundingClientRect();
+            const s = Math.min(a.width / v.videoWidth, a.height / v.videoHeight);
+            return { fills: Math.round(a.width) === innerWidth && Math.round(a.height) === innerHeight, fit: getComputedStyle(v).objectFit, offX: (a.width - v.videoWidth * s) / 2, offY: (a.height - v.videoHeight * s) / 2, barInside: bar.bottom <= innerHeight + 1 };
+        });
+        ok(r.fills && r.fit === 'contain' && r.barInside, `${name}: alan ekranı dolduruyor, contain, kontroller ekran içinde`);
+        ok(r.offX >= 0 && r.offY >= 0 && (r.offX < 1 || r.offY < 1), `${name}: görüntü tek eksende tam sığıp diğerinde ortalı (x ${r.offX.toFixed(0)} / y ${r.offY.toFixed(0)})`);
+        await page.evaluate(() => document.exitFullscreen());
+        await page.waitForTimeout(400);
+        const after = await page.evaluate(() => { const a = document.getElementById('player').shadowRoot.querySelector('.video-area').getBoundingClientRect(); return Math.abs(a.width / a.height - 16 / 9) < 0.02; });
+        ok(after, `${name}: tam ekrandan çıkınca 16:9 düzene döndü`);
+        await page.close();
+    }
+}
+
 async function testChipSurfaceChangesPerPreset(browser) {
     // Renk-varyantı preset'i yok (accent her preset'te beyaz) — preset'ler
     // STİLİ değiştiriyor. glass-dark'ın asıl farkı buton grubu yüzeyinin
@@ -443,6 +546,9 @@ async function testFullscreenEnlargesControls(browser) {
         await testSeekBarHoverTime(browser);
         await testMiniProgress(browser);
         await testSeekThumbAndHoverDot(browser);
+        await testMediaElementIosAttrsAndErrors(browser);
+        await testChromeStaysWhileHovered(browser);
+        await testChromeStaysWhenPaused(browser);
         await testChipSurfaceChangesPerPreset(browser);
         await testOptionsDoesNotClearAttributeTheme(browser);
         await testExplicitOptionsThemeOverridesAttribute(browser);
@@ -453,6 +559,7 @@ async function testFullscreenEnlargesControls(browser) {
         await testControlBarHasNoBackgroundButGroupsDo(browser);
         await testVolumeSliderAlignsWithSettingsPanel(browser);
         await testFullscreenEnlargesControls(browser);
+        await testFullscreenContainCentered(browser);
     } finally {
         await browser.close();
     }

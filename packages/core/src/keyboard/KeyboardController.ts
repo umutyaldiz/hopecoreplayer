@@ -13,6 +13,9 @@ export class KeyboardController {
 
     private readonly onKeyDown = (e: KeyboardEvent): void => {
         if (e.defaultPrevented) return;
+        // Odaktaki bir butonda Space/Enter butonun kendisini çalıştırsın (ör. süre etiketi, ayarlar) — oynat/durdur değil.
+        const target = e.composedPath()[0];
+        if ((e.key === ' ' || e.key === 'Enter') && target instanceof HTMLButtonElement) return;
         const duration = this.video.duration;
 
         switch (e.key) {

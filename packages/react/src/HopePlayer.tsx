@@ -1,5 +1,5 @@
 /// <reference path="./jsx.d.ts" />
-'use client';
+// "use client" burada değil: bundler kaynak direktifini atıp uyarı veriyor — vite.config.ts banner'ı çıktının ilk satırına ekliyor.
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import type { CSSProperties } from 'react';

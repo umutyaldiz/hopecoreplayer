@@ -55,6 +55,13 @@ export interface SettingsToggleRow {
 type PanelId = 'main' | 'speed' | 'quality' | 'captions' | 'captions-size' | 'captions-bg' | 'captions-text' | `custom:${string}`;
 
 /** Ayarlar butonu + popup: ana liste (Hız/Kalite/Altyazı) → alt liste. */
+/** Menü ile buton arası boşluk ve player kenarına bırakılan pay (px). */
+const MENU_GAP_PX = 8;
+const MENU_EDGE_PX = 8;
+/** Panel yüksekliği: buton yanında bundan az yer varsa menü player kenarından açılır; üst sınır eski max-h-64. */
+const MENU_MIN_HEIGHT_PX = 100;
+const MENU_MAX_HEIGHT_PX = 256;
+
 export class SettingsMenu {
     readonly el: HTMLDivElement;
     private readonly button: HTMLButtonElement;
@@ -70,6 +77,9 @@ export class SettingsMenu {
     private captionAppearance: SettingsCaptionAppearance | null = null;
     private qrResumeToggle: SettingsToggleRow | null = null;
     private open = false;
+    /** Menü açılıp kapanınca — HopePlayerElement açıkken kontrolleri otomatik gizlemez. */
+    onOpenChange: ((open: boolean) => void) | null = null;
+    private readonly panelObserver: MutationObserver;
     private currentPanel: PanelId = 'main';
     private submenus: SettingsSubmenuDef[] = [];
 
@@ -93,6 +103,9 @@ export class SettingsMenu {
         this.panel = document.createElement('div');
         this.panel.className =
             'hp-chip hp-chip-panel hp:hidden hp:absolute hp:bottom-full hp:right-0 hp:mb-2 hp:w-48 hp:max-h-64 hp:overflow-y-auto hp:text-sm hp:py-1';
+        // Alt menüye geçince içerik yüksekliği değişir — yerleşimi yeniden hesapla.
+        this.panelObserver = new MutationObserver(this.fitToPlayer);
+        this.panelObserver.observe(this.panel, { childList: true });
 
         this.el.appendChild(this.button);
         this.el.appendChild(this.panel);
@@ -159,11 +172,50 @@ export class SettingsMenu {
         this.currentPanel = 'main';
         this.panel.classList.remove('hp:hidden');
         this.renderMain();
+        this.fitToPlayer();
+        this.onOpenChange?.(true);
+    }
+
+    get isOpen(): boolean {
+        return this.open;
+    }
+
+    /**
+     * Yön + yükseklik player'a göre: kompakt düzende (buton üst bardaysa) aşağı açılır; her iki yönde de
+     * yükseklik player içinde kalan alanla sınırlı — küçük player'da menü dışarı taşmaz, kendi içinde kayar.
+     */
+    private readonly fitToPlayer = (): void => {
+        if (!this.open) return;
+        const area = this.el.closest('.video-area');
+        if (!area) return;
+        const a = area.getBoundingClientRect();
+        const b = this.button.getBoundingClientRect();
+        const anchor = this.el.getBoundingClientRect();
+        const drop = !!this.el.closest('.hp-top-bar');
+        this.panel.toggleAttribute('data-drop', drop);
+        Object.assign(this.panel.style, { top: '', bottom: '', marginTop: '', marginBottom: '' });
+
+        const content = this.panel.scrollHeight;
+        const room = (drop ? a.bottom - b.bottom : b.top - a.top) - MENU_GAP_PX - MENU_EDGE_PX;
+        if (content <= room || room >= MENU_MIN_HEIGHT_PX) {
+            this.panel.style.maxHeight = `${Math.min(MENU_MAX_HEIGHT_PX, room)}px`;
+            return;
+        }
+        // Butonun yanında yer yok (küçük player) — menü player'ın kenarından başlayıp tüm yüksekliği kullanır.
+        this.panel.style.maxHeight = `${Math.min(MENU_MAX_HEIGHT_PX, a.height - 2 * MENU_EDGE_PX)}px`;
+        if (drop) Object.assign(this.panel.style, { top: `${a.top + MENU_EDGE_PX - anchor.top}px`, marginTop: '0' });
+        else Object.assign(this.panel.style, { bottom: `${anchor.bottom - (a.bottom - MENU_EDGE_PX)}px`, marginBottom: '0' });
+    };
+
+    /** Düzen değişince (ör. kompakt ↔ normal) açık menüyü kapat — eski konumunda asılı kalmasın. */
+    closeMenu(): void {
+        if (this.open) this.close();
     }
 
     private close(): void {
         this.open = false;
         this.panel.classList.add('hp:hidden');
+        this.onOpenChange?.(false);
     }
 
     private readonly onDocumentClick = (e: MouseEvent): void => {
@@ -388,5 +440,6 @@ export class SettingsMenu {
 
     destroy(): void {
         document.removeEventListener('click', this.onDocumentClick, true);
+        this.panelObserver.disconnect();
     }
 }

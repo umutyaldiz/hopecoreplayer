@@ -191,6 +191,7 @@ export class ControlBar {
         const compact = width < COMPACT_MAX_WIDTH;
         if (compact === this.compact) return;
         this.compact = compact;
+        this.settingsMenu.closeMenu();
         this.el.toggleAttribute('data-compact', compact);
         // Video alanı da bilsin — altyazı boyutu küçük player'da küçülüyor (tailwind.css `.video-area[data-compact]`).
         this.el.closest('.video-area')?.toggleAttribute('data-compact', compact);
@@ -262,7 +263,7 @@ export class ControlBar {
         return { btn, icon };
     }
 
-    /** Plugin'lerin (live-wall-clock vb.) kontrol çubuğuna buton olmayan bir element (ör. saat göstergesi) eklemesi için. */
+    /** Süre etiketine tıklama: geçen süre ↔ kalan süre. */
     private readonly onTimeClick = (e: MouseEvent): void => {
         e.stopPropagation();
         this.toggleTimeMode();
@@ -283,6 +284,7 @@ export class ControlBar {
         return this.showRemaining;
     }
 
+    /** Plugin'lerin (live-wall-clock vb.) kontrol çubuğuna buton olmayan bir element (ör. saat göstergesi) eklemesi için. */
     addElement(el: HTMLElement): void {
         this.row.insertBefore(el, this.extraButtonAnchor);
     }
@@ -337,7 +339,9 @@ export class ControlBar {
             const duration = this.video.duration;
             const current = this.video.currentTime;
             if (this.showRemaining) {
-                const remaining = Math.max(0, (Number.isFinite(duration) ? duration : 0) - current);
+                // Görünen tam saniyelerden: ⌊süre⌋ − ⌊geçen⌋ — iki modda gösterilen değerlerin toplamı her zaman görünen süreyi tutar.
+                const total = Number.isFinite(duration) ? Math.floor(duration) : 0;
+                const remaining = Math.max(0, total - Math.floor(current));
                 this.timeLabel.textContent = `-${formatTime(remaining)} / ${formatTime(duration)}`;
             } else {
                 this.timeLabel.textContent = `${formatTime(current)} / ${formatTime(duration)}`;

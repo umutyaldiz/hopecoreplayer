@@ -145,6 +145,7 @@ hope-player::part(center-play-button) { /* ... */ }
 | `top-bar` | Compact layout only: top-right bar the right button group (settings, plugin buttons, PIP) moves into; fullscreen stays bottom-right |
 | `unmute-badge` | Touch devices only: "Unmute" pill shown while a playing video is muted (the volume button is hidden on touch) |
 | `seek-bar` | The scrubber |
+| `error-screen` | Error overlay shown when the media fails (with a "Retry" button) |
 | `mini-progress` | Thin 1px edge-to-edge progress line at the bottom while the controls are hidden (`miniProgress: true`) |
 | `seek-time` | Time shown above the seek bar while hovering (default, no plugin needed; hidden when sprite-thumbnails/segments show their own time, and on live streams). Follows the `--hp-tooltip-*` tokens |
 | `play-pause-button` | Play/pause icon button |
@@ -166,6 +167,7 @@ hope-player::part(center-play-button) { /* ... */ }
 | `tooltip` | The hover tooltip popup (`controls/Tooltip.ts`) — shown for any `button`/slider with an `aria-label` |
 | `caption-layer` / `caption-bubble` | Subtitle overlay layer / the draggable caption bubble (`subtitles/CaptionRenderer.ts`) |
 | `qr-resume-screen` | QR-resume plugin's "continue on your phone" overlay |
+| `pause-ad` | Pause-ad plugin's right-hand display ad panel (header, ad slot, "Resume video" button) |
 
 ---
 

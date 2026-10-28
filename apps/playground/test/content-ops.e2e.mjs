@@ -473,6 +473,62 @@ async function testDubbing(browser) {
     await page.close();
 }
 
+async function testSubtitlesWithoutTrackElements(browser) {
+    console.log('\n[SUB] Altyazılar <track> elementi olmadan yükleniyor (iOS out-of-band iz kod 4 hatası), kaynak değişince havuz yeniden kullanılıyor');
+    const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+    try {
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+        const subs = [
+            { src: '/sample.vtt', label: 'Türkçe', srclang: 'tr', default: true },
+            { src: '/sample.en.vtt', label: 'English', srclang: 'en' },
+        ];
+        const state = () =>
+            page.evaluate(() => {
+                const v = document.getElementById('player').shadowRoot.querySelector('video');
+                const tracks = Array.from(v.textTracks).filter((t) => t.kind === 'subtitles');
+                return {
+                    trackEls: v.querySelectorAll('track').length,
+                    tracks: tracks.map((t) => {
+                        const mode = t.mode;
+                        if (mode === 'disabled') t.mode = 'hidden';
+                        const n = t.cues?.length ?? 0;
+                        t.mode = mode;
+                        return `${t.language}:${mode}:${n}`;
+                    }),
+                };
+            });
+
+        await page.evaluate((subtitles) => { document.getElementById('player').options = { src: '/sample.mp4', muted: true, subtitles }; }, subs);
+        await page.waitForTimeout(800);
+        let st = await state();
+        ok(st.trackEls === 0, `video'da <track> elementi yok (${st.trackEls})`);
+        ok(JSON.stringify(st.tracks) === JSON.stringify(['tr:hidden:5', 'en:disabled:5']), `cue'lar fetch ile yüklendi ${JSON.stringify(st.tracks)}`);
+
+        await page.evaluate(async () => {
+            const v = document.getElementById('player').shadowRoot.querySelector('video');
+            v.currentTime = 1;
+            await new Promise((r) => setTimeout(r, 400));
+        });
+        const caption = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-caption-bubble')?.textContent?.trim());
+        ok(/volkanik/.test(caption ?? ''), `altyazı ekranda (${caption})`);
+
+        // Aynı izlerle tekrar kur → havuz yeniden kullanılır, iz sayısı artmaz.
+        await page.evaluate((subtitles) => { document.getElementById('player').options = { src: '/sample.mp4', muted: true, subtitles }; }, subs);
+        await page.waitForTimeout(800);
+        st = await state();
+        ok(st.tracks.length === 2 && JSON.stringify(st.tracks) === JSON.stringify(['tr:hidden:5', 'en:disabled:5']), `yeniden kurulumda iz çoğalmadı, cue'lar çiftlenmedi ${JSON.stringify(st.tracks)}`);
+
+        // Altyazısız kaynağa geçiş → izler kapalı ve boş.
+        await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4', muted: true }; });
+        await page.waitForTimeout(500);
+        st = await state();
+        ok(JSON.stringify(st.tracks) === JSON.stringify(['tr:disabled:0', 'en:disabled:0']), `altyazısız kaynakta izler kapalı ve boş ${JSON.stringify(st.tracks)}`);
+    } finally {
+        await page.close();
+    }
+}
+
 async function testQrResume(browser) {
     console.log('\n[9] QrResume: yeterince izlenmiş noktada duraklatınca QR gösteriyor, "Devam Et"/"Bir daha gösterme" + ?vtime= ile geri dönüş çalışıyor mu?');
     const page = await openFeature(browser, 'qr-resume');
@@ -598,6 +654,7 @@ async function testQrResume(browser) {
         await testRedirectScreen(browser);
         await testDubbing(browser);
         await testQrResume(browser);
+        await testSubtitlesWithoutTrackElements(browser);
     } finally {
         await browser.close();
     }

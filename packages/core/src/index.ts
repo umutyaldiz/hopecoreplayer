@@ -5,6 +5,7 @@ if (typeof window !== 'undefined' && !customElements.get('hope-player')) {
 }
 
 export { HopePlayerElement };
+export type { PlaybackEngineInfo } from './hls/SourceManager';
 export type {
     HopeThemePreset,
     HopeLocale,
@@ -39,6 +40,7 @@ export type {
     RedirectScreenSuggestion,
     RedirectScreenOptions,
     QrResumeOptions,
+    PauseAdOptions,
     DubbingTrack,
     DubbingOptions,
     LiveWallClockOptions,

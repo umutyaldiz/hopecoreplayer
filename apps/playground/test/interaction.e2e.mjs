@@ -515,6 +515,29 @@ async function testTimeDisplayToggle(browser) {
     const apiText = await getTimeText();
     ok(apiText === '-0:10 / 0:15', `player.showRemainingTime = true ile kalan süre gösteriliyor: "${apiText}"`);
 
+    // Tutarlılık: 5.9 sn'de de geçen (0:05) + kalan toplamı görünen süreyi (0:15) tutmalı.
+    await page.evaluate(() => { document.getElementById('player').shadowRoot.querySelector('video').currentTime = 5.9; });
+    await page.waitForTimeout(150);
+    const at59 = await getTimeText();
+    ok(at59 === '-0:10 / 0:15', `5.9 sn'de kalan "-0:10" (0:05 + 0:10 = 0:15 tutarlı): "${at59}"`);
+
+    // Klavye: süre butonu odaktayken Space butonu çalıştırmalı (oynat/durdur DEĞİL).
+    await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="time-display"]').focus());
+    const pausedBefore = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').paused);
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(150);
+    const afterSpace = await page.evaluate(() => ({ text: document.getElementById('player').shadowRoot.querySelector('[part="time-display"]').textContent.trim(), paused: document.getElementById('player').shadowRoot.querySelector('video').paused }));
+    ok(afterSpace.text === '0:05 / 0:15' && afterSpace.paused === pausedBefore, `odakta Space süre modunu değiştirdi, videoyu oynatmadı ("${afterSpace.text}", paused=${afterSpace.paused})`);
+
+    // Kullanıcının seçimi başka bir option güncellemesiyle sıfırlanmamalı.
+    await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4', showRemainingTime: false }; });
+    await page.waitForTimeout(200);
+    await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="time-display"]').click());
+    await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4', showRemainingTime: false, muted: true }; });
+    await page.waitForTimeout(200);
+    const kept = await getTimeText();
+    ok(kept?.startsWith('-'), `başka bir option değişince kullanıcının seçtiği kalan süre modu korundu: "${kept}"`);
+
     await page.close();
 }
 

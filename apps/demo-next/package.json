@@ -10,8 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hopeplayer/core": "1.0.1",
-    "@hopeplayer/react": "1.0.1",
+    "@hopeplayer/core": "*",
+    "@hopeplayer/react": "*",
     "next": "^15.0.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"

@@ -365,6 +365,27 @@ export interface RedirectScreenOptions {
     suggestions?: RedirectScreenSuggestion[];
 }
 
+export interface PauseAdOptions {
+    /** GAM reklam birimi yolu, ör. '/6355419/Travel/Europe/France/Paris'. */
+    adUnitPath: string;
+    /** İstenecek display boyutları — yalnızca alana sığanlar istenir. Varsayılan [[300,250],[336,280],[250,250],[200,200]]. */
+    sizes?: Array<[number, number]>;
+    /** Slot düzeyinde key-value hedefleme. */
+    targeting?: Record<string, string | string[]>;
+    /** Duraklatmadan kaç ms sonra istek atılsın (seek/kısa duraklatmalarda boşuna istek atmamak için). Varsayılan 300. */
+    delayMs?: number;
+    /** Aynı reklam bu süre (sn) içinde tekrar duraklatılırsa yeni istek atmadan yeniden gösterilir. Varsayılan 30. */
+    refreshIntervalSec?: number;
+    /** Video alanı bu genişlikten (px) darsa reklam istenmez. Varsayılan 640. */
+    minPlayerWidth?: number;
+    /** Reklam paneli video alanının en fazla bu oranını kaplar. Varsayılan 0.5. */
+    maxWidthRatio?: number;
+    /** Panel başlığı — verilmezse dil dosyasındaki "Sponsorlu". */
+    label?: string;
+    /** Panelin altındaki "Videoya devam et" butonu. Varsayılan true. */
+    showResumeButton?: boolean;
+}
+
 export interface QrResumeOptions {
     /** QR'nin ortasına yerleştirilecek logo görseli (PNG/SVG URL) — verilmezse düz QR kod. */
     logo?: string;
@@ -416,6 +437,11 @@ export interface HopePlayerOptions {
     playbackRates?: number[];
     /** Fare video üzerinden ayrılınca kontrol çubuğunun/merkez play butonunun kaybolmadan önce beklediği süre (ms). Varsayılan 1200. */
     autoHideDelayMs?: number;
+    /**
+     * Sayfa açılınca ne kadarının önceden yükleneceği (HTML `preload`). Varsayılan `'metadata'`:
+     * yalnızca süre/boyut bilgisi — veri harcamaz, süre ve ilk kare hazır olur.
+     */
+    preload?: 'none' | 'metadata' | 'auto';
     /** Kontroller gizliyken videonun en altında kenardan kenara 1px ilerleme çizgisi. Varsayılan false. */
     miniProgress?: boolean;
     /** Süre göstergesinde kalan süreyi (-0:10 / 0:15) gösterme. Varsayılan false (geçen süre). */
@@ -460,6 +486,8 @@ export interface HopePlayerOptions {
     redirectScreen?: RedirectScreenOptions;
     /** Yeterince izlenmiş bir noktada duraklatılınca "telefonundan devam et" QR kodu. */
     qrResume?: QrResumeOptions;
+    /** Duraklatınca video sola sıkışır, sağda Google display (GPT) reklamı gösterilir. */
+    pauseAd?: PauseAdOptions;
     /** Ayarlar menüsüne "Ses/Dil" alt menüsü ekler — seçim TÜM kaynağı değiştirir (ayrı dublaj dosyaları). */
     dubbing?: DubbingOptions;
     /** Canlı yayında kontrol çubuğunda duvar saati + seekbar hover tooltip'inde "ne zaman izleniyor / canlıdan ne kadar geride". */
@@ -498,4 +526,5 @@ export type HopePlayerEventMap = {
     'hp:aderror': CustomEvent<{ message: string }>;
     'hp:itemchange': CustomEvent<{ index: number; source: 'playlist' | 'story' }>;
     'hp:sticky': CustomEvent<{ sticky: boolean; corner?: StickyCorner }>;
+    'hp:pausead': CustomEvent<{ state: 'shown' | 'hidden' | 'empty'; size?: [number, number]; reason?: 'closed' | 'resumed' }>;
 };

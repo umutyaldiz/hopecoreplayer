@@ -73,6 +73,82 @@ async function testCompactTouchLayout(browser) {
     await context.close();
 }
 
+async function testSettingsMenuStaysInside(browser) {
+    console.log('\n[1b] Mobil: üst bardaki ayarlar menüsü AŞAĞI açılıyor ve player içinde kalıyor; masaüstünde yukarı açılıyor');
+    const read = (page) =>
+        page.evaluate(() => {
+            const root = document.getElementById('player').shadowRoot;
+            const area = root.querySelector('.video-area').getBoundingClientRect();
+            const btn = root.querySelector('[aria-label="Ayarlar"]').getBoundingClientRect();
+            const panel = root.querySelector('.hp-chip-panel').getBoundingClientRect();
+            return {
+                below: panel.top >= btn.bottom - 1,
+                above: panel.bottom <= btn.top + 1,
+                inside: panel.top >= area.top - 1 && panel.bottom <= area.bottom + 1 && panel.left >= area.left - 1 && panel.right <= area.right + 1,
+                h: Math.round(panel.height),
+            };
+        });
+    {
+        const { context, page } = await openPlayer(browser, { width: 360, touch: true });
+        const pos = await page.evaluate(() => {
+            const r = document.getElementById('player').shadowRoot.querySelector('[aria-label="Ayarlar"]').getBoundingClientRect();
+            return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        });
+        await page.touchscreen.tap(pos.x, pos.y);
+        await page.waitForTimeout(250);
+        const m = await read(page);
+        ok(m.inside && !m.above, `mobil: menü yukarı (ekran dışına) değil, tamamen player içinde açılıyor (içeride=${m.inside}, h=${m.h}px)`);
+        await context.close();
+    }
+    {
+        const { context, page } = await openPlayer(browser, { width: 1000, touch: false });
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[aria-label="Ayarlar"]').click());
+        await page.waitForTimeout(250);
+        const d = await read(page);
+        ok(d.above && d.inside, `masaüstü: menü butonun üstünde ve player içinde (yukarı=${d.above}, içeride=${d.inside})`);
+        await context.close();
+    }
+}
+
+async function testChromeStaysWhileMenuOpen(browser) {
+    console.log('\n[1c] Mobil: ayarlar menüsü açıkken kontroller (ve menü) otomatik gizlenmiyor');
+    const { context, page } = await openPlayer(browser, { width: 360, touch: true });
+    await page.evaluate(async () => { const v = document.getElementById('player').shadowRoot.querySelector('video'); v.muted = true; await v.play().catch(() => {}); });
+    const pos = await page.evaluate(() => { const r = document.getElementById('player').shadowRoot.querySelector('[aria-label="Ayarlar"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    await page.touchscreen.tap(pos.x, pos.y);
+    await page.waitForTimeout(2500);
+    const st = await page.evaluate(() => {
+        const root = document.getElementById('player').shadowRoot;
+        return { chrome: getComputedStyle(root.querySelector('[part="control-bar"]').parentElement).opacity, menuOpen: !root.querySelector('.hp-chip-panel').classList.contains('hp:hidden') };
+    });
+    ok(st.chrome === '1' && st.menuOpen, `2,5 sn sonra kontroller ve menü hâlâ açık (opacity ${st.chrome}, menü ${st.menuOpen})`);
+    await context.close();
+}
+
+async function testIphoneFullscreenFallback(browser) {
+    console.log('\n[1d] iPhone: element tam ekranı yoksa tam ekran butonu <video>\'nun kendi tam ekranını açıyor');
+    const { context, page } = await openPlayer(browser, { width: 390, touch: true });
+    await page.evaluate(() => {
+        const host = document.getElementById('player');
+        const v = host.shadowRoot.querySelector('video');
+        // iPhone Safari: element tam ekranı yok, yalnızca video.webkitEnterFullscreen var.
+        Object.defineProperty(host, 'requestFullscreen', { value: undefined, configurable: true });
+        Object.defineProperty(host, 'webkitRequestFullscreen', { value: undefined, configurable: true });
+        v.webkitEnterFullscreen = () => {
+            window.__iosFs = true;
+            Object.defineProperty(v, 'webkitDisplayingFullscreen', { value: true, configurable: true });
+            v.dispatchEvent(new Event('webkitbeginfullscreen'));
+        };
+    });
+    const pos = await page.evaluate(() => { const r = document.getElementById('player').shadowRoot.querySelector('[aria-label="Tam ekran"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    await page.touchscreen.tap(pos.x, pos.y);
+    await page.waitForTimeout(200);
+    const r = await page.evaluate(() => ({ called: !!window.__iosFs, exitLabel: !!document.getElementById('player').shadowRoot.querySelector('[aria-label="Tam ekrandan çık"]') }));
+    ok(r.called, 'tam ekran butonu video.webkitEnterFullscreen() çağırdı');
+    ok(r.exitLabel, 'tam ekran durumu algılandı — buton "Tam ekrandan çık" oldu');
+    await context.close();
+}
+
 async function testUnmuteBadge(browser) {
     console.log('\n[2] Mobil: sessiz oynayan videoda "Sesi aç" rozeti görünüyor, dokununca ses açılıyor ve rozet kayboluyor');
     const { context, page } = await openPlayer(browser, { width: 360, touch: true });
@@ -169,6 +245,9 @@ async function testCaptionsDropToBottom(browser) {
     const browser = await chromium.launch();
     try {
         await testCompactTouchLayout(browser);
+        await testSettingsMenuStaysInside(browser);
+        await testChromeStaysWhileMenuOpen(browser);
+        await testIphoneFullscreenFallback(browser);
         await testUnmuteBadge(browser);
         await testDesktopLayoutAndResize(browser);
         await testCaptionsDropToBottom(browser);

@@ -536,6 +536,158 @@ async function testAdModeToolbar(browser) {
     });
 }
 
+// ── Pause reklamı (GPT mock'lu): gerçek gpt.js yerine sahte googletag; slotRenderEnded mock tarafından tetikleniyor. ──
+const MOCK_GPT_INIT = () => {
+    const listeners = [];
+    const slots = {};
+    window.__gpt = { define: 0, display: 0, refresh: 0, empty: window.__gptEmpty === true };
+    function render(slot) {
+        setTimeout(() => {
+            const empty = window.__gpt.empty;
+            const div = document.getElementById(slot.id);
+            if (div) div.innerHTML = empty ? '' : '<div class="mock-creative" style="width:300px;height:250px;background:#e33"></div>';
+            listeners.forEach((fn) => fn({ slot, isEmpty: empty, size: empty ? null : [300, 250] }));
+        }, 40);
+    }
+    const pubads = {
+        addEventListener: (type, fn) => listeners.push(fn),
+        removeEventListener: (type, fn) => {
+            const i = listeners.indexOf(fn);
+            if (i >= 0) listeners.splice(i, 1);
+        },
+        refresh: (list) => {
+            window.__gpt.refresh++;
+            list.forEach(render);
+        },
+        isInitialLoadDisabled: () => false,
+    };
+    window.googletag = {
+        cmd: { push: (fn) => fn() },
+        defineSlot: (path, sizes, id) => {
+            window.__gpt.define++;
+            window.__gpt.lastSizes = sizes;
+            window.__gpt.lastPath = path;
+            slots[id] = { id, addService() { return this; }, setTargeting() { return this; }, getSlotElementId: () => id };
+            return slots[id];
+        },
+        pubads: () => pubads,
+        enableServices: () => {},
+        display: (id) => {
+            window.__gpt.display++;
+            render(slots[id]);
+        },
+        destroySlots: () => true,
+    };
+};
+
+async function pausePage(browser, { width = 960, empty = false } = {}) {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    await page.route('https://securepubads.g.doubleclick.net/**', (r) => r.fulfill({ status: 200, contentType: 'application/javascript', body: '' }));
+    if (empty) await page.addInitScript(() => { window.__gptEmpty = true; });
+    await page.addInitScript(MOCK_GPT_INIT);
+    await page.goto(`${BASE}/`);
+    await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+    await page.evaluate((w) => {
+        const el = document.getElementById('player');
+        el.style.width = `${w}px`;
+        el.style.display = 'block';
+        window.__pauseEvents = [];
+        el.addEventListener('hp:pausead', (e) => window.__pauseEvents.push(e.detail));
+        el.options = { src: '/sample.mp4', muted: true, pauseAd: { adUnitPath: '/6355419/Travel/Europe/France/Paris', delayMs: 50 } };
+    }, width);
+    await page.waitForTimeout(400);
+    return page;
+}
+
+const pauseAdState = (page) =>
+    page.evaluate(() => {
+        const el = document.getElementById('player');
+        const root = el.shadowRoot;
+        const panel = root.querySelector('.hp-pause-ad');
+        const area = root.querySelector('.video-area');
+        const layer = root.querySelector('.media-layer');
+        const adDiv = el.querySelector('[slot="hp-pause-ad"]');
+        return {
+            open: panel?.hasAttribute('data-open') ?? false,
+            areaFlag: area.hasAttribute('data-pause-ad'),
+            layerRight: Math.round(area.getBoundingClientRect().right - layer.getBoundingClientRect().right),
+            panelW: Math.round(panel?.getBoundingClientRect().width ?? 0),
+            fit: getComputedStyle(root.querySelector('video')).objectFit,
+            slotted: !!adDiv?.assignedSlot,
+            creative: !!adDiv?.querySelector('.mock-creative'),
+            paused: root.querySelector('video').paused,
+            gpt: window.__gpt,
+            events: window.__pauseEvents.map((d) => d.state + (d.reason ? `:${d.reason}` : '')),
+        };
+    });
+
+const playThenPause = (page) =>
+    page.evaluate(async () => {
+        const v = document.getElementById('player').shadowRoot.querySelector('video');
+        await v.play();
+        await new Promise((r) => setTimeout(r, 250));
+        v.pause();
+    });
+
+async function testPauseAd(browser) {
+    console.log('\n[PA1] Pause reklamı: duraklatınca GPT isteği, dolunca video sola sıkışıyor, panel sağda');
+    const page = await pausePage(browser);
+    try {
+        let st = await pauseAdState(page);
+        ok(st.gpt.define === 0 && !st.open, 'oynatılmadan reklam istenmedi');
+        await playThenPause(page);
+        await page.waitForTimeout(700);
+        st = await pauseAdState(page);
+        ok(st.gpt.define === 1 && st.gpt.display === 1 && st.gpt.lastPath === '/6355419/Travel/Europe/France/Paris', `slot tanımlandı + display (${JSON.stringify(st.gpt)})`);
+        ok(JSON.stringify(st.gpt.lastSizes) === JSON.stringify([[300, 250], [336, 280], [250, 250], [200, 200]]), `alana sığan boyutlar istendi ${JSON.stringify(st.gpt.lastSizes)}`);
+        ok(st.open && st.areaFlag && st.creative && st.slotted, `panel açık, reklam light DOM'da ve slot'a yansıyor (${JSON.stringify(st)})`);
+        ok(st.panelW === 332 && Math.abs(st.layerRight - 332) <= 1, `video ${st.layerRight}px sola sıkıştı (panel ${st.panelW}px)`);
+        ok(st.fit === 'cover', `sıkışıkken video cover (${st.fit})`);
+        ok(st.events.join() === 'shown', `hp:pausead shown (${st.events})`);
+
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-pause-ad-resume').click());
+        await page.waitForTimeout(600);
+        st = await pauseAdState(page);
+        ok(!st.paused && !st.open && !st.areaFlag && st.layerRight === 0 && st.fit === 'contain', `"Videoya devam et" → oynuyor, panel kapandı, video eski haline döndü (${st.layerRight}px, ${st.fit})`);
+
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').pause());
+        await page.waitForTimeout(600);
+        st = await pauseAdState(page);
+        ok(st.open && st.gpt.define === 1 && st.gpt.display === 1 && st.gpt.refresh === 0, `30 sn içinde tekrar pause → yeni istek atılmadan aynı reklam (${JSON.stringify(st.gpt)})`);
+
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-pause-ad-close').click());
+        await page.waitForTimeout(500);
+        st = await pauseAdState(page);
+        ok(!st.open && st.paused && st.layerRight === 0, 'kapat (×) → panel kapandı, video duraklatılmış kaldı');
+        ok(st.events.join() === 'shown,hidden:resumed,shown,hidden:closed', `olay sırası (${st.events})`);
+    } finally {
+        await page.close();
+    }
+
+    console.log('\n[PA2] Pause reklamı boş dönerse hiçbir şey açılmıyor');
+    const p2 = await pausePage(browser, { empty: true });
+    try {
+        await playThenPause(p2);
+        await p2.waitForTimeout(700);
+        const st = await pauseAdState(p2);
+        ok(st.gpt.define === 1 && !st.open && !st.areaFlag && st.layerRight === 0, 'boş reklam → panel açılmadı, video sıkışmadı');
+        ok(st.events.join() === 'empty', `hp:pausead empty (${st.events})`);
+    } finally {
+        await p2.close();
+    }
+
+    console.log('\n[PA3] Dar player (minPlayerWidth altı) → reklam istenmiyor');
+    const p3 = await pausePage(browser, { width: 520 });
+    try {
+        await playThenPause(p3);
+        await p3.waitForTimeout(500);
+        const st = await pauseAdState(p3);
+        ok(st.gpt.define === 0 && !st.open, 'dar playerda GPT isteği yok');
+    } finally {
+        await p3.close();
+    }
+}
+
 (async () => {
     const browser = await chromium.launch();
     try {
@@ -551,6 +703,7 @@ async function testAdModeToolbar(browser) {
         await testRetry(browser);
         await testNoAdsNoChunk(browser);
         await testAdModeToolbar(browser);
+        await testPauseAd(browser);
     } finally {
         await browser.close();
     }

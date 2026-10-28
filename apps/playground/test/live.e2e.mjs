@@ -225,6 +225,117 @@ async function testLiveBadge(browser) {
     await page.close();
 }
 
+const MASTER_3 = '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=854x480\nv480.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=650000,RESOLUTION=640x360\nv360.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=450000,RESOLUTION=426x240\nv240.m3u8\n';
+const MEDIA_PL = '#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:4,\nseg0.ts\n#EXT-X-ENDLIST\n';
+
+async function qualityMenu(page) {
+    return page.evaluate(async () => {
+        const root = document.getElementById('player').shadowRoot;
+        root.querySelector('[aria-label="Ayarlar"]').click();
+        await new Promise((r) => setTimeout(r, 120));
+        const row = Array.from(root.querySelectorAll('.hp-chip-panel button')).find((b) => /Kalite/.test(b.textContent));
+        if (!row) return null;
+        row.click();
+        await new Promise((r) => setTimeout(r, 120));
+        return Array.from(root.querySelectorAll('.hp-chip-panel button')).slice(1).map((b) => b.textContent.trim());
+    });
+}
+
+async function testHlsQualityMenuInChrome(browser) {
+    console.log('\n[4e] Chrome native HLS "maybe" dese bile hls.js kullanılıyor ve kalite menüsünde seviyeler var mı?');
+    const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+    await page.route('https://hls-q.example.test/**', (route) => {
+        const u = route.request().url();
+        const headers = { 'access-control-allow-origin': '*' };
+        if (u.endsWith('master.m3u8')) return route.fulfill({ status: 200, contentType: 'application/vnd.apple.mpegurl', body: MASTER_3, headers });
+        if (u.endsWith('.m3u8')) return route.fulfill({ status: 200, contentType: 'application/vnd.apple.mpegurl', body: MEDIA_PL, headers });
+        return route.fulfill({ status: 404, body: '', headers });
+    });
+    await page.addInitScript(() => {
+        const orig = HTMLMediaElement.prototype.canPlayType;
+        HTMLMediaElement.prototype.canPlayType = function (t) {
+            return /mpegurl/i.test(t) ? 'maybe' : orig.call(this, t);
+        };
+    });
+    await page.goto(`${BASE}/`);
+    await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+    await page.evaluate(() => { document.getElementById('player').options = { src: 'https://hls-q.example.test/master.m3u8', muted: true }; });
+    await page.waitForFunction(() => document.getElementById('player').playbackEngine?.engine === 'hls.js', { timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(800);
+    const engine = await page.evaluate(() => document.getElementById('player').playbackEngine);
+    ok(engine?.engine === 'hls.js', `Chrome'da hls.js seçildi (${JSON.stringify(engine)})`);
+    const q = await qualityMenu(page);
+    ok(JSON.stringify(q) === JSON.stringify(['Oto', '480p', '360p', '240p']), `kalite menüsü: ${JSON.stringify(q)}`);
+    await page.close();
+}
+
+async function testHlsCorsFallsBackToNative(browser) {
+    console.log('\n[4f] CORS izni olmayan HLS: hls.js indiremeyince native HLS\'e düşüyor, oynuyor ve eski kalite listesi kalmıyor mu?');
+    const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+    let jsFetch = 0;
+    // hls.js (fetch/XHR) isteğine CORS başlığı yok → engellenir; native medya isteği (CORS'a tabi değil) geçer.
+    await page.route('https://hls-nocors.example.test/**', (route) => {
+        const req = route.request();
+        const isMedia = req.resourceType() === 'media';
+        if (!isMedia) jsFetch++;
+        const u = req.url();
+        const body = u.endsWith('master.m3u8') ? MASTER_3 : u.endsWith('.m3u8') ? MEDIA_PL : '';
+        return route.fulfill({ status: body ? 200 : 404, contentType: 'application/vnd.apple.mpegurl', body, headers: isMedia ? {} : { 'access-control-allow-origin': 'denied' } });
+    });
+    await page.goto(`${BASE}/`);
+    await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+    // Önce çok kaliteli MP4 kaynağı (menüde "Kalite" olsun), sonra CORS'suz HLS.
+    await page.evaluate(() => { document.getElementById('player').options = { sources: [{ src: '/sample.mp4', label: '720p', selected: true }, { src: '/sample.mp4', label: '360p' }], muted: true }; });
+    await page.waitForTimeout(300);
+    await page.evaluate(() => { document.getElementById('player').options = { src: 'https://hls-nocors.example.test/master.m3u8', muted: true }; });
+    await page.waitForFunction(() => document.getElementById('player').playbackEngine?.reason === 'hlsjs-failed', { timeout: 10000 }).catch(() => {});
+    const engine = await page.evaluate(() => document.getElementById('player').playbackEngine);
+    ok(jsFetch > 0 && engine?.engine === 'native-hls' && engine?.reason === 'hlsjs-failed', `hls.js CORS'a takıldı → native HLS (${JSON.stringify(engine)})`);
+    const q = await qualityMenu(page);
+    ok(q === null, `önceki MP4 kaynağının kalite listesi menüde kalmadı (${JSON.stringify(q)})`);
+    await page.close();
+}
+
+async function testNativeHlsFallsBackToHlsJs(browser) {
+    console.log('\n[4d] Kod 4 (Safari): native HLS "oynatırım" deyip oynatamazsa hata ekranı açılmadan hls.js\'e geçiliyor mu?');
+    // Native-önce yolu yalnızca Safari/iOS'ta — Safari tarayıcı kimliğiyle.
+    const page = await browser.newPage({
+        viewport: { width: 800, height: 600 },
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+    });
+    // İlk istek = native deneme → bozuk yanıt (kod 4); sonraki istekler = hls.js → geçerli playlist.
+    let manifestRequests = 0;
+    await page.route('https://hls.example.test/**', (route) => {
+        if (route.request().url().endsWith('.m3u8')) {
+            manifestRequests++;
+            if (manifestRequests === 1) return route.fulfill({ status: 200, contentType: 'application/vnd.apple.mpegurl', body: 'bozuk' });
+            return route.fulfill({ status: 200, contentType: 'application/vnd.apple.mpegurl', body: '#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nseg0.ts\n#EXT-X-ENDLIST\n' });
+        }
+        return route.fulfill({ status: 404, body: '' });
+    });
+    await page.addInitScript(() => {
+        // Native HLS "var" desin (bazı Android tarayıcıları/WebView'lar gibi).
+        const orig = HTMLMediaElement.prototype.canPlayType;
+        HTMLMediaElement.prototype.canPlayType = function (t) {
+            return /mpegurl/i.test(t) ? 'maybe' : orig.call(this, t);
+        };
+    });
+    await page.goto(`${BASE}/`);
+    await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+    await page.evaluate(() => {
+        document.getElementById('player').options = { src: 'https://hls.example.test/live/index.m3u8', muted: true };
+    });
+    await page.waitForFunction(() => (document.getElementById('player').shadowRoot.querySelector('video').getAttribute('src') || '').startsWith('blob:'), { timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(500);
+    const r = await page.evaluate(() => {
+        const root = document.getElementById('player').shadowRoot;
+        return { src: (root.querySelector('video').getAttribute('src') || '').slice(0, 5), errorScreen: root.querySelector('[part="error-screen"]').hasAttribute('data-visible') };
+    });
+    ok(r.src === 'blob:', `native başarısız olunca hls.js'e geçildi (src=${r.src}…, manifest isteği: ${manifestRequests})`);
+    ok(!r.errorScreen, 'geçiş sırasında hata ekranı GÖSTERİLMEDİ');
+    await page.close();
+}
+
 async function testLiveWallClockNativeHlsEmptySeekable(browser) {
     console.log('\n[4b] KRİTİK REGRESYON: native HLS (güncel Chromium) — canlıda `seekable` BOŞ, yalnızca `buffered` dolu: saat yine gösteriliyor mu?');
     const page = await openFeature(browser, 'live-clock');
@@ -293,6 +404,9 @@ async function testDai(browser) {
         await testLiveWallClock(browser);
         await testLiveWallClockNativeHlsEmptySeekable(browser);
         await testLiveBadge(browser);
+        await testNativeHlsFallsBackToHlsJs(browser);
+        await testHlsQualityMenuInChrome(browser);
+        await testHlsCorsFallsBackToNative(browser);
         await testDai(browser);
     } finally {
         await browser.close();

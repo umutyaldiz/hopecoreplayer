@@ -1,12 +1,12 @@
 import tailwindCss from './theme/tailwind.css?inline';
 import type { AdsOptions, HopePlayerOptions } from './types';
-import { SourceManager, type HlsQualityLevel } from './hls/SourceManager';
+import { SourceManager, type HlsQualityLevel, type PlaybackEngineInfo } from './hls/SourceManager';
 import { ControlBar } from './controls/ControlBar';
 import { TooltipController } from './controls/Tooltip';
 import { KeyboardController } from './keyboard/KeyboardController';
 import { LoadingSpinner } from './screens/LoadingSpinner';
 import { ErrorScreen } from './screens/ErrorScreen';
-import { attachSubtitleTracks, selectSubtitleTrack, type AttachedTrack } from './subtitles/attachTracks';
+import { attachSubtitleTracks, clearSubtitleTracks, selectSubtitleTrack, type AttachedTrack } from './subtitles/attachTracks';
 import { CaptionRenderer, type CaptionFontSize } from './subtitles/CaptionRenderer';
 import { MiniProgress } from './controls/MiniProgress';
 import type { SettingsCaptionAppearance, SettingsColorOption } from './controls/SettingsMenu';
@@ -26,6 +26,7 @@ import type { CountdownScreen } from './plugins/countdown-screen';
 import type { GeoChecker } from './plugins/geo-checker';
 import type { RedirectScreen } from './plugins/redirect-screen';
 import type { QrResume } from './plugins/qr-resume';
+import type { PauseAd } from './plugins/pause-ad';
 import type { Dubbing } from './plugins/dubbing';
 import type { LiveWallClock } from './plugins/live';
 import type { DaiController } from './plugins/dai';
@@ -41,7 +42,7 @@ const TAP_MAX_MOVE_PX = 10;
 const TEMPLATE = /* html */ `
   <div class="video-area">
     <div class="media-layer">
-      <video part="video" playsinline></video>
+      <video part="video" playsinline webkit-playsinline preload="metadata"></video>
       <div part="ad-layer" class="hp:absolute hp:inset-0 hp:z-10 hp:hidden"></div>
     </div>
   </div>
@@ -84,6 +85,7 @@ export class HopePlayerElement extends HTMLElement {
     private geoChecker: GeoChecker | null = null;
     private redirectScreen: RedirectScreen | null = null;
     private qrResume: QrResume | null = null;
+    private pauseAd: PauseAd | null = null;
     private dubbing: Dubbing | null = null;
     private liveWallClock: LiveWallClock | null = null;
     private daiController: DaiController | null = null;
@@ -106,6 +108,12 @@ export class HopePlayerElement extends HTMLElement {
     private bootGraceTimer: ReturnType<typeof setTimeout> | null = null;
     private _options: HopePlayerOptions = {};
     private hideTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Fare (dokunma değil) player'ın üzerinde mi — üzerindeyken kontroller otomatik gizlenmez. */
+    private mouseOver = false;
+    /** Kalite menüsünde şu an HLS seviyeleri mi var (kaynak değişince temizlemek için). */
+    private hlsQualitiesShown = false;
+    /** Son uygulanan options.showRemainingTime — bkz. applyOptions. */
+    private appliedShowRemaining: boolean | undefined;
     private autoHideDelayMs = DEFAULT_AUTO_HIDE_DELAY_MS;
     private tapCandidate = false;
     private tapStartX = 0;
@@ -125,6 +133,8 @@ export class HopePlayerElement extends HTMLElement {
         this.root.appendChild(style);
 
         const wrapper = document.createElement('div');
+        // Tam ekranda yüksekliği zincirlemek için sınıflı (tailwind.css `:host(:fullscreen) .hp-root`).
+        wrapper.className = 'hp-root';
         wrapper.innerHTML = TEMPLATE;
         this.root.appendChild(wrapper);
 
@@ -137,8 +147,9 @@ export class HopePlayerElement extends HTMLElement {
         this.root.querySelector('.media-layer')!.appendChild(this.loadingSpinner.el);
 
         this.errorScreen = new ErrorScreen(this.videoEl, this.i18n);
-        this.errorScreen.setOnRetry(() => this.videoEl.load());
-        this.root.querySelector('.media-layer')!.appendChild(this.errorScreen.el);
+        this.errorScreen.setOnRetry(() => void this.sourceManager.reload());
+        // Chrome'un (z-20) üstünde — merkez play butonu ve kontroller hata ekranına binmesin.
+        this.videoArea.appendChild(this.errorScreen.el);
 
         this.centerPlayButton = document.createElement('button');
         this.centerPlayButton.type = 'button';
@@ -146,7 +157,7 @@ export class HopePlayerElement extends HTMLElement {
         this.centerPlayButton.setAttribute('aria-label', this.i18n.play);
         // Tıklama alanı tüm video alanı; görsel olarak yalnızca ortadaki yuvarlak buton.
         this.centerPlayButton.className =
-            'hp:absolute hp:inset-0 hp:flex hp:items-center hp:justify-center hp:bg-transparent hp:border-0 hp:cursor-pointer hp:text-on-surface hp:transition-opacity';
+            'hp-center-play hp:absolute hp:inset-0 hp:flex hp:items-center hp:justify-center hp:bg-transparent hp:border-0 hp:cursor-pointer hp:text-on-surface hp:transition-opacity';
         const centerChip = document.createElement('span');
         centerChip.className = 'hp-chip hp:flex hp:items-center hp:justify-center hp:w-16 hp:h-16';
         // .hp-chip'in kendi --hp-chip-radius'u rounded-full utility'sini ezer
@@ -161,10 +172,11 @@ export class HopePlayerElement extends HTMLElement {
 
         this.chromeEl = document.createElement('div');
         // pointer-events-none: tüm video alanını kaplıyor; açık olsaydı alttaki video/reklam tıklamalarını yutardı.
-        this.chromeEl.className = 'hp:absolute hp:inset-0 hp:z-20 hp:pointer-events-none';
+        this.chromeEl.className = 'hp-chrome hp:absolute hp:inset-0 hp:z-20 hp:pointer-events-none';
         this.videoArea.appendChild(this.chromeEl);
 
         this.sourceManager = new SourceManager(this.videoEl, this.onHlsLevelsChanged);
+        this.errorScreen.setShouldShow(() => !this.sourceManager.isRecovering());
 
         this.controlBar = new ControlBar(
             this.videoEl,
@@ -231,8 +243,19 @@ export class HopePlayerElement extends HTMLElement {
         this.videoEl.addEventListener('play', this.onPlay);
         this.videoEl.addEventListener('pause', this.onPause);
         this.addEventListener('pointermove', this.scheduleAutoHide);
+        this.addEventListener('pointerenter', this.onPointerEnter);
+        this.addEventListener('pointerleave', this.onPointerLeave);
         this.addEventListener('pointerdown', this.onPointerDownFocus);
         document.addEventListener('fullscreenchange', this.onFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', this.onFullscreenChange);
+        // iPhone video tam ekranı (webkitEnterFullscreen) kendi olaylarını yayınlar.
+        this.videoEl.addEventListener('webkitbeginfullscreen', this.onFullscreenChange);
+        this.videoEl.addEventListener('webkitendfullscreen', this.onFullscreenChange);
+        // Ayarlar menüsü açıkken kontroller gizlenmesin (mobilde menü de onlarla kayboluyordu).
+        this.controlBar.settingsMenu.onOpenChange = (open) => {
+            if (open && this.hideTimer) clearTimeout(this.hideTimer);
+            if (!open) this.scheduleAutoHide();
+        };
 
         // "Ekrana dokun → oynat/duraklat": doğrudan videoEl'e bağlı, kontrol çubuğu tıklamaları tetiklemez.
         this.videoEl.addEventListener('mousedown', this.onVideoPressStart);
@@ -251,8 +274,14 @@ export class HopePlayerElement extends HTMLElement {
         this.videoEl.removeEventListener('play', this.onPlay);
         this.videoEl.removeEventListener('pause', this.onPause);
         this.removeEventListener('pointermove', this.scheduleAutoHide);
+        this.removeEventListener('pointerenter', this.onPointerEnter);
+        this.removeEventListener('pointerleave', this.onPointerLeave);
         this.removeEventListener('pointerdown', this.onPointerDownFocus);
+        this.controlBar.settingsMenu.onOpenChange = null;
         document.removeEventListener('fullscreenchange', this.onFullscreenChange);
+        document.removeEventListener('webkitfullscreenchange', this.onFullscreenChange);
+        this.videoEl.removeEventListener('webkitbeginfullscreen', this.onFullscreenChange);
+        this.videoEl.removeEventListener('webkitendfullscreen', this.onFullscreenChange);
         this.videoEl.removeEventListener('mousedown', this.onVideoPressStart);
         this.videoEl.removeEventListener('mouseup', this.onVideoPressEnd);
         this.videoEl.removeEventListener('mouseleave', this.onVideoPressCancel);
@@ -280,6 +309,8 @@ export class HopePlayerElement extends HTMLElement {
         this.geoChecker?.destroy();
         this.redirectScreen?.destroy();
         this.qrResume?.destroy();
+        this.pauseAd?.destroy();
+        this.pauseAd = null;
         this.dubbing?.destroy();
         this.liveWallClock?.destroy();
         this.daiController?.destroy();
@@ -319,6 +350,11 @@ export class HopePlayerElement extends HTMLElement {
         this.videoEl.pause();
     }
 
+    /** Şu anki oynatma yolu: `native` (MP4/WebM), `native-hls` (tarayıcının HLS'i) ya da `hls.js` — teşhis için. */
+    get playbackEngine(): PlaybackEngineInfo {
+        return this.sourceManager.engine;
+    }
+
     /** `options.qrResume` kuruluysa "telefonundan devam et" QR ekranını manuel göster (ör. entegratörün kendi "telefona gönder" butonu) — otomatik gösterim kuralları (minElapsed/minRemaining) burada uygulanmaz. */
     showQrResume(): void {
         this.qrResume?.show();
@@ -354,6 +390,10 @@ export class HopePlayerElement extends HTMLElement {
         this.videoEl.autoplay = !!options.autoplay;
         this.videoEl.muted = !!options.muted;
         this.videoEl.loop = !!options.loop;
+        this.videoEl.preload = options.preload ?? 'metadata';
+        // iOS: inline oynatma (aksi halde play() videoyu zorla tam ekrana alır). Eski iOS/WebView'lar için webkit- adı.
+        this.videoEl.playsInline = true;
+        this.videoEl.setAttribute('webkit-playsinline', '');
         this.autoHideDelayMs = options.autoHideDelayMs ?? DEFAULT_AUTO_HIDE_DELAY_MS;
         if (options.miniProgress && !this.miniProgress) {
             this.miniProgress = new MiniProgress(this.videoEl);
@@ -363,7 +403,9 @@ export class HopePlayerElement extends HTMLElement {
             this.miniProgress.destroy();
             this.miniProgress = null;
         }
-        if (options.showRemainingTime !== undefined) {
+        // Yalnızca DEĞER değişince uygula — başka bir option güncellemesi kullanıcının tıklayarak seçtiği modu sıfırlamasın.
+        if (options.showRemainingTime !== undefined && options.showRemainingTime !== this.appliedShowRemaining) {
+            this.appliedShowRemaining = options.showRemainingTime;
             this.controlBar.setShowRemaining(options.showRemainingTime);
         }
         if (options.theme) this.setAttribute('data-theme', options.theme);
@@ -382,6 +424,7 @@ export class HopePlayerElement extends HTMLElement {
         this.geoChecker?.refreshLabels();
         this.redirectScreen?.refreshLabels();
         this.qrResume?.refreshLabels();
+        this.pauseAd?.refreshLabels();
         this.dubbing?.refreshLabels();
         this.liveWallClock?.refreshLabels();
         this.loopSection?.refreshLabels();
@@ -432,6 +475,12 @@ export class HopePlayerElement extends HTMLElement {
 
     private async initPlayback(options: HopePlayerOptions): Promise<void> {
         const sources = options.sources?.length ? options.sources : options.src ? [{ src: options.src, label: this.i18n.autoQuality }] : [];
+        // Tek kaynakta önceki kaynağın (MP4 sources) kalite listesi kalmasın — yüklemeden ÖNCE temizle,
+        // ki hls.js'in birazdan bildireceği seviyeler silinmesin.
+        if (sources.length <= 1) {
+            this.controlBar.setQualities([], '');
+            this.hlsQualitiesShown = false;
+        }
         if (sources.length > 0) {
             const initial = sources.find((s) => s.selected) ?? sources[0]!;
             await this.sourceManager.load(initial.src, initial.type);
@@ -609,6 +658,14 @@ export class HopePlayerElement extends HTMLElement {
             });
         }
 
+        if (options.pauseAd?.adUnitPath && !this.pauseAd) {
+            const { installPauseAd } = await import('./plugins/pause-ad');
+            this.pauseAd = installPauseAd(
+                { videoEl: this.videoEl, hostEl: this, videoArea: this.videoArea, i18n: this.i18n, isBlocked: () => this.isChromeBlocked },
+                options.pauseAd
+            );
+        }
+
         if (options.dubbing && !this.dubbing) {
             const { installDubbing } = await import('./plugins/dubbing');
             this.dubbing = installDubbing(
@@ -674,6 +731,8 @@ export class HopePlayerElement extends HTMLElement {
             );
             selectCaption(defaultTrack?.label ?? null);
         } else {
+            clearSubtitleTracks(this.videoEl);
+            this.subtitleTracks = [];
             this.captionRenderer.setActiveTrack(null);
             this.captionTrackActive = false;
             this.controlBar.settingsMenu.setCaptionAppearance(null);
@@ -750,12 +809,22 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     private readonly onHlsLevelsChanged = (levels: HlsQualityLevel[], activeIndex: number): void => {
+        // Kaynak değişince boş liste gelir — önceki HLS kaynağının seviyeleri menüde kalmasın.
+        if (levels.length === 0 && this.hlsQualitiesShown) {
+            this.hlsQualitiesShown = false;
+            this.controlBar.setQualities([], '');
+            return;
+        }
         if (levels.length <= 1) return;
+        this.hlsQualitiesShown = true;
         const label = (l: HlsQualityLevel) => `${l.height}p`;
         this.controlBar.setQualities(
             [
                 { label: this.i18n.autoQuality, onSelect: () => this.sourceManager.setLevel(-1) },
-                ...levels.map((l) => ({ label: label(l), onSelect: () => this.sourceManager.setLevel(l.index) })),
+                // Yüksekten düşüğe (hls.js artan sıralıyor) — l.index hls.js'teki gerçek seviye numarası, sıradan bağımsız.
+                ...[...levels]
+                    .sort((x, y) => y.height - x.height)
+                    .map((l) => ({ label: label(l), onSelect: () => this.sourceManager.setLevel(l.index) })),
             ],
             activeIndex === -1 ? this.i18n.autoQuality : label(levels[activeIndex]!)
         );
@@ -763,23 +832,39 @@ export class HopePlayerElement extends HTMLElement {
 
     // ── Fullscreen (vendor-prefix uyumlu) ───────────────────────────────
 
+    /** iPhone Safari element tam ekranını desteklemiyor — yalnızca <video>'nun kendi (native kontrollü) tam ekranı. */
+    private get iosVideo(): HTMLVideoElement & {
+        webkitEnterFullscreen?: () => void;
+        webkitExitFullscreen?: () => void;
+        webkitDisplayingFullscreen?: boolean;
+    } {
+        return this.videoEl;
+    }
+
     private requestFullscreenCompat(): void {
         const el = this as unknown as {
             requestFullscreen?: () => Promise<void>;
             webkitRequestFullscreen?: () => void;
         };
-        if (el.requestFullscreen) void el.requestFullscreen();
+        const videoFallback = (): void => this.iosVideo.webkitEnterFullscreen?.();
+        if (el.requestFullscreen) el.requestFullscreen().catch(videoFallback);
         else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+        else videoFallback();
     }
 
     private exitFullscreenCompat(): void {
+        if (this.iosVideo.webkitDisplayingFullscreen) {
+            this.iosVideo.webkitExitFullscreen?.();
+            return;
+        }
         const doc = document as unknown as { webkitExitFullscreen?: () => void };
         if (document.exitFullscreen) void document.exitFullscreen();
         else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
     }
 
     private isFullscreenActive(): boolean {
-        return document.fullscreenElement === this;
+        const doc = document as unknown as { webkitFullscreenElement?: Element | null };
+        return document.fullscreenElement === this || doc.webkitFullscreenElement === this || !!this.iosVideo.webkitDisplayingFullscreen;
     }
 
     private readonly onFullscreenChange = (): void => {
@@ -808,6 +893,8 @@ export class HopePlayerElement extends HTMLElement {
     };
 
     private readonly onPause = (): void => {
+        // Oynarken kurulan gizleme zamanlayıcısını iptal et — yoksa duraklatınca kontroller birazdan kayboluyordu.
+        if (this.hideTimer) clearTimeout(this.hideTimer);
         if (!this.isChromeBlocked) {
             this.centerPlayButton.style.opacity = '1';
             this.centerPlayButton.style.pointerEvents = 'auto';
@@ -925,11 +1012,23 @@ export class HopePlayerElement extends HTMLElement {
         this.controlBar.seekBar.el.style.opacity = '';
     }
 
+    private readonly onPointerEnter = (e: PointerEvent): void => {
+        if (e.pointerType === 'mouse') this.mouseOver = true;
+    };
+
+    private readonly onPointerLeave = (e: PointerEvent): void => {
+        if (e.pointerType !== 'mouse') return;
+        this.mouseOver = false;
+        this.scheduleAutoHide();
+    };
+
     private readonly scheduleAutoHide = (): void => {
         this.showChrome();
         if (this.hideTimer) clearTimeout(this.hideTimer);
         if (this.videoEl.paused) return;
         this.hideTimer = setTimeout(() => {
+            // Duraklatılmışken, fare player'ın üzerindeyken ya da ayarlar menüsü açıkken gizleme.
+            if (this.videoEl.paused || this.mouseOver || this.controlBar.settingsMenu.isOpen) return;
             this.setChromeOpacity('0');
         }, this.autoHideDelayMs);
     };
