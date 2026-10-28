@@ -76,12 +76,6 @@ npm test                     # full Playwright suite (ads, prebid/consent, inter
 
 See [README.tr.md](./README.tr.md) for the full, detailed development log (every phase, every bug found and fixed, with root causes) — it's substantially more exhaustive than this file.
 
-## Releasing
-
-Publishing `@hopeplayer/core`/`react`/`vue` to npm happens automatically from [`.github/workflows/publish.yml`](./.github/workflows/publish.yml) when a GitHub **release** is published, using npm's **OIDC Trusted Publishing** — no `NPM_TOKEN`/`NODE_AUTH_TOKEN` secret involved. This requires each package to be configured with this repository + the `publish.yml` workflow as a "Trusted Publisher" on npmjs.com beforehand (npmjs.com → package → Settings → Trusted Publishers).
-
-To cut a release: bump `version` in the three `package.json` files, commit, then publish a GitHub release tagged with that version — the workflow builds `core` → `react` → `vue` and publishes each in order.
-
 ## License
 
 MIT © [Umut Yaldız](https://www.umutyaldiz.com)
