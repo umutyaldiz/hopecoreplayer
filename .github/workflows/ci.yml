@@ -21,9 +21,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck all workspaces
-        run: npm run typecheck
-
       - name: Build @hopeplayer/core
         run: npm run build:core
 
@@ -32,3 +29,6 @@ jobs:
 
       - name: Build @hopeplayer/vue
         run: npm run build:vue
+
+      - name: Typecheck all workspaces
+        run: npm run typecheck
