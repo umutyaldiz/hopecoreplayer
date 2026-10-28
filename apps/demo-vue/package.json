@@ -10,8 +10,8 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@hopeplayer/core": "1.0.0",
-    "@hopeplayer/vue": "1.0.0",
+    "@hopeplayer/core": "1.0.1",
+    "@hopeplayer/vue": "1.0.1",
     "vue": "^3.5.0"
   },
   "devDependencies": {
