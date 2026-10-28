@@ -23,7 +23,7 @@ packages/vue      — ince Vue 3 wrapper (aynı mimari: mount sonrası dinamik i
 apps/playground   — düz HTML/TS dev ortamı
 apps/demo-next    — Next.js demo
 apps/demo-vue     — Vite + Vue 3 demo
-apps/docs         — swiperjs.com tarzı kurulum + canlı demo sitesi (statik export; bu repoya/npm'e dahil DEĞİL — bkz. .gitignore, umutyaldiz.com'da ayrıca yayınlanıyor)
+apps/docs         — kurulum + canlı demo sitesi (statik export; bu repoya/npm'e dahil DEĞİL — bkz. .gitignore, umutyaldiz.com'da ayrıca yayınlanıyor)
 docs/             — mimari/plugin/tema dokümantasyonu
 ```
 
@@ -52,7 +52,7 @@ npm run build:core && npm run build:vue
 npm run build --workspace=apps/demo-vue && npm run preview --workspace=apps/demo-vue  # port 5193
 node apps/demo-vue/test/vue-wrapper.e2e.mjs   # başka bir terminalde
 
-# apps/docs (backlog: swiperjs.com tarzı kurulum + demo sitesi) — GERÇEK bir
+
 # statik export (`next build` + `output: 'export'`), Next.js çalışma zamanı
 # olmadan düz bir static file server'la servis edilip test ediliyor:
 npm run build:core && npm run build:react && npm run build:docs
