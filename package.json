@@ -1,7 +1,7 @@
 {
   "name": "hopecoreplayer",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "HopePlayer — dependency-free (except hls.js), TypeScript, Shadow DOM + Tailwind video player core",
   "repository": {
     "type": "git",
