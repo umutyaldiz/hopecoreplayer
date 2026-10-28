@@ -1,0 +1,27 @@
+/* OTOMATİK ÜRETİLDİ — elle düzenlemeyin. Kaynak: icon-src/*.svg, bkz. scripts/build-icons.mjs. Shadow root stylesheet'ine import edilir. */
+.hp-icon {
+    font-family: "hope-icons";
+    font-style: normal;
+    font-weight: normal;
+    font-variant: normal;
+    text-transform: none;
+    line-height: 1;
+    speak: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.hp-icon-check::before { content: "\e900"; }
+.hp-icon-chevron-left::before { content: "\e901"; }
+.hp-icon-close::before { content: "\e902"; }
+.hp-icon-fullscreen-enter::before { content: "\e903"; }
+.hp-icon-fullscreen-exit::before { content: "\e904"; }
+.hp-icon-loop::before { content: "\e905"; }
+.hp-icon-pause::before { content: "\e906"; }
+.hp-icon-pip::before { content: "\e907"; }
+.hp-icon-play::before { content: "\e908"; }
+.hp-icon-settings::before { content: "\e909"; }
+.hp-icon-volume-high::before { content: "\e90a"; }
+.hp-icon-volume-low::before { content: "\e90b"; }
+.hp-icon-volume-muted::before { content: "\e90c"; }
+.hp-icon-warning::before { content: "\e90d"; }

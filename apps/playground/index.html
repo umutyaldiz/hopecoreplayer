@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>HopeCorePlayer — Playground (Faz 1)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      margin: 0; padding: 2rem; font-family: system-ui, sans-serif;
+      /* Glassmorphism'in blur efekti görünsün diye renkli bir arkaplan. */
+      background: radial-gradient(circle at 20% 20%, #ff5a1f33, transparent 40%),
+                  radial-gradient(circle at 80% 70%, #3498db33, transparent 45%),
+                  #0d0d10;
+      min-height: 100vh;
+    }
+    main { max-width: 640px; margin: 0 auto; }
+    h1 { color: #fff; font-size: 1.1rem; }
+    select { font: inherit; padding: 4px 8px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>HopeCorePlayer — Faz 1 (native kontroller)</h1>
+    <label style="color:#a3a3a3; font-size:0.8rem; display:block;">
+      Tema:
+      <select id="theme-select">
+        <option value="">(varsayılan: glass-light)</option>
+        <option value="glass-dark">glass-dark</option>
+        <option value="neo-dark">neo-dark</option>
+        <option value="mono">mono</option>
+      </select>
+    </label>
+    <hope-player id="player"></hope-player>
+    <p id="log" style="color:#a3a3a3; font-size: 0.8rem;"></p>
+  </main>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

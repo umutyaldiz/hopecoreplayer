@@ -1,0 +1,46 @@
+{
+  "name": "hopecoreplayer",
+  "private": true,
+  "version": "1.0.0",
+  "description": "HopePlayer — dependency-free (except hls.js), TypeScript, Shadow DOM + Tailwind video player core",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/umutyaldiz/hopecoreplayer.git"
+  },
+  "homepage": "https://umutyaldiz.com/hopecoreplayer",
+  "bugs": {
+    "url": "https://github.com/umutyaldiz/hopecoreplayer/issues"
+  },
+  "author": "Umut Yaldız (https://www.umutyaldiz.com)",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/playground",
+    "build:core": "npm run build --workspace=packages/core",
+    "build:react": "npm run build --workspace=packages/react",
+    "build:vue": "npm run build --workspace=packages/vue",
+    "build:docs": "npm run build --workspace=apps/docs",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test:ads": "node apps/playground/test/ads.e2e.mjs",
+    "test:prebid": "node apps/playground/test/prebid-consent.e2e.mjs",
+    "test:interaction": "node apps/playground/test/interaction.e2e.mjs",
+    "test:content-ops": "node apps/playground/test/content-ops.e2e.mjs",
+    "test:live": "node apps/playground/test/live.e2e.mjs",
+    "test:theme": "node apps/playground/test/theme.e2e.mjs",
+    "test:i18n": "node apps/playground/test/i18n.e2e.mjs",
+    "test": "npm run test:ads && npm run test:prebid && npm run test:interaction && npm run test:content-ops && npm run test:live && npm run test:theme && npm run test:i18n && npm run test:mobile",
+    "test:react-wrapper": "node apps/demo-next/test/react-wrapper.e2e.mjs",
+    "test:docs-site": "node apps/docs/test/static-site.e2e.mjs",
+    "test:mobile": "node apps/playground/test/mobile.e2e.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1",
+    "serve": "^14.2.6"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

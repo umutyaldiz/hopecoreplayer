@@ -1,0 +1,375 @@
+import { SeekBar } from './SeekBar';
+import { VolumePanel, type VolumePanelAdHooks } from './VolumePanel';
+import { SettingsMenu, type SettingsCaptionOption, type SettingsQualityOption } from './SettingsMenu';
+import { formatTime } from '../utils/format-time';
+import { createIcon, setIconName } from '../icons/Icon';
+import type { HopeLocaleStrings } from '../i18n/types';
+
+/** `title` bilerek set edilmiyor — tooltip'i Tooltip.ts gösteriyor, native tooltip üstüne binmesin. */
+/** Canlı uçtan bu kadar saniyeden fazla gerideyse rozet "geride" (gri) sayılır — HLS'in doğal gecikmesi (birkaç segment) bunun altında kalır. */
+const LIVE_EDGE_TOLERANCE_SEC = 15;
+/** Player bu genişliğin (px) altındaysa kompakt (mobil) düzen: sağ grup üst sağa, tam ekran altta. */
+const COMPACT_MAX_WIDTH = 480;
+
+function setButtonLabel(btn: HTMLButtonElement, label: string): void {
+    btn.setAttribute('aria-label', label);
+}
+
+/** `shortcut`: Tooltip.ts'in gösterdiği küçük "pill" (ör. "F") — yalnızca `KeyboardController`'daki GERÇEK bir tuşla birebir eşleşiyorsa veriliyor, uydurma değil. */
+function iconButton(label: string, iconName: string, shortcut?: string): { btn: HTMLButtonElement; icon: HTMLElement } {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    setButtonLabel(btn, label);
+    if (shortcut) btn.dataset.shortcut = shortcut;
+    // hp-chip: tema yüzeyi; boyut --hp-ctrl-* token'larından (fullscreen/dokunmatikte büyür).
+    btn.className =
+        'hp-chip hp:flex hp:items-center hp:justify-center hp:w-[var(--hp-ctrl-btn-size)] hp:h-[var(--hp-ctrl-btn-size)] hp:cursor-pointer hp:shrink-0';
+    const icon = createIcon(iconName, 'hp:text-[length:var(--hp-ctrl-icon-size)]');
+    btn.appendChild(icon);
+    return { btn, icon };
+}
+
+export interface ControlBarCallbacks {
+    onRequestFullscreen: () => void;
+    onExitFullscreen: () => void;
+    isFullscreen: () => boolean;
+    /** Reklam modunda oynat/duraklat reklamı yönetir — IMA reklamı içerikten ayrı bir video'da oynatır. */
+    isAdActive: () => boolean;
+    adTogglePlay: () => void;
+    adIsPaused: () => boolean;
+    adVolume: VolumePanelAdHooks;
+}
+
+/** Alt kontrol çubuğunu kurar; alt bileşenleri (SeekBar/VolumePanel/SettingsMenu) birleştirir. */
+export class ControlBar {
+    readonly el: HTMLDivElement;
+    readonly seekBar: SeekBar;
+    readonly volumePanel: VolumePanel;
+    readonly settingsMenu: SettingsMenu;
+
+    private readonly video: HTMLVideoElement;
+    private readonly labels: HopeLocaleStrings;
+    private readonly playButton: HTMLButtonElement;
+    private readonly playIcon: HTMLElement;
+    private readonly pipButton: HTMLButtonElement;
+    private readonly fullscreenButton: HTMLButtonElement;
+    private readonly fullscreenIcon: HTMLElement;
+    private readonly timeLabel: HTMLButtonElement;
+    private showRemaining = false;
+    /** Kompakt düzende (player < 480px) sağ grubun taşındığı üst bar; tam ekran altta kalır. */
+    readonly topEl: HTMLDivElement;
+    private readonly bottomRow: HTMLDivElement;
+    private readonly rightGroup: HTMLDivElement;
+    private readonly fullscreenSlot: HTMLDivElement;
+    private compact = false;
+    private readonly resizeObserver: ResizeObserver;
+    private readonly liveBadge: HTMLButtonElement;
+    private readonly liveText: HTMLSpanElement;
+    private adMode = false;
+    private readonly callbacks: ControlBarCallbacks;
+    private row!: HTMLDivElement;
+    private extraButtonAnchor!: HTMLElement;
+
+    constructor(video: HTMLVideoElement, playbackRates: number[], callbacks: ControlBarCallbacks, labels: HopeLocaleStrings) {
+        this.video = video;
+        this.callbacks = callbacks;
+        this.labels = labels;
+
+        this.el = document.createElement('div');
+        this.el.setAttribute('part', 'control-bar');
+        // pointer-events-none: kapsayıcı alt şeridin tamamını kaplıyor; açık olsaydı boş alanlar reklamın
+        // "Reklamı Geç" butonu dahil alttaki tıklamaları yutardı. Yalnızca gerçek yüzeyler pointer-events-auto.
+        this.el.className =
+            'hp:absolute hp:inset-x-0 hp:bottom-0 hp:flex hp:flex-col hp:gap-1 hp:px-3 hp:pb-2 hp:pt-6 hp:pointer-events-none ' +
+            'hp:transition-opacity hp:duration-200';
+
+        this.seekBar = new SeekBar(video, labels);
+        this.seekBar.el.classList.add('hp:pointer-events-auto');
+        this.el.appendChild(this.seekBar.el);
+
+        const row = document.createElement('div');
+        row.className = 'hp:flex hp:items-center hp:gap-2';
+        this.el.appendChild(row);
+        this.bottomRow = row;
+
+        // Sol küme: oynat/duraklat + ses + süre — kendi transparan "pill"
+        // yüzeyini paylaşıyor (`.hp-group`, theme/tailwind.css).
+        const leftGroup = document.createElement('div');
+        leftGroup.className = 'hp-group hp:flex hp:items-center hp:gap-1 hp:px-1.5 hp:py-1 hp:shrink-0 hp:pointer-events-auto';
+        row.appendChild(leftGroup);
+
+        const play = iconButton(labels.play, 'play', 'K');
+        this.playButton = play.btn;
+        this.playIcon = play.icon;
+        this.playButton.setAttribute('part', 'play-pause-button');
+        this.playButton.addEventListener('click', () => this.togglePlay());
+        leftGroup.appendChild(this.playButton);
+
+        this.volumePanel = new VolumePanel(video, labels, callbacks.adVolume);
+        leftGroup.appendChild(this.volumePanel.el);
+
+        this.timeLabel = document.createElement('button');
+        this.timeLabel.type = 'button';
+        this.timeLabel.setAttribute('part', 'time-display');
+        this.timeLabel.className =
+            'hp:text-xs hp:text-on-surface hp:tabular-nums hp:whitespace-nowrap hp:px-1 hp:bg-transparent hp:border-0 hp:cursor-pointer hp:select-none hp:p-0 hp:hover:opacity-80 hp:transition-opacity hp:focus-visible:outline-none hp:focus-visible:ring-1 hp:focus-visible:ring-accent hp:rounded';
+        this.timeLabel.textContent = '0:00 / 0:00';
+        this.timeLabel.addEventListener('click', this.onTimeClick);
+        leftGroup.appendChild(this.timeLabel);
+
+        // Canlı yayında (duration === Infinity) süre etiketinin YERİNE —
+        // YouTube tarzı "● CANLI": canlı uçtayken nokta kırmızı, geriye
+        // sarılmışsa gri ve tıklayınca canlı uca döner.
+        this.liveBadge = document.createElement('button');
+        this.liveBadge.type = 'button';
+        this.liveBadge.className = 'hp-live-badge';
+        this.liveBadge.setAttribute('part', 'live-badge');
+        this.liveBadge.setAttribute('aria-label', labels.goToLive);
+        const liveDot = document.createElement('span');
+        liveDot.className = 'hp-live-dot';
+        this.liveText = document.createElement('span');
+        this.liveText.textContent = labels.live;
+        this.liveBadge.append(liveDot, this.liveText);
+        this.liveBadge.style.display = 'none';
+        this.liveBadge.addEventListener('click', this.goToLive);
+        leftGroup.appendChild(this.liveBadge);
+
+        const spacer = document.createElement('div');
+        spacer.className = 'hp:flex-1';
+        row.appendChild(spacer);
+
+        // Sağ küme: ayarlar + plugin'lerin addButton/addElement ile eklediği
+        // kendi butonları (ayarlardan ÖNCE eklenir) + PIP + tam ekran — aynı
+        // pill yüzeyi.
+        const rightGroup = document.createElement('div');
+        rightGroup.className = 'hp-group hp:flex hp:items-center hp:gap-1 hp:px-1.5 hp:py-1 hp:shrink-0 hp:pointer-events-auto';
+        row.appendChild(rightGroup);
+        this.rightGroup = rightGroup;
+
+        this.settingsMenu = new SettingsMenu(video, playbackRates, labels);
+        rightGroup.appendChild(this.settingsMenu.el);
+        this.extraButtonAnchor = this.settingsMenu.el;
+        this.row = rightGroup;
+
+        const pip = iconButton(labels.pip, 'pip');
+        this.pipButton = pip.btn;
+        this.pipButton.addEventListener('click', () => this.togglePip());
+        if (!document.pictureInPictureEnabled) this.pipButton.style.display = 'none';
+        rightGroup.appendChild(this.pipButton);
+
+        const fullscreen = iconButton(labels.fullscreenEnter, 'fullscreen-enter', 'F');
+        this.fullscreenButton = fullscreen.btn;
+        this.fullscreenIcon = fullscreen.icon;
+        this.fullscreenButton.addEventListener('click', () => this.toggleFullscreen());
+        rightGroup.appendChild(this.fullscreenButton);
+
+        this.topEl = document.createElement('div');
+        this.topEl.className = 'hp-top-bar';
+        this.topEl.setAttribute('part', 'top-bar');
+        this.fullscreenSlot = document.createElement('div');
+        this.fullscreenSlot.className = 'hp-group hp:items-center hp:px-1.5 hp:py-1 hp:shrink-0 hp:pointer-events-auto';
+        this.fullscreenSlot.style.display = 'none';
+        row.appendChild(this.fullscreenSlot);
+
+        this.resizeObserver = new ResizeObserver(() => this.updateLayout());
+        this.resizeObserver.observe(this.el);
+
+        video.addEventListener('play', this.renderPlayState);
+        video.addEventListener('pause', this.renderPlayState);
+        video.addEventListener('timeupdate', this.renderTime);
+        video.addEventListener('loadedmetadata', this.renderTime);
+        video.addEventListener('durationchange', this.renderTime);
+        video.addEventListener('progress', this.renderTime);
+        this.renderPlayState();
+        this.renderTime();
+    }
+
+    /** Player genişliğine göre normal / kompakt (mobil) düzen arasında geçiş — yalnızca eşik geçilince DOM taşınır. */
+    private updateLayout(): void {
+        const width = this.el.getBoundingClientRect().width;
+        if (width === 0) return;
+        const compact = width < COMPACT_MAX_WIDTH;
+        if (compact === this.compact) return;
+        this.compact = compact;
+        this.el.toggleAttribute('data-compact', compact);
+        // Video alanı da bilsin — altyazı boyutu küçük player'da küçülüyor (tailwind.css `.video-area[data-compact]`).
+        this.el.closest('.video-area')?.toggleAttribute('data-compact', compact);
+        if (compact) {
+            this.fullscreenSlot.appendChild(this.fullscreenButton);
+            this.fullscreenSlot.style.display = this.adMode ? 'none' : 'flex';
+            this.topEl.appendChild(this.rightGroup);
+        } else {
+            this.rightGroup.appendChild(this.fullscreenButton);
+            this.bottomRow.insertBefore(this.rightGroup, this.fullscreenSlot);
+            this.fullscreenSlot.style.display = 'none';
+        }
+    }
+
+    setFullscreenState(isFullscreen: boolean): void {
+        setIconName(this.fullscreenIcon, isFullscreen ? 'fullscreen-exit' : 'fullscreen-enter');
+        setButtonLabel(this.fullscreenButton, isFullscreen ? this.labels.fullscreenExit : this.labels.fullscreenEnter);
+    }
+
+    /** Dil sonradan değişince (`options.locale`/`labels`) statik (reaktif olarak yeniden render edilmeyen) etiketleri tazeler. */
+    refreshLabels(): void {
+        this.renderPlayState();
+        setButtonLabel(this.pipButton, this.labels.pip);
+        setButtonLabel(this.liveBadge, this.labels.goToLive);
+        this.liveText.textContent = this.labels.live;
+        this.setFullscreenState(this.callbacks.isFullscreen());
+        this.seekBar.refreshLabels();
+        this.volumePanel.refreshLabels();
+        this.settingsMenu.refreshLabels();
+    }
+
+    /** Reklam modu: seek bar, süre ve sağ grup gizlenir; oynat/duraklat + ses kalır. */
+    setAdMode(active: boolean): void {
+        const display = active ? 'none' : '';
+        this.adMode = active;
+        this.seekBar.el.style.display = display;
+        this.row.style.display = display;
+        if (this.compact) this.fullscreenSlot.style.display = active ? 'none' : 'flex';
+        // Süre etiketi / canlı rozeti hangisinin görüneceğine renderTime karar veriyor (ad modunda ikisi de gizli).
+        this.renderTime();
+        const iconColor = active ? '#202020' : '';
+        this.playIcon.style.color = iconColor;
+        this.volumePanel.setIconColor(iconColor);
+        this.volumePanel.setSliderFillColor(iconColor);
+        // Oynat/duraklat ikonu + ses göstergesi, ad moduna girer/çıkarken
+        // doğru kaynağı (reklam ya da içerik) hemen yansıtsın.
+        this.renderPlayState();
+        this.volumePanel.refreshForAdMode();
+    }
+
+    /** `AdsController`'ın IMA'nın KENDİ UI'ı üzerinden (ör. reklam video'suna tıklama) gelen PAUSED/RESUMED event'leri için — oynat/duraklat ikonunu tazeler. */
+    refreshAdPlayState(): void {
+        this.renderPlayState();
+    }
+
+    setQualities(options: SettingsQualityOption[], activeLabel: string): void {
+        this.settingsMenu.setQualities(options, activeLabel);
+    }
+
+    setCaptions(options: SettingsCaptionOption[], activeLabel: string): void {
+        this.settingsMenu.setCaptions(options, activeLabel);
+    }
+
+    /** Plugin'lerin (loop-section vb.) kontrol çubuğuna kendi butonlarını eklemesi için — ayarlar menüsünden önce yerleştirilir. */
+    addButton(label: string, iconName: string, onClick: () => void): { btn: HTMLButtonElement; icon: HTMLElement } {
+        const { btn, icon } = iconButton(label, iconName);
+        btn.addEventListener('click', onClick);
+        this.row.insertBefore(btn, this.extraButtonAnchor);
+        return { btn, icon };
+    }
+
+    /** Plugin'lerin (live-wall-clock vb.) kontrol çubuğuna buton olmayan bir element (ör. saat göstergesi) eklemesi için. */
+    private readonly onTimeClick = (e: MouseEvent): void => {
+        e.stopPropagation();
+        this.toggleTimeMode();
+    };
+
+    toggleTimeMode(): void {
+        this.showRemaining = !this.showRemaining;
+        this.renderTime();
+    }
+
+    setShowRemaining(show: boolean): void {
+        if (this.showRemaining === show) return;
+        this.showRemaining = show;
+        this.renderTime();
+    }
+
+    getShowRemaining(): boolean {
+        return this.showRemaining;
+    }
+
+    addElement(el: HTMLElement): void {
+        this.row.insertBefore(el, this.extraButtonAnchor);
+    }
+
+    private togglePlay(): void {
+        if (this.callbacks.isAdActive()) {
+            this.callbacks.adTogglePlay();
+            this.renderPlayState();
+            return;
+        }
+        if (this.video.paused) void this.video.play();
+        else this.video.pause();
+    }
+
+    private async togglePip(): Promise<void> {
+        try {
+            if (document.pictureInPictureElement) {
+                await document.exitPictureInPicture();
+            } else {
+                await this.video.requestPictureInPicture();
+            }
+        } catch {
+            // PIP desteklenmiyor/izin verilmedi — sessizce yoksay.
+        }
+    }
+
+    private toggleFullscreen(): void {
+        if (this.callbacks.isFullscreen()) this.callbacks.onExitFullscreen();
+        else this.callbacks.onRequestFullscreen();
+    }
+
+    private readonly renderPlayState = (): void => {
+        const paused = this.callbacks.isAdActive() ? this.callbacks.adIsPaused() : this.video.paused;
+        setIconName(this.playIcon, paused ? 'play' : 'pause');
+        setButtonLabel(this.playButton, paused ? this.labels.play : this.labels.pause);
+    };
+
+    /** Canlı uç (media-time) — seekable sonu; native HLS'te DVR'sız canlıda seekable boş kalabildiği için buffered sonu (bkz. LiveWallClock.isLive notu). */
+    private liveEdge(): number | null {
+        const { seekable, buffered } = this.video;
+        if (seekable.length) return seekable.end(seekable.length - 1);
+        if (buffered.length) return buffered.end(buffered.length - 1);
+        return null;
+    }
+
+    private readonly renderTime = (): void => {
+        const isLive = this.video.duration === Infinity;
+        this.timeLabel.style.display = this.adMode || isLive ? 'none' : '';
+        this.liveBadge.style.display = !this.adMode && isLive ? '' : 'none';
+
+        if (!isLive) {
+            const duration = this.video.duration;
+            const current = this.video.currentTime;
+            if (this.showRemaining) {
+                const remaining = Math.max(0, (Number.isFinite(duration) ? duration : 0) - current);
+                this.timeLabel.textContent = `-${formatTime(remaining)} / ${formatTime(duration)}`;
+            } else {
+                this.timeLabel.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
+            }
+            return;
+        }
+        // Canlı uçtan LIVE_EDGE_TOLERANCE_SEC'ten fazla gerideyse "geride" (gri nokta, tıklanınca uca döner).
+        const edge = this.liveEdge();
+        const behind = edge !== null && edge - this.video.currentTime > LIVE_EDGE_TOLERANCE_SEC;
+        this.liveBadge.toggleAttribute('data-behind', behind);
+    };
+
+    private readonly goToLive = (): void => {
+        const edge = this.liveEdge();
+        if (edge === null) return;
+        // Tam uca değil, biraz gerisine — buffered'ın en sonuna seek edince oynatma takılabiliyor.
+        this.video.currentTime = Math.max(0, edge - 1);
+        if (this.video.paused) void this.video.play().catch(() => {});
+        this.renderTime();
+    };
+
+    destroy(): void {
+        this.timeLabel.removeEventListener('click', this.onTimeClick);
+        this.video.removeEventListener('play', this.renderPlayState);
+        this.video.removeEventListener('pause', this.renderPlayState);
+        this.video.removeEventListener('timeupdate', this.renderTime);
+        this.video.removeEventListener('loadedmetadata', this.renderTime);
+        this.video.removeEventListener('durationchange', this.renderTime);
+        this.video.removeEventListener('progress', this.renderTime);
+        this.resizeObserver.disconnect();
+        this.topEl.remove();
+        this.seekBar.destroy();
+        this.settingsMenu.destroy();
+    }
+}

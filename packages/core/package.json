@@ -1,0 +1,55 @@
+{
+  "name": "@hopeplayer/core",
+  "version": "1.0.0",
+  "description": "HopePlayer core — dependency-free <hope-player> custom element (Shadow DOM + Tailwind)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/umutyaldiz/hopecoreplayer.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://umutyaldiz.com/hopecoreplayer",
+  "bugs": {
+    "url": "https://github.com/umutyaldiz/hopecoreplayer/issues"
+  },
+  "author": "Umut Yaldız (https://www.umutyaldiz.com)",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "sideEffects": [
+    "./src/index.ts",
+    "./dist/hope-player.js"
+  ],
+  "main": "./dist/hope-player.js",
+  "module": "./dist/hope-player.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/hope-player.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite build --watch",
+    "icons:build": "node scripts/build-icons.mjs",
+    "build": "vite build && tsc -p tsconfig.json --emitDeclarationOnly --outDir dist",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "hls.js": "^1.7.3",
+    "qrcode-generator": "2.0.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "svg2ttf": "^6.0.3",
+    "svgicons2svgfont": "^15.0.1",
+    "tailwindcss": "^4.1.0",
+    "ttf2woff2": "^8.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  },
+  "license": "MIT"
+}
