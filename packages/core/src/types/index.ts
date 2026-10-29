@@ -484,6 +484,12 @@ export interface HopePlayerOptions {
     /** Video oynarken fare bu süre (ms) kıpırdamazsa imleç gizlenir; `false` = hiç gizleme. Varsayılan 5000. */
     cursorHideDelayMs?: number | false;
     /**
+     * Videoya dokununca/tıklayınca oynat/duraklat. `'auto'` (varsayılan): dar player'da (kompakt düzen, tam ekran
+     * dışında) dokunmatikte kapalı — dokunuş kontrolleri gösterir/gizler; büyük player'da ve fareyle açık.
+     * `true`: her zaman açık, `false`: hiç (yalnızca oynat butonu).
+     */
+    tapToPlay?: 'auto' | boolean;
+    /**
      * Sayfa açılınca ne kadarının önceden yükleneceği (HTML `preload`). Varsayılan `'metadata'`:
      * yalnızca süre/boyut bilgisi — veri harcamaz, süre ve ilk kare hazır olur.
      */

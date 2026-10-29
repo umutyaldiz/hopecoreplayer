@@ -108,6 +108,9 @@ export class HopePlayerElement extends HTMLElement {
     private tapGestures: TapGestures | null = null;
     /** Dokunmadan sonra tarayıcının ürettiği uyumluluk mouse olayları ikinci bir dokunuş sayılmasın. */
     private lastTouchEndAt = 0;
+    /** Video alanı boyutu değişince merkez play butonunun yerini yeniden hesaplar. */
+    private centerPlayObserver: ResizeObserver | null = null;
+    private tapToPlay: 'auto' | boolean = 'auto';
     private adsController: AdsController | null = null;
     private gestureControls: GestureControls | null = null;
     private loopSection: LoopSection | null = null;
@@ -220,12 +223,18 @@ export class HopePlayerElement extends HTMLElement {
             const play = (): void => {
                 if (this.videoEl.paused) void this.videoEl.play();
             };
-            // Duraklatılmışken bu buton tüm alanı kaplar — dokunuşlar çift dokunma hareketlerinden (tapGestures) geçsin.
             const pointer = this.lastPointerType === 'pen' ? 'pen' : this.lastPointerType === 'touch' ? 'touch' : null;
-            if (pointer && this.tapGestures?.handleTap(e.clientX, pointer, play)) return;
-            play();
+            // Duraklatılmışken bu buton tüm alanı kaplar; yuvarlak butonun DIŞINA dokunmak "videoya dokunmak" sayılır.
+            const onChip = e.composedPath().includes(centerChip);
+            const single = onChip ? play : (): void => this.onBackgroundTap(pointer ?? 'mouse', play);
+            // Dokunuşlar çift dokunma hareketlerinden (tapGestures) geçsin.
+            if (pointer && this.tapGestures?.handleTap(e.clientX, pointer, single)) return;
+            single();
         });
         this.videoArea.appendChild(this.centerPlayButton);
+        // Kompakt düzen ControlBar'ın kendi ResizeObserver'ında değişiyor — bir kare sonra ölç.
+        this.centerPlayObserver = new ResizeObserver(() => requestAnimationFrame(() => this.layoutCenterPlay()));
+        this.centerPlayObserver.observe(this.videoArea);
 
         this.chromeEl = document.createElement('div');
         // pointer-events-none: tüm video alanını kaplıyor; açık olsaydı alttaki video/reklam tıklamalarını yutardı.
@@ -350,6 +359,7 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     disconnectedCallback(): void {
+        this.centerPlayObserver?.disconnect();
         this.showCursor();
         this.miniProgress?.destroy();
         this.miniProgress = null;
@@ -524,6 +534,7 @@ export class HopePlayerElement extends HTMLElement {
         this.videoEl.playsInline = true;
         this.videoEl.setAttribute('webkit-playsinline', '');
         this.autoHideDelayMs = options.autoHideDelayMs ?? DEFAULT_AUTO_HIDE_DELAY_MS;
+        this.tapToPlay = options.tapToPlay ?? 'auto';
         this.cursorHideDelayMs = options.cursorHideDelayMs === false ? null : (options.cursorHideDelayMs ?? DEFAULT_CURSOR_HIDE_DELAY_MS);
         if (this.cursorHideDelayMs === null) this.showCursor();
         if (options.miniProgress && !this.miniProgress) {
@@ -1240,15 +1251,75 @@ export class HopePlayerElement extends HTMLElement {
             const moved = Math.hypot(point.clientX - this.tapStartX, point.clientY - this.tapStartY);
             if (moved > TAP_MAX_MOVE_PX) return;
         }
-        const singleTap = (): void => {
-            if (this.videoEl.paused) void this.videoEl.play().catch(() => {});
-            else this.videoEl.pause();
-        };
-        // Bu bölgede çift dokunma hareketi varsa tek dokunuş, ikinci dokunuş gelmezse uygulanır.
         const pointer = isTouch ? 'touch' : (this.lastPointerType as 'mouse' | 'pen');
+        const singleTap = (): void =>
+            this.onBackgroundTap(pointer, () => {
+                if (this.videoEl.paused) void this.videoEl.play().catch(() => {});
+                else this.videoEl.pause();
+            });
+        // Bu bölgede çift dokunma hareketi varsa tek dokunuş, ikinci dokunuş gelmezse uygulanır.
         if (point && this.tapGestures?.handleTap(point.clientX, pointer === 'pen' ? 'pen' : pointer, singleTap)) return;
         singleTap();
     };
+
+    /**
+     * Dar player'da kontrol çubuğu (alt satır + seek bar) yüksekliğin yarısını kaplıyor ve seek bar ortadaki play
+     * butonunun içinden geçiyordu — butonun ortasına dokunmak videoyu sarıyordu. Buton seek bar'ın üstündeki boş
+     * alanın ortasına alınır, sığmazsa küçülür (en az 40px).
+     */
+    private layoutCenterPlay(): void {
+        const area = this.videoArea;
+        const areaRect = area.getBoundingClientRect();
+        const seekRect = this.controlBar.seekBar.el.getBoundingClientRect();
+        const reset = (): void => {
+            area.removeAttribute('data-center-play-shifted');
+            area.style.removeProperty('--hp-center-play-size');
+            area.style.removeProperty('--hp-center-play-shift');
+            area.style.removeProperty('--hp-center-play-shift-x');
+        };
+        if (!areaRect.height || !seekRect.height || !area.hasAttribute('data-compact')) return reset();
+        const fullSize = 64;
+        const freeBottom = seekRect.top - areaRect.top - 8;
+        // Ortada zaten sığıyorsa dokunma.
+        if (areaRect.height / 2 + fullSize / 2 <= freeBottom) return reset();
+        const size = Math.max(40, Math.min(56, freeBottom - 12));
+        // Seek bar'ın hemen üstü — görsel merkeze olabildiğince yakın (en tepeye yapışmasın).
+        const centerY = Math.max(size / 2 + 6, freeBottom - size / 2);
+        const shift = Math.round(centerY - areaRect.height / 2);
+        // En dar ekranda (≈320px) buton üst bara (ayarlar/PiP) değebiliyor — o zaman üst barın soluna kaydır.
+        let shiftX = 0;
+        const top = this.controlBar.topEl.getBoundingClientRect();
+        if (top.width > 0 && centerY - size / 2 < top.bottom - areaRect.top) {
+            const maxCenterX = top.left - areaRect.left - 8 - size / 2;
+            if (areaRect.width / 2 > maxCenterX) shiftX = Math.round(Math.max(size / 2 + 8, maxCenterX) - areaRect.width / 2);
+        }
+        area.setAttribute('data-center-play-shifted', '');
+        area.style.setProperty('--hp-center-play-shift-x', `${shiftX}px`);
+        area.style.setProperty('--hp-center-play-size', `${size}px`);
+        area.style.setProperty('--hp-center-play-shift', `${shift}px`);
+    }
+
+    /** Dar player'da dokunmatikte oynat/duraklat yerine kontrolleri göster/gizle (options.tapToPlay). */
+    private tapTogglesPlay(pointer: string): boolean {
+        if (this.tapToPlay !== 'auto') return this.tapToPlay;
+        if (pointer === 'mouse') return true;
+        return !this.videoArea.hasAttribute('data-compact') || this.isFullscreenActive();
+    }
+
+    /** Videonun boş alanına tek dokunuş/tık: ya `togglePlay` ya da (dar player'da) kontrolleri aç/kapa. */
+    private onBackgroundTap(pointer: string, togglePlay: () => void): void {
+        if (this.tapTogglesPlay(pointer)) {
+            togglePlay();
+            return;
+        }
+        // YouTube mobil gibi: kontroller açık ve video oynuyorsa gizle, değilse göster (gizleme sayacıyla).
+        if (this.chromeVisible && !this.videoEl.paused) {
+            if (this.hideTimer) clearTimeout(this.hideTimer);
+            this.setChromeOpacity('0');
+        } else {
+            this.scheduleAutoHide();
+        }
+    }
 
     private readonly onVideoPressCancel = (): void => {
         this.tapCandidate = false;

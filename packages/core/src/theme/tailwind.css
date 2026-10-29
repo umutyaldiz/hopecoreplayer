@@ -898,6 +898,13 @@ button.hp-context-menu-item:focus-visible {
     position: relative;
     z-index: 7;
 }
+/* Dar player'da seek bar dikey ortaya kadar çıkıyor — buton JS'te (layoutCenterPlay) seek bar'ın üstündeki boş
+   alanın ortasına alınır ve gerekirse küçülür; yoksa butonun ortasına dokunmak seek bar'a gidiyordu. */
+.video-area[data-center-play-shifted] .hp-center-play > .hp-chip {
+    width: var(--hp-center-play-size);
+    height: var(--hp-center-play-size);
+    translate: var(--hp-center-play-shift-x, 0px) var(--hp-center-play-shift);
+}
 
 /* ── Pause reklamı (plugins/pause-ad). Açıkken video ve tüm katmanları --hp-pause-ad-w kadar sola
    sıkışır; video cover'a geçer (oran bozulmaz, dış kenarlar kırpılır), panel sağdan kayarak gelir. */

@@ -248,7 +248,7 @@ async function testTapGestures(browser) {
     console.log('\n[7] İstek üzerine: tapGestures — sağa/sola çift dokunma sarma (zincirleme), tek dokunuş oynat/duraklat');
     const { context, page } = await openPlayer(browser, { width: 390, touch: true });
     try {
-        await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4', muted: true, tapGestures: true }; });
+        await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4', muted: true, tapGestures: true, tapToPlay: true }; });
         await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1);
         await page.waitForTimeout(400);
         const area = await page.evaluate(() => {
@@ -302,6 +302,98 @@ async function testTapGestures(browser) {
         ok(s.paused, `ortada tek dokunuş hemen duraklattı ${JSON.stringify(s)}`);
     } finally {
         await context.close();
+    }
+}
+
+async function testTapToPlayCompact(browser) {
+    console.log('\n[8] İstek üzerine: dar (mobil) player\'da videoya dokunmak oynat/duraklat yapmıyor, kontrolleri açıp kapatıyor; büyük player\'da yapıyor');
+    const tapState = (page) =>
+        page.evaluate(() => {
+            const root = document.getElementById('player').shadowRoot;
+            return { paused: root.querySelector('video').paused, chrome: getComputedStyle(root.querySelector('.hp-chrome')).opacity };
+        });
+    const setup = async (width, extra = {}) => {
+        const { context, page } = await openPlayer(browser, { width, touch: true });
+        await page.evaluate((extra) => { document.getElementById('player').options = { src: '/sample.mp4', muted: true, ...extra }; }, extra);
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1);
+        await page.waitForTimeout(300);
+        const r = await page.evaluate(() => {
+            const root = document.getElementById('player').shadowRoot;
+            const a = root.querySelector('.video-area').getBoundingClientRect();
+            const chip = root.querySelector('.hp-center-play > .hp-chip').getBoundingClientRect();
+            return { bg: { x: a.left + a.width * 0.2, y: a.top + a.height * 0.35 }, chip: { x: chip.left + chip.width / 2, y: chip.top + chip.height / 2 }, compact: root.querySelector('.video-area').hasAttribute('data-compact') };
+        });
+        return { context, page, ...r };
+    };
+
+    // Dar player, varsayılan (auto).
+    let { context, page, bg, chip, compact } = await setup(360);
+    try {
+        await page.touchscreen.tap(bg.x, bg.y);
+        await page.waitForTimeout(250);
+        let s = await tapState(page);
+        ok(compact && s.paused, `dar player, duraklatılmış: boş alana dokunmak oynatmadı ${JSON.stringify(s)}`);
+        await page.touchscreen.tap(chip.x, chip.y);
+        await page.waitForTimeout(400);
+        s = await tapState(page);
+        ok(!s.paused, `ortadaki play butonuna dokunmak oynattı ${JSON.stringify(s)}`);
+        await page.touchscreen.tap(bg.x, bg.y);
+        await page.waitForTimeout(250);
+        s = await tapState(page);
+        ok(!s.paused && s.chrome === '0', `oynarken dokunmak duraklatmadı, kontrolleri gizledi ${JSON.stringify(s)}`);
+        await page.touchscreen.tap(bg.x, bg.y);
+        await page.waitForTimeout(250);
+        s = await tapState(page);
+        ok(!s.paused && s.chrome === '1', `tekrar dokunmak kontrolleri gösterdi ${JSON.stringify(s)}`);
+    } finally {
+        await context.close();
+    }
+
+    // Dar player, tapToPlay: true → eski davranış.
+    ({ context, page, bg } = await setup(360, { tapToPlay: true }));
+    try {
+        await page.touchscreen.tap(bg.x, bg.y);
+        await page.waitForTimeout(400);
+        ok(!(await tapState(page)).paused, 'tapToPlay: true → dar player\'da dokunmak oynattı');
+    } finally {
+        await context.close();
+    }
+
+    // Büyük player (kompakt değil), dokunmatik.
+    ({ context, page, bg, compact } = await setup(900));
+    try {
+        await page.touchscreen.tap(bg.x, bg.y);
+        await page.waitForTimeout(400);
+        let s = await tapState(page);
+        ok(!compact && !s.paused, `büyük player'da dokunmak oynattı ${JSON.stringify(s)}`);
+        await page.touchscreen.tap(bg.x, bg.y);
+        await page.waitForTimeout(300);
+        s = await tapState(page);
+        ok(s.paused, 'büyük player\'da tekrar dokunmak duraklattı');
+    } finally {
+        await context.close();
+    }
+}
+
+async function testCenterPlayClearOfSeekBar(browser) {
+    console.log('\n[9] Dar player\'da ortadaki play butonu seek bar\'la / üst barla çakışmıyor, dokunuş butona gidiyor');
+    for (const width of [320, 360, 390, 430]) {
+        const { context, page } = await openPlayer(browser, { width, touch: true });
+        try {
+            await page.waitForTimeout(400);
+            const r = await page.evaluate(() => {
+                const root = document.getElementById('player').shadowRoot;
+                const chip = root.querySelector('.hp-center-play > .hp-chip').getBoundingClientRect();
+                const seek = root.querySelector('[part="seek-bar"]').getBoundingClientRect();
+                const top = root.querySelector('.hp-top-bar').getBoundingClientRect();
+                const overlap = (a, b) => b.width > 0 && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+                const hit = root.elementFromPoint(chip.left + chip.width / 2, chip.top + chip.height / 2);
+                return { seek: overlap(chip, seek), topBar: overlap(chip, top), hit: !!hit?.closest('.hp-center-play'), size: Math.round(chip.width) };
+            });
+            ok(!r.seek && !r.topBar && r.hit && r.size >= 40, `${width}px: çakışma yok, dokunuş butona gidiyor (${r.size}px) ${JSON.stringify(r)}`);
+        } finally {
+            await context.close();
+        }
     }
 }
 
@@ -410,6 +502,8 @@ async function testCaptionsDropToBottom(browser) {
         await testIosNativeFullscreenCaptions(browser);
         await testCenterPlayAboveCaptions(browser);
         await testTapGestures(browser);
+        await testTapToPlayCompact(browser);
+        await testCenterPlayClearOfSeekBar(browser);
     } finally {
         await browser.close();
     }
