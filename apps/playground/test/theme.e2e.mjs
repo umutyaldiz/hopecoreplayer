@@ -246,18 +246,58 @@ async function testMediaElementIosAttrsAndErrors(browser) {
 }
 
 async function testChromeStaysWhileHovered(browser) {
-    console.log('\n[1f] İstek üzerine: fare player üzerindeyken kontroller gizlenmiyor, çıkınca gizleniyor');
+    console.log('\n[1f] İstek üzerine: oynarken fare video üzerinde hareketsizse kontroller gizleniyor, hareket edince geliyor, kontrol üzerindeyken kalıyor');
     const page = await openBase(browser);
     await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1, { timeout: 5000 });
     const box = await page.evaluate(() => { const r = document.getElementById('player').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 3 }; });
     await page.mouse.move(box.x, box.y);
     await page.evaluate(async () => { const v = document.getElementById('player').shadowRoot.querySelector('video'); v.muted = true; await v.play().catch(() => {}); });
-    await page.waitForTimeout(2500);
     const chromeOpacity = () => page.evaluate(() => getComputedStyle(document.getElementById('player').shadowRoot.querySelector('[part="control-bar"]').parentElement).opacity);
-    ok((await chromeOpacity()) === '1', 'fare üzerinde 2,5 sn dururken kontroller açık kaldı');
+    await page.waitForTimeout(1900);
+    ok((await chromeOpacity()) === '0', 'fare video üzerinde hareketsiz → kontroller gizlendi');
+    await page.mouse.move(box.x + 20, box.y + 10);
+    await page.waitForTimeout(150);
+    ok((await chromeOpacity()) === '1', 'fare hareket edince kontroller geri geldi');
+    const btn = await page.evaluate(() => { const r = document.getElementById('player').shadowRoot.querySelector('[aria-label="Ayarlar"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    await page.mouse.move(btn.x, btn.y);
+    await page.waitForTimeout(2500);
+    ok((await chromeOpacity()) === '1', 'fare bir kontrolün üzerinde 2,5 sn dururken kontroller açık kaldı');
     await page.mouse.move(2, 2);
     await page.waitForTimeout(1900);
     ok((await chromeOpacity()) === '0', 'fare çıkınca kontroller gizlendi');
+    await page.close();
+}
+
+async function testTooltipBehindOpenMenu(browser) {
+    console.log('\n[1h] İstek üzerine: ayarlar menüsü açıkken ayarlar butonunun tooltip\'i menünün altında kalıyor (gösterilmiyor), menüyle çakışmayan tooltipler çalışıyor');
+    const page = await openBase(browser);
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1, { timeout: 5000 });
+    const center = (label) =>
+        page.evaluate((label) => {
+            const root = document.getElementById('player').shadowRoot;
+            const sel = `[aria-label="${label}"]`;
+            const r = (root.querySelector('[part="control-bar"]').querySelector(sel) ?? root.querySelector(sel)).getBoundingClientRect();
+            return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        }, label);
+    const tooltip = () =>
+        page.evaluate(() => {
+            const t = document.getElementById('player').shadowRoot.querySelector('[part="tooltip"]');
+            return t.style.visibility === 'visible' ? t.textContent.trim() : null;
+        });
+    const s = await center('Ayarlar');
+    await page.mouse.move(s.x, s.y);
+    await page.waitForTimeout(700);
+    ok((await tooltip()) === 'Ayarlar', `menü kapalıyken ayarlar tooltip'i görünüyor (${await tooltip()})`);
+    await page.mouse.click(s.x, s.y);
+    await page.mouse.move(s.x + 1, s.y);
+    await page.mouse.move(s.x - 1, s.y);
+    await page.waitForTimeout(700);
+    const open = await page.evaluate(() => !!document.getElementById('player').shadowRoot.querySelector('.hp-chip-panel:not(.hp\\:hidden)'));
+    ok(open && (await tooltip()) === null, `menü açıkken ayarlar butonunda tooltip gösterilmiyor (menü açık: ${open}, tooltip: ${await tooltip()})`);
+    const p = await center('Oynat');
+    await page.mouse.move(p.x, p.y);
+    await page.waitForTimeout(700);
+    ok((await tooltip())?.startsWith('Oynat'), `menüyle çakışmayan oynat butonunun tooltip'i çalışıyor (${await tooltip()})`);
     await page.close();
 }
 
@@ -548,6 +588,7 @@ async function testFullscreenEnlargesControls(browser) {
         await testSeekThumbAndHoverDot(browser);
         await testMediaElementIosAttrsAndErrors(browser);
         await testChromeStaysWhileHovered(browser);
+        await testTooltipBehindOpenMenu(browser);
         await testChromeStaysWhenPaused(browser);
         await testChipSurfaceChangesPerPreset(browser);
         await testOptionsDoesNotClearAttributeTheme(browser);

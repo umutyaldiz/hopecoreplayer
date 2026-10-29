@@ -131,6 +131,13 @@ export class SettingsMenu {
         if (this.currentPanel === 'main' || this.currentPanel === 'captions') this.render();
     }
 
+    /** Seçili altyazıyı dışarıdan günceller (ör. iOS native tam ekranda yapılan seçim) — seçenekler aynı kalır. */
+    setActiveCaption(label: string): void {
+        if (this.activeCaptionLabel === label) return;
+        this.activeCaptionLabel = label;
+        if (this.currentPanel === 'main' || this.currentPanel === 'captions') this.render();
+    }
+
     /** Altyazı AÇIKKEN "Altyazı" alt menüsüne eklenecek Boyut/Renk/Konum satırları — `null` kaldırır. */
     setCaptionAppearance(appearance: SettingsCaptionAppearance | null): void {
         this.captionAppearance = appearance;
@@ -178,6 +185,11 @@ export class SettingsMenu {
 
     get isOpen(): boolean {
         return this.open;
+    }
+
+    /** Açıksa menü panelinin ekran dikdörtgeni (tooltip çakışma kontrolü için). */
+    get panelRect(): DOMRect | null {
+        return this.open ? this.panel.getBoundingClientRect() : null;
     }
 
     /**

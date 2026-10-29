@@ -11,6 +11,19 @@ const LIVE_EDGE_TOLERANCE_SEC = 15;
 /** Player bu genişliğin (px) altındaysa kompakt (mobil) düzen: sağ grup üst sağa, tam ekran altta. */
 const COMPACT_MAX_WIDTH = 480;
 
+/** Sarma butonu: yuvarlak ok ikonu + ortasında süre. */
+function skipButton(direction: 'back' | 'forward', part: string): { btn: HTMLButtonElement; num: HTMLSpanElement } {
+    const { btn } = iconButton('', `skip-${direction}`);
+    btn.classList.add('hp-skip-btn');
+    btn.setAttribute('part', part);
+    const num = document.createElement('span');
+    num.className = 'hp-skip-num';
+    num.setAttribute('aria-hidden', 'true');
+    btn.appendChild(num);
+    btn.style.display = 'none';
+    return { btn, num };
+}
+
 function setButtonLabel(btn: HTMLButtonElement, label: string): void {
     btn.setAttribute('aria-label', label);
 }
@@ -52,6 +65,13 @@ export class ControlBar {
     private readonly playButton: HTMLButtonElement;
     private readonly playIcon: HTMLElement;
     private readonly pipButton: HTMLButtonElement;
+    private readonly skipBack: { btn: HTMLButtonElement; num: HTMLSpanElement };
+    private readonly skipForward: { btn: HTMLButtonElement; num: HTMLSpanElement };
+    /** Etkin sarma süreleri (sn); null = buton gizli. */
+    private skipSeconds: { back: number | null; forward: number | null } = { back: null, forward: null };
+    private seekingEnabled = true;
+    /** Sarma butonuyla sarıldığında (sn, negatif = geri) — sarma bildirimi için. */
+    onSkip: ((delta: number) => void) | null = null;
     private readonly fullscreenButton: HTMLButtonElement;
     private readonly fullscreenIcon: HTMLElement;
     private readonly timeLabel: HTMLButtonElement;
@@ -104,6 +124,12 @@ export class ControlBar {
         this.playButton.setAttribute('part', 'play-pause-button');
         this.playButton.addEventListener('click', () => this.togglePlay());
         leftGroup.appendChild(this.playButton);
+
+        this.skipBack = skipButton('back', 'skip-back-button');
+        this.skipBack.btn.addEventListener('click', () => this.skip(-(this.skipSeconds.back ?? 0)));
+        this.skipForward = skipButton('forward', 'skip-forward-button');
+        this.skipForward.btn.addEventListener('click', () => this.skip(this.skipSeconds.forward ?? 0));
+        leftGroup.append(this.skipBack.btn, this.skipForward.btn);
 
         this.volumePanel = new VolumePanel(video, labels, callbacks.adVolume);
         leftGroup.appendChild(this.volumePanel.el);
@@ -212,8 +238,44 @@ export class ControlBar {
     }
 
     /** Dil sonradan değişince (`options.locale`/`labels`) statik (reaktif olarak yeniden render edilmeyen) etiketleri tazeler. */
+    /** Geri/ileri sarma butonları — `null` süre o butonu gizler. */
+    setSkipButtons(back: number | null, forward: number | null): void {
+        this.skipSeconds = { back, forward };
+        this.renderSkipButtons();
+    }
+
+    /** DAI reklam arasında seek kapalıyken sarma butonları da devre dışı. */
+    setSeekingEnabled(enabled: boolean): void {
+        this.seekingEnabled = enabled;
+        this.skipBack.btn.disabled = !enabled;
+        this.skipForward.btn.disabled = !enabled;
+    }
+
+    private renderSkipButtons(): void {
+        const render = (b: { btn: HTMLButtonElement; num: HTMLSpanElement }, seconds: number | null, label: (s: number) => string): void => {
+            b.btn.style.display = seconds === null || this.adMode ? 'none' : '';
+            if (seconds === null) return;
+            b.num.textContent = String(seconds);
+            b.num.toggleAttribute('data-long', String(seconds).length > 2);
+            setButtonLabel(b.btn, label(seconds));
+        };
+        render(this.skipBack, this.skipSeconds.back, this.labels.skipBack);
+        render(this.skipForward, this.skipSeconds.forward, this.labels.skipForward);
+    }
+
+    private skip(delta: number): void {
+        if (!delta || !this.seekingEnabled) return;
+        const v = this.video;
+        // Canlı yayında (duration Infinity) seekable aralığın içinde kal.
+        const start = v.seekable.length ? v.seekable.start(0) : 0;
+        const end = Number.isFinite(v.duration) ? v.duration : v.seekable.length ? v.seekable.end(v.seekable.length - 1) : v.currentTime;
+        v.currentTime = Math.max(start, Math.min(end, v.currentTime + delta));
+        this.onSkip?.(delta);
+    }
+
     refreshLabels(): void {
         this.renderPlayState();
+        this.renderSkipButtons();
         setButtonLabel(this.pipButton, this.labels.pip);
         setButtonLabel(this.liveBadge, this.labels.goToLive);
         this.liveText.textContent = this.labels.live;
@@ -227,6 +289,7 @@ export class ControlBar {
     setAdMode(active: boolean): void {
         const display = active ? 'none' : '';
         this.adMode = active;
+        this.renderSkipButtons();
         this.seekBar.el.style.display = display;
         this.row.style.display = display;
         if (this.compact) this.fullscreenSlot.style.display = active ? 'none' : 'flex';

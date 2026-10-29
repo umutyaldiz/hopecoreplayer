@@ -493,6 +493,172 @@ button.hp-chip:active {
     }
 }
 
+/* ── Sarma bildirimi (controls/SeekFeedback): ileride sağda, geride solda beliren cam hap — üç ok sırayla
+   yanıp söner, ard arda sarmalarda toplanan süre her artışta "zıplar". z-8: altyazının (5) üstünde, kontrollerin (20) altında. */
+.hp-seek-fb {
+    position: absolute;
+    top: 50%;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px 12px 16px;
+    border: 1px solid var(--hp-chip-border);
+    border-radius: 9999px;
+    background: var(--hp-chip-bg);
+    backdrop-filter: blur(var(--hp-chip-blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--hp-chip-blur)) saturate(160%);
+    box-shadow: var(--hp-chip-shadow);
+    color: var(--hp-chip-text);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 180ms ease, translate 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hp-seek-fb[data-side='forward'] {
+    right: 7%;
+    translate: 14px -50%;
+}
+.hp-seek-fb[data-side='back'] {
+    left: 7%;
+    flex-direction: row-reverse;
+    padding: 12px 16px 12px 20px;
+    translate: -14px -50%;
+}
+.hp-seek-fb[data-visible] {
+    opacity: 1;
+    translate: 0 -50%;
+}
+.hp-seek-fb-chevrons {
+    display: flex;
+}
+.hp-seek-fb-chevrons svg {
+    width: 16px;
+    height: 16px;
+    margin: 0 -3px;
+    fill: currentColor;
+    opacity: 0.25;
+    animation: hp-seek-fb-chevron 900ms ease-in-out infinite;
+}
+.hp-seek-fb[data-side='back'] .hp-seek-fb-chevrons {
+    transform: scaleX(-1);
+}
+.hp-seek-fb-chevrons svg:nth-child(2) {
+    animation-delay: 150ms;
+}
+.hp-seek-fb-chevrons svg:nth-child(3) {
+    animation-delay: 300ms;
+}
+@keyframes hp-seek-fb-chevron {
+    0%,
+    100% {
+        opacity: 0.25;
+    }
+    40% {
+        opacity: 1;
+    }
+}
+.hp-seek-fb-value {
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+    white-space: nowrap;
+}
+.hp-seek-fb-num {
+    display: inline-block;
+    font-size: 20px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+.hp-seek-fb-unit {
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0.75;
+}
+.hp-seek-fb-bump {
+    animation: hp-seek-fb-bump 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes hp-seek-fb-bump {
+    0% {
+        transform: scale(1.25);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+/* Kompakt (mobil) düzende dar alan: oklar gizlenir, hap kenara yaklaşır — ortadaki play butonuyla çakışmasın. */
+.video-area[data-compact] .hp-seek-fb {
+    padding: 8px 12px;
+}
+.video-area[data-compact] .hp-seek-fb[data-side='forward'] {
+    right: 4%;
+}
+.video-area[data-compact] .hp-seek-fb[data-side='back'] {
+    left: 4%;
+    padding: 8px 12px;
+}
+.video-area[data-compact] .hp-seek-fb-chevrons {
+    display: none;
+}
+.video-area[data-compact] .hp-seek-fb-num {
+    font-size: 16px;
+}
+.hp-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+    .hp-seek-fb,
+    .hp-seek-fb-chevrons svg,
+    .hp-seek-fb-bump {
+        transition: none;
+        animation: none;
+    }
+    .hp-seek-fb-chevrons svg {
+        opacity: 0.8;
+    }
+}
+
+/* ── Geri/ileri sarma butonları: yuvarlak ok ikonu diğerlerinden biraz büyük, süre ortasında. */
+.hp-skip-btn {
+    position: relative;
+}
+.hp-skip-btn > .hp-icon {
+    font-size: calc(var(--hp-ctrl-icon-size) * 1.45);
+}
+.hp-skip-num {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: calc(var(--hp-ctrl-icon-size) * 0.14);
+    font-size: calc(var(--hp-ctrl-icon-size) * 0.56);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+}
+.hp-skip-num[data-long] {
+    font-size: calc(var(--hp-ctrl-icon-size) * 0.42);
+}
+.hp-skip-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* Merkezdeki büyük play butonu altyazının (z-5) üstünde. Yalnızca görünen yuvarlak buton yükseltilir —
+   tüm alanı kaplayan tıklama yüzeyi altta kalır ki altyazı balonu sürüklenebilsin. */
+.hp-center-play > .hp-chip {
+    position: relative;
+    z-index: 7;
+}
+
 /* ── Pause reklamı (plugins/pause-ad). Açıkken video ve tüm katmanları --hp-pause-ad-w kadar sola
    sıkışır; video cover'a geçer (oran bozulmaz, dış kenarlar kırpılır), panel sağdan kayarak gelir. */
 .video-area[data-pause-ad-ready] > :is(.media-layer, .hp-chrome, .hp-center-play, .hp-caption-layer, .hp-error-screen, .hp-mini-progress) {

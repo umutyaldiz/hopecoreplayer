@@ -8,6 +8,10 @@ export interface HopeLocaleStrings {
     seekBar: string;
     settings: string;
     pip: string;
+    skipBack: (seconds: number) => string;
+    skipForward: (seconds: number) => string;
+    /** Sarma bildirimindeki saniye kısaltması ("+15 sn"). */
+    secondsShort: string;
     fullscreenEnter: string;
     fullscreenExit: string;
     playbackSpeed: string;

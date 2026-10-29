@@ -258,15 +258,22 @@ export class SeekBar {
         this.el.removeEventListener('pointerup', this.onPointerUp);
     };
 
+    /** Odaktayken ←/→ sarma süresi (sn) — player'ın klavye kısayoluyla aynı (options.keyboardSeekStep). */
+    keyboardStep = 5;
+    /** Odaktayken ok tuşuyla sarıldığında (sn, negatif = geri) — sarma bildirimi için. */
+    onKeyboardSeek: ((delta: number) => void) | null = null;
+
     private readonly onKeyDown = (e: KeyboardEvent): void => {
         const duration = this.video.duration || 0;
         if (!Number.isFinite(duration) || duration <= 0) return;
 
         if (e.key === 'ArrowRight') {
-            this.video.currentTime = Math.min(duration, this.video.currentTime + 5);
+            this.video.currentTime = Math.min(duration, this.video.currentTime + this.keyboardStep);
+            this.onKeyboardSeek?.(this.keyboardStep);
             e.preventDefault();
         } else if (e.key === 'ArrowLeft') {
-            this.video.currentTime = Math.max(0, this.video.currentTime - 5);
+            this.video.currentTime = Math.max(0, this.video.currentTime - this.keyboardStep);
+            this.onKeyboardSeek?.(-this.keyboardStep);
             e.preventDefault();
         }
     };

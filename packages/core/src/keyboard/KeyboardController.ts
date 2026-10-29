@@ -3,6 +3,10 @@ export class KeyboardController {
     private readonly host: HTMLElement;
     private readonly video: HTMLVideoElement;
     private readonly toggleFullscreen: () => void;
+    /** ←/→ ve J/L ile sarma süresi (sn) — options.keyboardSeekStep. */
+    seekStep = 5;
+    /** Klavyeyle sarıldığında (sn, negatif = geri) — sarma bildirimi için. */
+    onSeek: ((delta: number) => void) | null = null;
 
     constructor(host: HTMLElement, video: HTMLVideoElement, toggleFullscreen: () => void) {
         this.host = host;
@@ -27,12 +31,16 @@ export class KeyboardController {
                 break;
             case 'ArrowRight':
             case 'l':
-                if (Number.isFinite(duration)) this.video.currentTime = Math.min(duration, this.video.currentTime + 5);
+                if (Number.isFinite(duration)) {
+                    this.video.currentTime = Math.min(duration, this.video.currentTime + this.seekStep);
+                    this.onSeek?.(this.seekStep);
+                }
                 e.preventDefault();
                 break;
             case 'ArrowLeft':
             case 'j':
-                this.video.currentTime = Math.max(0, this.video.currentTime - 5);
+                this.video.currentTime = Math.max(0, this.video.currentTime - this.seekStep);
+                this.onSeek?.(-this.seekStep);
                 e.preventDefault();
                 break;
             case 'ArrowUp':

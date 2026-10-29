@@ -149,6 +149,101 @@ async function testIphoneFullscreenFallback(browser) {
     await context.close();
 }
 
+async function testIosNativeFullscreenCaptions(browser) {
+    console.log('\n[5] iPhone native tam ekran: altyazı iOS\'a devrediliyor, dönüşte seçim bize aktarılıyor ve çift altyazı olmuyor');
+    const { context, page } = await openPlayer(browser, { width: 390, touch: true });
+    await page.evaluate(() => {
+        document.getElementById('player').options = {
+            src: '/sample.mp4',
+            muted: true,
+            subtitles: [
+                { src: '/sample.vtt', label: 'Türkçe', srclang: 'tr', default: true },
+                { src: '/sample.en.vtt', label: 'English', srclang: 'en' },
+            ],
+        };
+    });
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1);
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { document.getElementById('player').shadowRoot.querySelector('video').currentTime = 1; });
+    await page.waitForTimeout(400);
+    const state = () =>
+        page.evaluate(async () => {
+            const root = document.getElementById('player').shadowRoot;
+            const v = root.querySelector('video');
+            const modes = Array.from(v.textTracks).filter((t) => t.kind === 'subtitles').map((t) => `${t.language}:${t.mode}`);
+            root.querySelector('[aria-label="Ayarlar"]').click();
+            await new Promise((r) => setTimeout(r, 120));
+            const row = Array.from(root.querySelectorAll('.hp-chip-panel button')).find((b) => /Altyazı/.test(b.textContent));
+            const menu = row?.textContent.replace('Altyazı', '').trim();
+            root.querySelector('[aria-label="Ayarlar"]').click();
+            await new Promise((r) => setTimeout(r, 120));
+            const bubble = root.querySelector('.hp-caption-bubble');
+            return { modes, menu, caption: bubble.classList.contains('hp-caption-visible') ? bubble.textContent.trim() : null };
+        });
+    const fire = (type) =>
+        page.evaluate((type) => {
+            const v = document.getElementById('player').shadowRoot.querySelector('video');
+            Object.defineProperty(v, 'webkitDisplayingFullscreen', { value: type === 'webkitbeginfullscreen', configurable: true });
+            v.dispatchEvent(new Event(type));
+        }, type);
+    const nativePick = (lang) =>
+        page.evaluate((lang) => {
+            const v = document.getElementById('player').shadowRoot.querySelector('video');
+            for (const t of v.textTracks) if (t.kind === 'subtitles') t.mode = t.language === lang ? 'showing' : 'disabled';
+        }, lang);
+
+    let st = await state();
+    ok(JSON.stringify(st.modes) === '["tr:hidden","en:disabled"]' && /volkanik/.test(st.caption ?? ''), `başlangıç: tr bizim katmanda (${JSON.stringify(st)})`);
+
+    await fire('webkitbeginfullscreen');
+    st = await state();
+    ok(st.modes[0] === 'tr:showing', `tam ekrana girince seçili iz iOS'a devredildi (showing) ${JSON.stringify(st.modes)}`);
+
+    // Kullanıcı iOS menüsünde İngilizceyi seçti, sonra tam ekrandan çıktı.
+    await nativePick('en');
+    await fire('webkitendfullscreen');
+    await page.waitForTimeout(300);
+    st = await state();
+    ok(JSON.stringify(st.modes) === '["tr:disabled","en:hidden"]', `dönüşte hiçbir iz showing değil — çift altyazı yok ${JSON.stringify(st.modes)}`);
+    ok(st.menu === 'English' && /glide/.test(st.caption ?? ''), `iOS'ta seçilen İngilizce bize aktarıldı (menü: ${st.menu}, altyazı: ${st.caption})`);
+
+    // Tam ekranda altyazıyı kapatıp çıktı.
+    await fire('webkitbeginfullscreen');
+    await nativePick('none');
+    await fire('webkitendfullscreen');
+    await page.waitForTimeout(300);
+    st = await state();
+    ok(JSON.stringify(st.modes) === '["tr:disabled","en:disabled"]' && st.menu === 'Kapalı' && st.caption === null, `iOS'ta kapatılan altyazı bizde de kapalı (${JSON.stringify(st)})`);
+    await context.close();
+}
+
+async function testCenterPlayAboveCaptions(browser) {
+    console.log('\n[6] Büyük play butonu altyazının üstünde kalıyor');
+    const { context, page } = await openPlayer(browser, { width: 390, touch: true });
+    await page.evaluate(() => {
+        document.getElementById('player').options = { src: '/sample.mp4', muted: true, subtitles: [{ src: '/sample.vtt', label: 'Türkçe', srclang: 'tr', default: true }] };
+    });
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1);
+    await page.waitForTimeout(500);
+    await page.evaluate(() => { document.getElementById('player').shadowRoot.querySelector('video').currentTime = 1; });
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('.hp-caption-bubble.hp-caption-visible'), { timeout: 5000 });
+    const r = await page.evaluate(() => {
+        const root = document.getElementById('player').shadowRoot;
+        const chip = root.querySelector('.hp-center-play > .hp-chip');
+        const bubble = root.querySelector('.hp-caption-bubble');
+        const c = chip.getBoundingClientRect();
+        // Altyazı balonunu butonun tam üstüne taşı (küçük ekranda üst üste binme durumu).
+        const area = root.querySelector('.video-area').getBoundingClientRect();
+        bubble.style.bottom = `${area.bottom - (c.top + c.height / 2) - bubble.offsetHeight / 2}px`;
+        const b = bubble.getBoundingClientRect();
+        const overlaps = b.top < c.bottom && b.bottom > c.top;
+        const top = root.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
+        return { overlaps, onChip: !!top?.closest('.hp-chip') && !!top.closest('.hp-center-play') };
+    });
+    ok(r.overlaps && r.onChip, `altyazı butonla çakışınca en üstte play butonu (${JSON.stringify(r)})`);
+    await context.close();
+}
+
 async function testUnmuteBadge(browser) {
     console.log('\n[2] Mobil: sessiz oynayan videoda "Sesi aç" rozeti görünüyor, dokununca ses açılıyor ve rozet kayboluyor');
     const { context, page } = await openPlayer(browser, { width: 360, touch: true });
@@ -251,6 +346,8 @@ async function testCaptionsDropToBottom(browser) {
         await testUnmuteBadge(browser);
         await testDesktopLayoutAndResize(browser);
         await testCaptionsDropToBottom(browser);
+        await testIosNativeFullscreenCaptions(browser);
+        await testCenterPlayAboveCaptions(browser);
     } finally {
         await browser.close();
     }

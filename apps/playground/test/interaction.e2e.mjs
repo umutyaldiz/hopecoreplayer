@@ -543,6 +543,131 @@ async function testTimeDisplayToggle(browser) {
 
 
 
+async function testSkipButtons(browser) {
+    console.log('\n[13] İstek üzerine: geri/ileri sarma butonları (options ile süre, tek buton) + klavye sarma adımı (keyboardSeekStep)');
+    const page = await browser.newPage({ viewport: { width: 900, height: 600 } });
+    try {
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+        const setOptions = async (extra) => {
+            await page.evaluate((extra) => { document.getElementById('player').options = { src: '/sample.mp4', muted: true, ...extra }; }, extra);
+            await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1);
+            await page.waitForTimeout(150);
+        };
+        const buttons = () =>
+            page.evaluate(() => {
+                const root = document.getElementById('player').shadowRoot;
+                const info = (part) => {
+                    const b = root.querySelector(`[part="${part}"]`);
+                    if (!b || getComputedStyle(b).display === 'none') return null;
+                    return { label: b.getAttribute('aria-label'), num: b.querySelector('.hp-skip-num').textContent, long: b.querySelector('.hp-skip-num').hasAttribute('data-long') };
+                };
+                return { back: info('skip-back-button'), forward: info('skip-forward-button') };
+            });
+        const seekTo = (t) => page.evaluate(async (t) => { const v = document.getElementById('player').shadowRoot.querySelector('video'); v.currentTime = t; await new Promise((r) => setTimeout(r, 100)); }, t);
+        const click = (part) => page.evaluate(async (part) => { document.getElementById('player').shadowRoot.querySelector(`[part="${part}"]`).click(); await new Promise((r) => setTimeout(r, 100)); }, part);
+        const time = () => page.evaluate(() => Math.round(document.getElementById('player').shadowRoot.querySelector('video').currentTime * 10) / 10);
+
+        await setOptions({});
+        let b = await buttons();
+        ok(b.back === null && b.forward === null, 'varsayılanda sarma butonu yok');
+
+        await setOptions({ skipButtons: true });
+        b = await buttons();
+        ok(b.back?.num === '10' && b.forward?.num === '10' && b.back.label === '10 saniye geri' && b.forward.label === '10 saniye ileri', `skipButtons: true → 10 sn geri/ileri ${JSON.stringify(b)}`);
+        await seekTo(2);
+        await click('skip-forward-button');
+        ok((await time()) === 12, `ileri: 2 → ${await time()}`);
+        await click('skip-back-button');
+        ok((await time()) === 2, `geri: 12 → ${await time()}`);
+        await click('skip-back-button');
+        ok((await time()) === 0, `başta geri sarma 0'ın altına inmiyor (${await time()})`);
+        await seekTo(10);
+        await click('skip-forward-button');
+        const dur = await page.evaluate(() => Math.round(document.getElementById('player').shadowRoot.querySelector('video').duration * 10) / 10);
+        ok((await time()) === dur, `sonda ileri sarma süreyi aşmıyor (${await time()} / ${dur})`);
+
+        await setOptions({ skipButtons: { back: false, forward: 30 } });
+        b = await buttons();
+        ok(b.back === null && b.forward?.num === '30' && b.forward.label === '30 saniye ileri', `yalnızca ileri butonu, 30 sn ${JSON.stringify(b)}`);
+
+        await setOptions({ skipButtons: { back: 120 } });
+        b = await buttons();
+        ok(b.back?.num === '120' && b.back.long && b.forward?.num === '10', `3 haneli süre küçük yazılıyor, verilmeyen taraf varsayılan 10 ${JSON.stringify(b)}`);
+
+        await setOptions({ skipButtons: false });
+        b = await buttons();
+        ok(b.back === null && b.forward === null, 'skipButtons: false → butonlar kalktı');
+
+        // Klavye: varsayılan 5 sn, keyboardSeekStep ile değişir.
+        const press = async (key) => {
+            await page.evaluate(() => document.getElementById('player').focus());
+            await page.keyboard.press(key);
+            await page.waitForTimeout(100);
+        };
+        await seekTo(5);
+        await press('ArrowRight');
+        ok((await time()) === 10, `klavye varsayılan: → 5 sn ileri (5 → ${await time()})`);
+        await setOptions({ keyboardSeekStep: 3 });
+        await seekTo(6);
+        await press('ArrowLeft');
+        ok((await time()) === 3, `keyboardSeekStep: 3 → ← 3 sn geri (6 → ${await time()})`);
+        await press('l');
+        ok((await time()) === 6, `keyboardSeekStep: 3 → L 3 sn ileri (3 → ${await time()})`);
+    } finally {
+        await page.close();
+    }
+}
+
+async function testSeekFeedback(browser) {
+    console.log('\n[14] İstek üzerine: sarmada sağda/solda anlık bildirim, ard arda sarmalar toplanıyor');
+    const page = await browser.newPage({ viewport: { width: 900, height: 600 } });
+    try {
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+        await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4', muted: true, skipButtons: true }; });
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1);
+        await page.evaluate(() => { document.getElementById('player').shadowRoot.querySelector('video').currentTime = 7; });
+        const fb = () =>
+            page.evaluate(() => {
+                const root = document.getElementById('player').shadowRoot;
+                const el = root.querySelector('[part="seek-feedback"]');
+                const r = el.getBoundingClientRect();
+                const area = root.querySelector('.video-area').getBoundingClientRect();
+                return {
+                    visible: el.hasAttribute('data-visible'),
+                    side: el.dataset.side,
+                    text: el.querySelector('.hp-seek-fb-value').textContent,
+                    live: el.querySelector('[aria-live]').textContent,
+                    onRight: r.left > area.left + area.width / 2,
+                };
+            });
+
+        await page.evaluate(() => {
+            const b = document.getElementById('player').shadowRoot.querySelector('[part="skip-forward-button"]');
+            b.click();
+            b.click();
+            b.click();
+        });
+        let s = await fb();
+        ok(s.visible && s.side === 'forward' && s.onRight && s.text === '+30sn' && s.live === '30 saniye ileri', `3 kez ileri → sağda "+30 sn" ${JSON.stringify(s)}`);
+        await page.waitForTimeout(1000);
+        s = await fb();
+        ok(!s.visible, 'bir süre sarılmayınca bildirim kayboldu');
+
+        await page.evaluate(() => document.getElementById('player').focus());
+        await page.keyboard.press('ArrowLeft');
+        await page.keyboard.press('ArrowLeft');
+        s = await fb();
+        ok(s.visible && s.side === 'back' && !s.onRight && s.text === '−10sn', `klavyede 2 kez ← → solda "−10 sn" ${JSON.stringify(s)}`);
+        await page.keyboard.press('ArrowRight');
+        s = await fb();
+        ok(s.side === 'forward' && s.text === '+5sn', `yön değişince toplam sıfırlandı ${JSON.stringify(s)}`);
+    } finally {
+        await page.close();
+    }
+}
+
 (async () => {
     const browser = await chromium.launch();
     try {
@@ -558,6 +683,8 @@ async function testTimeDisplayToggle(browser) {
         await testPlaylist(browser);
         await testStory(browser);
         await testTimeDisplayToggle(browser);
+        await testSkipButtons(browser);
+        await testSeekFeedback(browser);
     } finally {
         await browser.close();
     }

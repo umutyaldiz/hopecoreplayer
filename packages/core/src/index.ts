@@ -41,6 +41,7 @@ export type {
     RedirectScreenOptions,
     QrResumeOptions,
     PauseAdOptions,
+    SkipButtonsOptions,
     DubbingTrack,
     DubbingOptions,
     LiveWallClockOptions,

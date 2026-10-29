@@ -365,6 +365,13 @@ export interface RedirectScreenOptions {
     suggestions?: RedirectScreenSuggestion[];
 }
 
+export interface SkipButtonsOptions {
+    /** Geri sarma süresi (sn); `false` geri butonunu gizler. Varsayılan 10. */
+    back?: number | false;
+    /** İleri sarma süresi (sn); `false` ileri butonunu gizler. Varsayılan 10. */
+    forward?: number | false;
+}
+
 export interface PauseAdOptions {
     /** GAM reklam birimi yolu, ör. '/6355419/Travel/Europe/France/Paris'. */
     adUnitPath: string;
@@ -446,6 +453,10 @@ export interface HopePlayerOptions {
     miniProgress?: boolean;
     /** Süre göstergesinde kalan süreyi (-0:10 / 0:15) gösterme. Varsayılan false (geçen süre). */
     showRemainingTime?: boolean;
+    /** Oynat butonunun yanında geri/ileri sarma butonları. `true` = 10 sn geri + 10 sn ileri. Varsayılan kapalı. */
+    skipButtons?: boolean | SkipButtonsOptions;
+    /** ←/→ ve J/L klavye kısayollarıyla kaç saniye sarılır. Varsayılan 5. */
+    keyboardSeekStep?: number;
     /**
      * UI dili — hazır gelen `'tr'` (varsayılan) / `'en'`, ya da herhangi bir
      * string (yalnızca `labels` ile TAM override veriliyorsa). Kontrol

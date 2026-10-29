@@ -9,6 +9,7 @@ import { ErrorScreen } from './screens/ErrorScreen';
 import { attachSubtitleTracks, clearSubtitleTracks, selectSubtitleTrack, type AttachedTrack } from './subtitles/attachTracks';
 import { CaptionRenderer, type CaptionFontSize } from './subtitles/CaptionRenderer';
 import { MiniProgress } from './controls/MiniProgress';
+import { SeekFeedback } from './controls/SeekFeedback';
 import type { SettingsCaptionAppearance, SettingsColorOption } from './controls/SettingsMenu';
 import { createIcon } from './icons/Icon';
 import { injectIconFont } from './icons/injectIconFont';
@@ -38,6 +39,10 @@ const DEFAULT_PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const DEFAULT_AUTO_HIDE_DELAY_MS = 1200;
 /** Basış ile kalkış arasındaki imleç/parmak hareketi bu eşiği aşarsa "tık" değil sürükleme sayılır — toggle tetiklenmez. */
 const TAP_MAX_MOVE_PX = 10;
+/** options.skipButtons'ta süre verilmezse. */
+const DEFAULT_SKIP_SECONDS = 10;
+/** options.keyboardSeekStep verilmezse ←/→ ve J/L ile sarma süresi (sn). */
+const DEFAULT_KEYBOARD_SEEK_STEP = 5;
 
 const TEMPLATE = /* html */ `
   <div class="video-area">
@@ -71,6 +76,8 @@ export class HopePlayerElement extends HTMLElement {
     private readonly keyboard: KeyboardController;
     private readonly loadingSpinner: LoadingSpinner;
     private readonly errorScreen: ErrorScreen;
+    /** İleri/geri sarmada sağda/solda beliren anlık bildirim. */
+    private readonly seekFeedback: SeekFeedback;
     private adsController: AdsController | null = null;
     private gestureControls: GestureControls | null = null;
     private loopSection: LoopSection | null = null;
@@ -92,6 +99,8 @@ export class HopePlayerElement extends HTMLElement {
     private readonly instanceKey: string;
 
     private subtitleTracks: AttachedTrack[] = [];
+    /** Altyazı seçiminin tek giriş noktası — iOS native tam ekrandan dönüşte de kullanılır. */
+    private selectCaption: ((label: string | null) => void) | null = null;
     /** `applyOptions()`'ta aktif bir altyazı track'i seçiliyken `true` — dil değişince Boyut/Konum görünümünü tazelemek için. */
     private captionTrackActive = false;
     /**
@@ -108,8 +117,8 @@ export class HopePlayerElement extends HTMLElement {
     private bootGraceTimer: ReturnType<typeof setTimeout> | null = null;
     private _options: HopePlayerOptions = {};
     private hideTimer: ReturnType<typeof setTimeout> | null = null;
-    /** Fare (dokunma değil) player'ın üzerinde mi — üzerindeyken kontroller otomatik gizlenmez. */
-    private mouseOver = false;
+    /** Fare kontrollerin (buton/seek bar) üzerinde mi — üzerindeyken otomatik gizlenmez; videonun üstünde hareketsizse gizlenir. */
+    private pointerOverControls = false;
     /** Kalite menüsünde şu an HLS seviyeleri mi var (kaynak değişince temizlemek için). */
     private hlsQualitiesShown = false;
     /** Son uygulanan options.showRemainingTime — bkz. applyOptions. */
@@ -217,6 +226,12 @@ export class HopePlayerElement extends HTMLElement {
         // bu yüzden tooltip'in konum hesaplaması bu kapsayıcıya göre doğru çalışır.
         this.tooltip = new TooltipController(this.videoArea);
 
+        this.seekFeedback = new SeekFeedback(this.i18n);
+        this.videoArea.appendChild(this.seekFeedback.el);
+        this.controlBar.onSkip = (delta) => this.seekFeedback.show(delta);
+        this.keyboard.onSeek = (delta) => this.seekFeedback.show(delta);
+        this.controlBar.seekBar.onKeyboardSeek = (delta) => this.seekFeedback.show(delta);
+
         // 'boot': gerçek `.options` (ör. countdownScreen) gelene kadar chrome
         // HİÇ görünmesin diye — bkz. `bootResolved` alanındaki mimari not.
         this.blockChrome('boot');
@@ -242,8 +257,7 @@ export class HopePlayerElement extends HTMLElement {
 
         this.videoEl.addEventListener('play', this.onPlay);
         this.videoEl.addEventListener('pause', this.onPause);
-        this.addEventListener('pointermove', this.scheduleAutoHide);
-        this.addEventListener('pointerenter', this.onPointerEnter);
+        this.addEventListener('pointermove', this.onPointerMove);
         this.addEventListener('pointerleave', this.onPointerLeave);
         this.addEventListener('pointerdown', this.onPointerDownFocus);
         document.addEventListener('fullscreenchange', this.onFullscreenChange);
@@ -255,7 +269,13 @@ export class HopePlayerElement extends HTMLElement {
         this.controlBar.settingsMenu.onOpenChange = (open) => {
             if (open && this.hideTimer) clearTimeout(this.hideTimer);
             if (!open) this.scheduleAutoHide();
+            this.tooltip.recheckOcclusion();
         };
+        // Açık menüyle çakışan tooltip menünün "altında" kalır (gösterilmez).
+        this.tooltip.setOcclusionCheck((r) => {
+            const p = this.controlBar.settingsMenu.panelRect;
+            return !!p && r.left < p.right && r.right > p.left && r.top < p.bottom && r.bottom > p.top;
+        });
 
         // "Ekrana dokun → oynat/duraklat": doğrudan videoEl'e bağlı, kontrol çubuğu tıklamaları tetiklemez.
         this.videoEl.addEventListener('mousedown', this.onVideoPressStart);
@@ -273,8 +293,7 @@ export class HopePlayerElement extends HTMLElement {
         this.miniProgress = null;
         this.videoEl.removeEventListener('play', this.onPlay);
         this.videoEl.removeEventListener('pause', this.onPause);
-        this.removeEventListener('pointermove', this.scheduleAutoHide);
-        this.removeEventListener('pointerenter', this.onPointerEnter);
+        this.removeEventListener('pointermove', this.onPointerMove);
         this.removeEventListener('pointerleave', this.onPointerLeave);
         this.removeEventListener('pointerdown', this.onPointerDownFocus);
         this.controlBar.settingsMenu.onOpenChange = null;
@@ -294,6 +313,7 @@ export class HopePlayerElement extends HTMLElement {
         this.tooltip.destroy();
         this.loadingSpinner.destroy();
         this.errorScreen.destroy();
+        this.seekFeedback.destroy();
         this.sourceManager.destroy();
         this.adsController?.destroy();
         this.gestureControls?.destroy();
@@ -404,6 +424,14 @@ export class HopePlayerElement extends HTMLElement {
             this.miniProgress = null;
         }
         // Yalnızca DEĞER değişince uygula — başka bir option güncellemesi kullanıcının tıklayarak seçtiği modu sıfırlamasın.
+        const seekStep = options.keyboardSeekStep && options.keyboardSeekStep > 0 ? options.keyboardSeekStep : DEFAULT_KEYBOARD_SEEK_STEP;
+        this.keyboard.seekStep = seekStep;
+        this.controlBar.seekBar.keyboardStep = seekStep;
+        const skip = options.skipButtons === true ? {} : options.skipButtons || null;
+        this.controlBar.setSkipButtons(
+            skip && skip.back !== false ? (skip.back ?? DEFAULT_SKIP_SECONDS) : null,
+            skip && skip.forward !== false ? (skip.forward ?? DEFAULT_SKIP_SECONDS) : null
+        );
         if (options.showRemainingTime !== undefined && options.showRemainingTime !== this.appliedShowRemaining) {
             this.appliedShowRemaining = options.showRemainingTime;
             this.controlBar.setShowRemaining(options.showRemainingTime);
@@ -717,8 +745,10 @@ export class HopePlayerElement extends HTMLElement {
                 const track = selectSubtitleTrack(this.subtitleTracks, label);
                 this.captionRenderer.setActiveTrack(track);
                 this.captionTrackActive = track !== null;
+                this.controlBar.settingsMenu.setActiveCaption(label ?? this.i18n.captionsOff);
                 this.controlBar.settingsMenu.setCaptionAppearance(track !== null ? this.buildCaptionAppearance() : null);
             };
+            this.selectCaption = selectCaption;
             this.controlBar.setCaptions(
                 [
                     { label: this.i18n.captionsOff, onSelect: () => selectCaption(null) },
@@ -733,6 +763,7 @@ export class HopePlayerElement extends HTMLElement {
         } else {
             clearSubtitleTracks(this.videoEl);
             this.subtitleTracks = [];
+            this.selectCaption = null;
             this.captionRenderer.setActiveTrack(null);
             this.captionTrackActive = false;
             this.controlBar.settingsMenu.setCaptionAppearance(null);
@@ -867,9 +898,28 @@ export class HopePlayerElement extends HTMLElement {
         return document.fullscreenElement === this || doc.webkitFullscreenElement === this || !!this.iosVideo.webkitDisplayingFullscreen;
     }
 
-    private readonly onFullscreenChange = (): void => {
+    private readonly onFullscreenChange = (e?: Event): void => {
         this.controlBar.setFullscreenState(this.isFullscreenActive());
+        if (e?.type === 'webkitbeginfullscreen') this.showCaptionsNatively();
+        else if (e?.type === 'webkitendfullscreen') this.syncCaptionsFromNative();
     };
+
+    /**
+     * iPhone native tam ekranında bizim altyazı katmanımız görünmez — seçili izi 'showing' yapıp iOS'un çizmesine bırakırız.
+     */
+    private showCaptionsNatively(): void {
+        for (const { track } of this.subtitleTracks) if (track.mode === 'hidden') track.mode = 'showing';
+    }
+
+    /**
+     * Native tam ekrandan dönüş: iOS menüsünde seçilen iz 'showing' kalır ve kendi katmanımızla çift altyazı çizilir.
+     * Seçimi bizim tarafa aktarıp izi tekrar 'hidden' yaparız (hiçbiri showing değilse kullanıcı kapatmıştır).
+     */
+    private syncCaptionsFromNative(): void {
+        if (!this.selectCaption) return;
+        const showing = this.subtitleTracks.find(({ track }) => track.mode === 'showing');
+        this.selectCaption(showing?.label ?? null);
+    }
 
     // ── Oynatma durumuna göre merkez buton + otomatik gizlenme ──
 
@@ -1003,22 +1053,26 @@ export class HopePlayerElement extends HTMLElement {
 
     /** DAI reklam arası boyunca kullanıcı reklamın İÇİNE seek edemesin diye (sunucu taraflı eklenen reklamlar seekable aralığın parçası). */
     disableSeeking(): void {
+        this.controlBar.setSeekingEnabled(false);
         this.controlBar.seekBar.el.style.pointerEvents = 'none';
         this.controlBar.seekBar.el.style.opacity = '0.5';
     }
 
     enableSeeking(): void {
+        this.controlBar.setSeekingEnabled(true);
         this.controlBar.seekBar.el.style.pointerEvents = '';
         this.controlBar.seekBar.el.style.opacity = '';
     }
 
-    private readonly onPointerEnter = (e: PointerEvent): void => {
-        if (e.pointerType === 'mouse') this.mouseOver = true;
+    private readonly onPointerMove = (e: PointerEvent): void => {
+        // chromeEl pointer-events-none; olay yolunda yalnızca imleç bir kontrolün (pointer-events-auto) üzerindeyse görünür.
+        this.pointerOverControls = e.pointerType === 'mouse' && e.composedPath().includes(this.chromeEl);
+        this.scheduleAutoHide();
     };
 
     private readonly onPointerLeave = (e: PointerEvent): void => {
         if (e.pointerType !== 'mouse') return;
-        this.mouseOver = false;
+        this.pointerOverControls = false;
         this.scheduleAutoHide();
     };
 
@@ -1027,8 +1081,8 @@ export class HopePlayerElement extends HTMLElement {
         if (this.hideTimer) clearTimeout(this.hideTimer);
         if (this.videoEl.paused) return;
         this.hideTimer = setTimeout(() => {
-            // Duraklatılmışken, fare player'ın üzerindeyken ya da ayarlar menüsü açıkken gizleme.
-            if (this.videoEl.paused || this.mouseOver || this.controlBar.settingsMenu.isOpen) return;
+            // Duraklatılmışken, fare kontrollerin üzerindeyken ya da ayarlar menüsü açıkken gizleme.
+            if (this.videoEl.paused || this.pointerOverControls || this.controlBar.settingsMenu.isOpen) return;
             this.setChromeOpacity('0');
         }, this.autoHideDelayMs);
     };

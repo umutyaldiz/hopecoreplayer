@@ -149,6 +149,8 @@ hope-player::part(center-play-button) { /* ... */ }
 | `mini-progress` | Thin 1px edge-to-edge progress line at the bottom while the controls are hidden (`miniProgress: true`) |
 | `seek-time` | Time shown above the seek bar while hovering (default, no plugin needed; hidden when sprite-thumbnails/segments show their own time, and on live streams). Follows the `--hp-tooltip-*` tokens |
 | `play-pause-button` | Play/pause icon button |
+| `skip-back-button` / `skip-forward-button` | Skip back / forward buttons (`options.skipButtons`); the duration is drawn in `.hp-skip-num` |
+| `seek-feedback` | Notice shown on the right/left while skipping ("+30 s"); follows the `--hp-chip-*` tokens |
 | `volume-button` / `volume-slider` | Mute toggle / the vertical slider popup |
 | `center-play-button` | The big center play button (outer full-area click target — the visual circle is an inner `<span class="hp-chip">`, not a separate part) |
 | `playlist-panel` | Playlist plugin's list panel |

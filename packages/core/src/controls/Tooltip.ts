@@ -21,6 +21,7 @@ export class TooltipController {
     private showTimer: ReturnType<typeof setTimeout> | null = null;
     private hideTimer: ReturnType<typeof setTimeout> | null = null;
     private currentTarget: HTMLElement | null = null;
+    private isOccluded: ((rect: DOMRect) => boolean) | null = null;
     /** Gösterim gecikmesi (SHOW_DELAY_MS) içinde bekleyen hedef — `currentTarget` yalnızca gerçekten gösterilince set ediliyor. */
     private pendingTarget: HTMLElement | null = null;
 
@@ -58,6 +59,20 @@ export class TooltipController {
         this.mountEl.removeEventListener('focusout', this.onFocusOut);
         this.mountEl.removeEventListener('pointerdown', this.hideNow);
         this.el.remove();
+    }
+
+    /**
+     * Tooltip'i örten bir katman (ör. açık ayarlar menüsü) varsa çakışan tooltip gösterilmez — menü kontrol katmanının
+     * (z-20) içinde olduğundan tooltip'i z-index ile menünün altına almak mümkün değil.
+     */
+    setOcclusionCheck(check: ((rect: DOMRect) => boolean) | null): void {
+        this.isOccluded = check;
+        this.recheckOcclusion();
+    }
+
+    /** Örten katman açıldı/kapandı — görünen tooltip artık çakışıyorsa gizle. */
+    recheckOcclusion(): void {
+        if (this.currentTarget && this.el.style.visibility === 'visible' && this.isOccluded?.(this.el.getBoundingClientRect())) this.hideNow();
     }
 
     private matchTarget(fromEl: EventTarget | null): HTMLElement | null {
@@ -166,6 +181,7 @@ export class TooltipController {
         requestAnimationFrame(() => {
             if (this.currentTarget !== target) return;
             this.position(target);
+            if (this.isOccluded?.(this.el.getBoundingClientRect())) return;
             this.el.style.visibility = 'visible';
             this.el.style.opacity = '1';
         });
