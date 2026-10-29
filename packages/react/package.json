@@ -1,6 +1,6 @@
 {
   "name": "@hopeplayer/react",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Thin React wrapper around <hope-player> (@hopeplayer/core) — prop/event bridge only, no state duplication",
   "repository": {
     "type": "git",
@@ -34,11 +34,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
-    "@hopeplayer/core": "^1.0.5",
+    "@hopeplayer/core": "^1.0.6",
     "react": ">=18"
   },
   "devDependencies": {
-    "@hopeplayer/core": "^1.0.5",
+    "@hopeplayer/core": "^1.0.6",
     "@types/react": "^18.3.0",
     "react": "^18.3.0",
     "typescript": "^5.7.0",
