@@ -668,6 +668,64 @@ async function testSeekFeedback(browser) {
     }
 }
 
+async function testContextMenu(browser) {
+    console.log('\n[15] İstek üzerine: sağ tık menüsü (varsayılan açık: ad + sürüm), options ile istatistik paneli ya da kapatma');
+    const page = await browser.newPage({ viewport: { width: 900, height: 600 } });
+    try {
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+        const setOptions = (extra) =>
+            page.evaluate((extra) => { document.getElementById('player').options = { src: '/sample.mp4', muted: true, ...extra }; }, extra);
+        const center = await page.evaluate(() => { const r = document.getElementById('player').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 3 }; });
+        const menu = () =>
+            page.evaluate(() => {
+                const m = document.getElementById('player').shadowRoot.querySelector('[part="context-menu"]');
+                return { open: m.hasAttribute('data-open'), items: Array.from(m.children).map((c) => c.textContent.trim()) };
+            });
+        const version = await page.evaluate(() => customElements.get('hope-player').version);
+
+        await setOptions({});
+        await page.waitForTimeout(200);
+        // Sağ tıktan ÖNCE dinleyici kur; olayın tarayıcı menüsünü engelleyip engellemediğini döndürür.
+        let prevented;
+        const pending = page.evaluate(() => new Promise((r) => {
+            document.getElementById('player').addEventListener('contextmenu', (e) => setTimeout(() => r(e.defaultPrevented)), { once: true });
+        }));
+        await page.mouse.click(center.x, center.y, { button: 'right' });
+        prevented = await pending;
+        let m = await menu();
+        ok(prevented === true && m.open && JSON.stringify(m.items) === JSON.stringify([`HopeCorePlayerv${version}`]), `varsayılan: tarayıcı menüsü yerine ad + sürüm (${version}) ${JSON.stringify(m)}`);
+        await page.keyboard.press('Escape');
+        ok(!(await menu()).open, 'Escape menüyü kapattı');
+
+        await setOptions({ contextMenu: { stats: true } });
+        await page.waitForTimeout(200);
+        await page.mouse.click(center.x, center.y, { button: 'right' });
+        m = await menu();
+        ok(m.items.length === 2 && m.items[1] === 'İstatistikler', `stats: true → "İstatistikler" satırı ${JSON.stringify(m.items)}`);
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelectorAll('[part="context-menu"] button')[0].click());
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('[part="stats-panel"]'), { timeout: 5000 });
+        const stats = await page.evaluate(() => {
+            const p = document.getElementById('player').shadowRoot.querySelector('[part="stats-panel"]');
+            return Array.from(p.querySelectorAll('dt')).map((dt) => `${dt.textContent}=${dt.nextElementSibling.textContent}`);
+        });
+        ok((await menu()).open === false && stats.some((s) => s === 'Motor=native') && stats.some((s) => s === `Sürüm=HopeCorePlayer ${version}`) && stats.some((s) => s.startsWith('Video / ekran=640×360')), `istatistik paneli açıldı, menü kapandı ${JSON.stringify(stats.slice(0, 3))}`);
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-stats-close').click());
+        ok(!(await page.evaluate(() => !!document.getElementById('player').shadowRoot.querySelector('[part="stats-panel"]'))), 'kapat butonu paneli kaldırdı');
+
+        await setOptions({ contextMenu: false });
+        await page.waitForTimeout(200);
+        const pending2 = page.evaluate(() => new Promise((r) => {
+            document.getElementById('player').addEventListener('contextmenu', (e) => setTimeout(() => r(e.defaultPrevented)), { once: true });
+        }));
+        await page.mouse.click(center.x, center.y, { button: 'right' });
+        prevented = await pending2;
+        ok(prevented === false && !(await menu()).open, 'contextMenu: false → tarayıcının kendi menüsü (olay engellenmedi)');
+    } finally {
+        await page.close();
+    }
+}
+
 (async () => {
     const browser = await chromium.launch();
     try {
@@ -685,6 +743,7 @@ async function testSeekFeedback(browser) {
         await testTimeDisplayToggle(browser);
         await testSkipButtons(browser);
         await testSeekFeedback(browser);
+        await testContextMenu(browser);
     } finally {
         await browser.close();
     }

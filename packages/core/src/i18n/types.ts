@@ -12,6 +12,21 @@ export interface HopeLocaleStrings {
     skipForward: (seconds: number) => string;
     /** Sarma bildirimindeki saniye kısaltması ("+15 sn"). */
     secondsShort: string;
+    /** Ayarlar menüsünde yayının alternatif ses izleri (HLS). */
+    audioTrack: string;
+    statsTitle: string;
+    statsClose: string;
+    statsEngine: string;
+    statsResolution: string;
+    statsQuality: string;
+    statsCodecs: string;
+    statsBandwidth: string;
+    statsBuffer: string;
+    statsDropped: string;
+    statsLatency: string;
+    statsSpeedVolume: string;
+    statsSource: string;
+    statsVersion: string;
     fullscreenEnter: string;
     fullscreenExit: string;
     playbackSpeed: string;

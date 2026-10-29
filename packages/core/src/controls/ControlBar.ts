@@ -2,6 +2,7 @@ import { SeekBar } from './SeekBar';
 import { VolumePanel, type VolumePanelAdHooks } from './VolumePanel';
 import { SettingsMenu, type SettingsCaptionOption, type SettingsQualityOption } from './SettingsMenu';
 import { formatTime } from '../utils/format-time';
+import { seekBy } from '../utils/seek-by';
 import { createIcon, setIconName } from '../icons/Icon';
 import type { HopeLocaleStrings } from '../i18n/types';
 
@@ -10,8 +11,13 @@ import type { HopeLocaleStrings } from '../i18n/types';
 const LIVE_EDGE_TOLERANCE_SEC = 15;
 /** Player bu genişliğin (px) altındaysa kompakt (mobil) düzen: sağ grup üst sağa, tam ekran altta. */
 const COMPACT_MAX_WIDTH = 480;
+/** Bundan kısa beklemelerde (ms) yükleme halkası hiç görünmez — kısa takılmalarda yanıp sönmesin. */
+const LOADING_RING_DELAY_MS = 150;
 
 /** Sarma butonu: yuvarlak ok ikonu + ortasında süre. */
+const LOADING_START_EVENTS = ['waiting', 'seeking'] as const;
+const LOADING_END_EVENTS = ['playing', 'canplay', 'canplaythrough', 'seeked', 'pause', 'error', 'emptied'] as const;
+
 function skipButton(direction: 'back' | 'forward', part: string): { btn: HTMLButtonElement; num: HTMLSpanElement } {
     const { btn } = iconButton('', `skip-${direction}`);
     btn.classList.add('hp-skip-btn');
@@ -51,6 +57,8 @@ export interface ControlBarCallbacks {
     adTogglePlay: () => void;
     adIsPaused: () => boolean;
     adVolume: VolumePanelAdHooks;
+    /** hls.js'in hedef canlı konumu (canlı ucun ~3 segment gerisi) — rozet "geride" kararı ve "canlıya dön" için. */
+    liveSyncPosition?(): number | null;
 }
 
 /** Alt kontrol çubuğunu kurar; alt bileşenleri (SeekBar/VolumePanel/SettingsMenu) birleştirir. */
@@ -70,6 +78,8 @@ export class ControlBar {
     /** Etkin sarma süreleri (sn); null = buton gizli. */
     private skipSeconds: { back: number | null; forward: number | null } = { back: null, forward: null };
     private seekingEnabled = true;
+    private readonly leftGroup: HTMLDivElement;
+    private loadingTimer: ReturnType<typeof setTimeout> | null = null;
     /** Sarma butonuyla sarıldığında (sn, negatif = geri) — sarma bildirimi için. */
     onSkip: ((delta: number) => void) | null = null;
     private readonly fullscreenButton: HTMLButtonElement;
@@ -115,8 +125,20 @@ export class ControlBar {
         // Sol küme: oynat/duraklat + ses + süre — kendi transparan "pill"
         // yüzeyini paylaşıyor (`.hp-group`, theme/tailwind.css).
         const leftGroup = document.createElement('div');
-        leftGroup.className = 'hp-group hp:flex hp:items-center hp:gap-1 hp:px-1.5 hp:py-1 hp:shrink-0 hp:pointer-events-auto';
+        leftGroup.className = 'hp-group hp-group-left hp:flex hp:items-center hp:gap-1 hp:px-1.5 hp:py-1 hp:shrink-0 hp:pointer-events-auto';
         row.appendChild(leftGroup);
+        this.leftGroup = leftGroup;
+
+        // Yükleme halkası: medya beklenirken grubun kenarında dolaşan ışık (tailwind.css `.hp-loading-ring`).
+        const ring = document.createElement('span');
+        ring.className = 'hp-loading-ring';
+        ring.setAttribute('aria-hidden', 'true');
+        // Dış katman parıltı (filter), iç katman kenara kırpan maske — filter maskeden önce uygulandığı için ayrı.
+        const ringMask = document.createElement('span');
+        ringMask.className = 'hp-loading-ring-mask';
+        ringMask.appendChild(document.createElement('span'));
+        ring.appendChild(ringMask);
+        leftGroup.appendChild(ring);
 
         const play = iconButton(labels.play, 'play', 'K');
         this.playButton = play.btn;
@@ -206,6 +228,10 @@ export class ControlBar {
         video.addEventListener('loadedmetadata', this.renderTime);
         video.addEventListener('durationchange', this.renderTime);
         video.addEventListener('progress', this.renderTime);
+        // Kaynak değişince süre NaN'a döner ama durationchange gelmez — önceki videonun "0:00 / 0:15"u kalmasın.
+        video.addEventListener('emptied', this.renderTime);
+        for (const ev of LOADING_START_EVENTS) video.addEventListener(ev, this.onLoadingStart);
+        for (const ev of LOADING_END_EVENTS) video.addEventListener(ev, this.onLoadingEnd);
         this.renderPlayState();
         this.renderTime();
     }
@@ -265,11 +291,7 @@ export class ControlBar {
 
     private skip(delta: number): void {
         if (!delta || !this.seekingEnabled) return;
-        const v = this.video;
-        // Canlı yayında (duration Infinity) seekable aralığın içinde kal.
-        const start = v.seekable.length ? v.seekable.start(0) : 0;
-        const end = Number.isFinite(v.duration) ? v.duration : v.seekable.length ? v.seekable.end(v.seekable.length - 1) : v.currentTime;
-        v.currentTime = Math.max(start, Math.min(end, v.currentTime + delta));
+        seekBy(this.video, delta);
         this.onSkip?.(delta);
     }
 
@@ -411,17 +433,38 @@ export class ControlBar {
             }
             return;
         }
-        // Canlı uçtan LIVE_EDGE_TOLERANCE_SEC'ten fazla gerideyse "geride" (gri nokta, tıklanınca uca döner).
-        const edge = this.liveEdge();
-        const behind = edge !== null && edge - this.video.currentTime > LIVE_EDGE_TOLERANCE_SEC;
+        // Canlı konumdan LIVE_EDGE_TOLERANCE_SEC'ten fazla gerideyse "geride" (gri nokta, tıklanınca uca döner). hls.js
+        // yayını bilerek uçtan ~3 segment geride oynatır — ölçü onun hedef konumu, yoksa seekable sonu.
+        const target = this.callbacks.liveSyncPosition?.() ?? this.liveEdge();
+        const behind = target !== null && target - this.video.currentTime > LIVE_EDGE_TOLERANCE_SEC;
         this.liveBadge.toggleAttribute('data-behind', behind);
     };
 
+    /** Buffer bekleniyor (oynarken takılma ya da buffer'lanmamış bir yere atlama). */
+    private readonly onLoadingStart = (e: Event): void => {
+        // Buffer'lı bir yere atlarken (veri hazır) halka gösterilmez.
+        if (e.type === 'seeking' && this.video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) return;
+        if (this.loadingTimer || this.leftGroup.hasAttribute('data-loading')) return;
+        this.loadingTimer = setTimeout(() => {
+            this.loadingTimer = null;
+            this.leftGroup.setAttribute('data-loading', '');
+        }, LOADING_RING_DELAY_MS);
+    };
+
+    private readonly onLoadingEnd = (e: Event): void => {
+        // seeked geldiğinde veri hâlâ yoksa bekleme sürüyor (waiting/canplay kararı verir).
+        if (e.type === 'seeked' && this.video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA && !this.video.paused) return;
+        if (this.loadingTimer) clearTimeout(this.loadingTimer);
+        this.loadingTimer = null;
+        this.leftGroup.removeAttribute('data-loading');
+    };
+
     private readonly goToLive = (): void => {
+        const sync = this.callbacks.liveSyncPosition?.();
         const edge = this.liveEdge();
-        if (edge === null) return;
-        // Tam uca değil, biraz gerisine — buffered'ın en sonuna seek edince oynatma takılabiliyor.
-        this.video.currentTime = Math.max(0, edge - 1);
+        if (edge === null && sync == null) return;
+        // hls.js'in hedef canlı konumu; yoksa tam uca değil biraz gerisine — en sona seek edince oynatma takılabiliyor.
+        this.video.currentTime = sync ?? Math.max(0, edge! - 1);
         if (this.video.paused) void this.video.play().catch(() => {});
         this.renderTime();
     };
@@ -434,6 +477,10 @@ export class ControlBar {
         this.video.removeEventListener('loadedmetadata', this.renderTime);
         this.video.removeEventListener('durationchange', this.renderTime);
         this.video.removeEventListener('progress', this.renderTime);
+        this.video.removeEventListener('emptied', this.renderTime);
+        for (const ev of LOADING_START_EVENTS) this.video.removeEventListener(ev, this.onLoadingStart);
+        for (const ev of LOADING_END_EVENTS) this.video.removeEventListener(ev, this.onLoadingEnd);
+        if (this.loadingTimer) clearTimeout(this.loadingTimer);
         this.resizeObserver.disconnect();
         this.topEl.remove();
         this.seekBar.destroy();

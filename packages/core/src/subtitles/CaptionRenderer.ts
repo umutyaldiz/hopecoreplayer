@@ -243,7 +243,9 @@ export class CaptionRenderer {
         if (animate && prevPx !== targetPx) {
             this.bubbleEl.classList.add('hp-caption-no-transition');
             this.bubbleEl.style.bottom = `${targetPx}px`;
-            this.bubbleEl.style.transform = `translateX(-50%) translateY(${prevPx - targetPx}px)`;
+            // bottom azalınca balon aşağı iner — eski yerinde görünmesi için o kadar YUKARI (negatif Y) kaydırılır.
+            // (İşaret ters olunca balon önce iki kat aşağı sıçrayıp sonra geri kayıyordu.)
+            this.bubbleEl.style.transform = `translateX(-50%) translateY(${targetPx - prevPx}px)`;
             void this.bubbleEl.offsetHeight; // reflow'u zorla — sıradaki transform değişikliği animasyonlansın
             this.bubbleEl.classList.remove('hp-caption-no-transition');
             this.bubbleEl.style.transform = 'translateX(-50%)';

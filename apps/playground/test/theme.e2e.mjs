@@ -66,10 +66,12 @@ async function testSeekBarHoverTime(browser) {
     await page.evaluate(() => {
         const v = document.getElementById('player').shadowRoot.querySelector('video');
         Object.defineProperty(v, 'duration', { value: Infinity, configurable: true });
+        // Geri sarılamayan canlı (DVR yok) — DVR'lı canlıda seek bar aktif (live.e2e [4i]).
+        Object.defineProperty(v, 'seekable', { value: { length: 0, start: () => 0, end: () => 0 }, configurable: true });
     });
     await page.mouse.move(bar.x + bar.w / 2, bar.y + bar.h / 2);
     await page.waitForTimeout(150);
-    ok(!(await read()).visible, 'canlı yayında varsayılan hover zamanı gösterilmiyor');
+    ok(!(await read()).visible, 'geri sarılamayan canlı yayında varsayılan hover zamanı gösterilmiyor');
     await page.close();
 }
 
@@ -125,6 +127,8 @@ async function testMiniProgress(browser) {
     await page.evaluate(() => {
         const v = document.getElementById('player').shadowRoot.querySelector('video');
         Object.defineProperty(v, 'duration', { value: Infinity, configurable: true });
+        // Geri sarılamayan canlı (DVR yok) — DVR'lı canlıda seek bar aktif (live.e2e [4i]).
+        Object.defineProperty(v, 'seekable', { value: { length: 0, start: () => 0, end: () => 0 }, configurable: true });
         v.dispatchEvent(new Event('durationchange'));
     });
     await page.waitForTimeout(350);
@@ -191,10 +195,12 @@ async function testSeekThumbAndHoverDot(browser) {
     await page.evaluate(() => {
         const v = document.getElementById('player').shadowRoot.querySelector('video');
         Object.defineProperty(v, 'duration', { value: Infinity, configurable: true });
+        // Geri sarılamayan canlı (DVR yok) — DVR'lı canlıda seek bar aktif (live.e2e [4i]).
+        Object.defineProperty(v, 'seekable', { value: { length: 0, start: () => 0, end: () => 0 }, configurable: true });
         v.dispatchEvent(new Event('timeupdate'));
     });
     await page.waitForTimeout(100);
-    ok((await read()).thumbDisplay === 'none', 'canlı yayında (süre yok) thumb gizli');
+    ok((await read()).thumbDisplay === 'none', 'geri sarılamayan canlı yayında thumb gizli');
     await page.close();
 }
 
@@ -299,6 +305,98 @@ async function testTooltipBehindOpenMenu(browser) {
     await page.waitForTimeout(700);
     ok((await tooltip())?.startsWith('Oynat'), `menüyle çakışmayan oynat butonunun tooltip'i çalışıyor (${await tooltip()})`);
     await page.close();
+}
+
+async function testCursorHide(browser) {
+    console.log('\n[1i] İstek üzerine: oynarken fare hareketsiz kalınca imleç gizleniyor (cursorHideDelayMs), kıpırdayınca geri geliyor');
+    const page = await openBase(browser);
+    try {
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1, { timeout: 5000 });
+        const box = await page.evaluate(() => { const r = document.getElementById('player').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 3 }; });
+        const cursor = () =>
+            page.evaluate(() => {
+                const el = document.getElementById('player');
+                return { hidden: el.hasAttribute('data-cursor-hidden'), css: getComputedStyle(el.shadowRoot.querySelector('video')).cursor };
+            });
+        const play = () => page.evaluate(async () => { const v = document.getElementById('player').shadowRoot.querySelector('video'); v.muted = true; await v.play().catch(() => {}); });
+        const pause = () => page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').pause());
+
+        await page.evaluate(() => { const el = document.getElementById('player'); el.options = { ...el.options, cursorHideDelayMs: 600 }; });
+        await page.waitForTimeout(200);
+        await page.mouse.move(box.x, box.y);
+        await play();
+        await page.mouse.move(box.x + 5, box.y);
+        await page.waitForTimeout(300);
+        ok(!(await cursor()).hidden, 'süre dolmadan imleç görünür');
+        await page.waitForTimeout(500);
+        let c = await cursor();
+        ok(c.hidden && c.css === 'none', `oynarken 600 ms hareketsiz → imleç gizli (cursor: ${c.css})`);
+        await page.mouse.move(box.x + 20, box.y + 10);
+        c = await cursor();
+        ok(!c.hidden && c.css !== 'none', `fare kıpırdayınca imleç geri geldi (${c.css})`);
+
+        await pause();
+        await page.mouse.move(box.x + 25, box.y + 10);
+        await page.waitForTimeout(900);
+        ok(!(await cursor()).hidden, 'duraklatılmışken imleç gizlenmiyor');
+
+        await play();
+        const btn = await page.evaluate(() => { const r = document.getElementById('player').shadowRoot.querySelector('[aria-label="Ayarlar"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+        await page.mouse.move(btn.x, btn.y);
+        await page.waitForTimeout(900);
+        ok(!(await cursor()).hidden, 'imleç bir kontrolün üzerindeyken gizlenmiyor');
+
+        await page.evaluate(() => { const el = document.getElementById('player'); el.options = { ...el.options, cursorHideDelayMs: false }; });
+        await page.waitForTimeout(200);
+        await play();
+        await page.mouse.move(box.x, box.y);
+        await page.waitForTimeout(900);
+        ok(!(await cursor()).hidden, 'cursorHideDelayMs: false → hiç gizlenmiyor');
+
+        // Varsayılan 5 sn.
+        await page.evaluate(() => { const el = document.getElementById('player'); const { cursorHideDelayMs, ...rest } = el.options; el.options = rest; });
+        await page.waitForTimeout(200);
+        await play();
+        await page.mouse.move(box.x + 3, box.y);
+        await page.waitForTimeout(4500);
+        const early = (await cursor()).hidden;
+        await page.waitForTimeout(800);
+        ok(!early && (await cursor()).hidden, 'varsayılan: 4,5 sn\'de görünür, 5 sn sonra gizli');
+    } finally {
+        await page.close();
+    }
+}
+
+async function testLoadingRing(browser) {
+    console.log('\n[1j] İstek üzerine: medya yüklenirken sol grubun kenarında dönen ışık (yükleme halkası), oynayınca kayboluyor');
+    const page = await browser.newPage({ viewport: { width: 700, height: 500 } });
+    try {
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+        const ringOn = () => page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-group-left').hasAttribute('data-loading'));
+        ok(!(await ringOn()), 'başlangıçta (duraklatılmış) halka yok');
+
+        // Video isteklerini geciktir → oynat'a basınca buffer beklenir.
+        await page.route('**/sample.mp4*', async (route) => {
+            await new Promise((r) => setTimeout(r, 1500));
+            await route.continue();
+        });
+        await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4?slow', muted: true, preload: 'none' }; });
+        await page.waitForTimeout(200);
+        await page.evaluate(() => { void document.getElementById('player').shadowRoot.querySelector('video').play().catch(() => {}); });
+        await page.waitForTimeout(700);
+        const during = await ringOn();
+        const anim = await page.evaluate(() => {
+            const span = document.getElementById('player').shadowRoot.querySelector('.hp-loading-ring-mask > span');
+            return { state: getComputedStyle(span).animationPlayState, opacity: getComputedStyle(span.closest('.hp-loading-ring')).opacity };
+        });
+        ok(during && anim.state === 'running', `yüklenirken halka açık ve dönüyor ${JSON.stringify(anim)}`);
+        await page.waitForFunction(() => { const v = document.getElementById('player').shadowRoot.querySelector('video'); return !v.paused && v.readyState >= 3; }, { timeout: 15000 });
+        await page.waitForTimeout(300);
+        ok(!(await ringOn()), 'video oynamaya başlayınca halka kayboldu');
+    } finally {
+        await page.close();
+    }
 }
 
 async function testChromeStaysWhenPaused(browser) {
@@ -589,6 +687,8 @@ async function testFullscreenEnlargesControls(browser) {
         await testMediaElementIosAttrsAndErrors(browser);
         await testChromeStaysWhileHovered(browser);
         await testTooltipBehindOpenMenu(browser);
+        await testCursorHide(browser);
+        await testLoadingRing(browser);
         await testChromeStaysWhenPaused(browser);
         await testChipSurfaceChangesPerPreset(browser);
         await testOptionsDoesNotClearAttributeTheme(browser);

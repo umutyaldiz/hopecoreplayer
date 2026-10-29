@@ -164,7 +164,7 @@ async function testIosNativeFullscreenCaptions(browser) {
     });
     await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1);
     await page.waitForTimeout(600);
-    await page.evaluate(() => { document.getElementById('player').shadowRoot.querySelector('video').currentTime = 1; });
+    await page.evaluate(() => { document.getElementById('player').shadowRoot.querySelector('video').currentTime = 4; });
     await page.waitForTimeout(400);
     const state = () =>
         page.evaluate(async () => {
@@ -225,7 +225,7 @@ async function testCenterPlayAboveCaptions(browser) {
     });
     await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1);
     await page.waitForTimeout(500);
-    await page.evaluate(() => { document.getElementById('player').shadowRoot.querySelector('video').currentTime = 1; });
+    await page.evaluate(() => { document.getElementById('player').shadowRoot.querySelector('video').currentTime = 4; });
     await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('.hp-caption-bubble.hp-caption-visible'), { timeout: 5000 });
     const r = await page.evaluate(() => {
         const root = document.getElementById('player').shadowRoot;
@@ -242,6 +242,67 @@ async function testCenterPlayAboveCaptions(browser) {
     });
     ok(r.overlaps && r.onChip, `altyazı butonla çakışınca en üstte play butonu (${JSON.stringify(r)})`);
     await context.close();
+}
+
+async function testTapGestures(browser) {
+    console.log('\n[7] İstek üzerine: tapGestures — sağa/sola çift dokunma sarma (zincirleme), tek dokunuş oynat/duraklat');
+    const { context, page } = await openPlayer(browser, { width: 390, touch: true });
+    try {
+        await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4', muted: true, tapGestures: true }; });
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1);
+        await page.waitForTimeout(400);
+        const area = await page.evaluate(() => {
+            const r = document.getElementById('player').shadowRoot.querySelector('.video-area').getBoundingClientRect();
+            return { left: r.left, width: r.width, y: r.top + r.height * 0.4 };
+        });
+        const right = { x: area.left + area.width * 0.85, y: area.y };
+        const left = { x: area.left + area.width * 0.15, y: area.y };
+        const center = { x: area.left + area.width * 0.5, y: area.y };
+        const state = () =>
+            page.evaluate(() => {
+                const root = document.getElementById('player').shadowRoot;
+                const v = root.querySelector('video');
+                const fb = root.querySelector('[part="seek-feedback"]');
+                return { t: Math.round(v.currentTime * 10) / 10, paused: v.paused, fb: fb.hasAttribute('data-visible') ? fb.querySelector('.hp-seek-fb-value').textContent : null };
+            });
+        const tap = async (p, gap = 90) => {
+            await page.touchscreen.tap(p.x, p.y);
+            await page.waitForTimeout(gap);
+        };
+
+        await page.evaluate(() => { document.getElementById('player').shadowRoot.querySelector('video').currentTime = 2; });
+        await page.waitForTimeout(150);
+        await tap(right);
+        await tap(right);
+        let s = await state();
+        ok(s.t === 12 && s.paused && s.fb === '+10sn', `sağa çift dokunma → +10 sn, oynat/duraklat tetiklenmedi ${JSON.stringify(s)}`);
+        await tap(right);
+        s = await state();
+        ok(s.t === 14.5 || s.t === 15.5 || s.t >= 15, `zincir: üçüncü dokunuş sarmaya devam etti (süre sonunda durur) ${JSON.stringify(s)}`);
+
+        await page.waitForTimeout(900);
+        await page.evaluate(() => { document.getElementById('player').shadowRoot.querySelector('video').currentTime = 12; });
+        await page.waitForTimeout(150);
+        await tap(left);
+        await tap(left);
+        s = await state();
+        ok(s.t === 2 && s.fb === '−10sn', `sola çift dokunma → −10 sn ${JSON.stringify(s)}`);
+
+        await page.waitForTimeout(900);
+        await tap(right, 50);
+        s = await state();
+        ok(s.paused, 'tek dokunuş hareket penceresi bitene kadar bekletildi');
+        await page.waitForTimeout(450);
+        s = await state();
+        ok(!s.paused, `ikinci dokunuş gelmeyince tek dokunuş oynattı ${JSON.stringify(s)}`);
+
+        // Ortada hareket tanımlı değil → tek dokunuş beklemeden.
+        await tap(center, 60);
+        s = await state();
+        ok(s.paused, `ortada tek dokunuş hemen duraklattı ${JSON.stringify(s)}`);
+    } finally {
+        await context.close();
+    }
 }
 
 async function testUnmuteBadge(browser) {
@@ -312,7 +373,7 @@ async function testCaptionsDropToBottom(browser) {
     });
     await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1);
     await page.evaluate(() => {
-        document.getElementById('player').shadowRoot.querySelector('video').currentTime = 1;
+        document.getElementById('player').shadowRoot.querySelector('video').currentTime = 4;
     });
     await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('.hp-caption-bubble.hp-caption-visible'), { timeout: 5000 });
     await page.waitForTimeout(300);
@@ -348,6 +409,7 @@ async function testCaptionsDropToBottom(browser) {
         await testCaptionsDropToBottom(browser);
         await testIosNativeFullscreenCaptions(browser);
         await testCenterPlayAboveCaptions(browser);
+        await testTapGestures(browser);
     } finally {
         await browser.close();
     }

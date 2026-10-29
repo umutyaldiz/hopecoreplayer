@@ -1,10 +1,10 @@
-import { HopePlayerElement } from './HopePlayerElement';
+import { HopePlayerElement, HOPE_PLAYER_VERSION } from './HopePlayerElement';
 
 if (typeof window !== 'undefined' && !customElements.get('hope-player')) {
     customElements.define('hope-player', HopePlayerElement);
 }
 
-export { HopePlayerElement };
+export { HopePlayerElement, HOPE_PLAYER_VERSION };
 export type { PlaybackEngineInfo } from './hls/SourceManager';
 export type {
     HopeThemePreset,
@@ -42,6 +42,13 @@ export type {
     QrResumeOptions,
     PauseAdOptions,
     SkipButtonsOptions,
+    HopeHlsOptions,
+    ContextMenuOptions,
+    TapGesture,
+    TapGestureType,
+    TapRegion,
+    TapPointer,
+    TapAction,
     DubbingTrack,
     DubbingOptions,
     LiveWallClockOptions,

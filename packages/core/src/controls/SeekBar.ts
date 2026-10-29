@@ -22,6 +22,11 @@ interface ChapterState extends SeekBarChapterRange {
     width: number;
 }
 
+/** Canlıda geri sarılabilir pencere bundan kısaysa (sn) yayın DVR'sız sayılır — seek bar pasif. */
+const MIN_LIVE_WINDOW_SEC = 10;
+/** Canlıda seek bar'ın en sağına tıklanınca canlı ucun bu kadar gerisine gidilir (sn). */
+const LIVE_EDGE_SAFETY_SEC = 1;
+
 export class SeekBar {
     readonly el: HTMLDivElement;
     private readonly trackEl: HTMLDivElement;
@@ -116,6 +121,24 @@ export class SeekBar {
         this.trackWidth = this.el.getBoundingClientRect().width;
     }
 
+    /** Canlıda hover zamanını başka bir bileşen gösteriyor mu (live-wall-clock tooltip'i) — üst üste binmesin. */
+    liveHoverHandled = false;
+
+    /**
+     * Seek bar'ın temsil ettiği zaman aralığı: VOD'da 0 → süre; canlıda (duration Infinity) yayının izin verdiği
+     * geri sarma penceresi (seekable başı → canlı uç). Pencere çok kısaysa (DVR yok) ya da süre bilinmiyorsa null.
+     */
+    private timeline(): { start: number; end: number; live: boolean } | null {
+        const duration = this.video.duration;
+        if (Number.isFinite(duration) && duration > 0) return { start: 0, end: duration, live: false };
+        if (duration !== Infinity) return null;
+        const { seekable } = this.video;
+        if (!seekable.length) return null;
+        const start = seekable.start(0);
+        const end = seekable.end(seekable.length - 1);
+        return end - start >= MIN_LIVE_WINDOW_SEC ? { start, end, live: true } : null;
+    }
+
     /** Kendi zamanını gösteren plugin'ler (sprite/segments) varsayılan hover zamanını gizler — keyed set. */
     suppressHoverTime(key: string, suppressed: boolean): void {
         if (suppressed) this.hoverTimeSuppressors.add(key);
@@ -124,24 +147,24 @@ export class SeekBar {
     }
 
     private readonly onHoverMove = (e: PointerEvent): void => {
-        const duration = this.video.duration;
-        const hasDuration = Number.isFinite(duration) && duration > 0;
+        const tl = this.timeline();
         const ratio = this.ratioAtClientX(e.clientX);
 
-        // Hover noktası: sürüklerken gösterilmez (thumb zaten imlecin altında); canlıda sarılacak konum yok.
-        if (hasDuration && !this.dragging) {
+        // Hover noktası: sürüklerken gösterilmez (thumb zaten imlecin altında); geri sarılamayan canlıda konum yok.
+        if (tl && !this.dragging) {
             this.hoverDotEl.style.transform = `translate(${this.xAtRatio(ratio)}px, -50%) translateX(-50%)`;
             this.hoverDotEl.setAttribute('data-visible', '');
         } else {
             this.hoverDotEl.removeAttribute('data-visible');
         }
 
-        // Canlı yayında (Infinity) süre yok — live-wall-clock'un kendi tooltip'i var.
-        if (this.hoverTimeSuppressors.size || !hasDuration) {
+        if (this.hoverTimeSuppressors.size || !tl || (tl.live && this.liveHoverHandled)) {
             this.hoverTimeEl.removeAttribute('data-visible');
             return;
         }
-        this.hoverTimeEl.textContent = formatTime(ratio * duration);
+        const time = tl.start + ratio * (tl.end - tl.start);
+        // Canlıda mutlak zaman anlamsız — canlı uçtan ne kadar geride ("-1:24").
+        this.hoverTimeEl.textContent = tl.live ? `-${formatTime(tl.end - time)}` : formatTime(time);
         this.hoverTimeEl.setAttribute('data-visible', '');
         // İmleci ortala, seek bar kenarlarından taşma.
         const rect = this.el.getBoundingClientRect();
@@ -264,24 +287,26 @@ export class SeekBar {
     onKeyboardSeek: ((delta: number) => void) | null = null;
 
     private readonly onKeyDown = (e: KeyboardEvent): void => {
-        const duration = this.video.duration || 0;
-        if (!Number.isFinite(duration) || duration <= 0) return;
+        const tl = this.timeline();
+        if (!tl) return;
 
         if (e.key === 'ArrowRight') {
-            this.video.currentTime = Math.min(duration, this.video.currentTime + this.keyboardStep);
+            this.video.currentTime = Math.min(tl.end, this.video.currentTime + this.keyboardStep);
             this.onKeyboardSeek?.(this.keyboardStep);
             e.preventDefault();
         } else if (e.key === 'ArrowLeft') {
-            this.video.currentTime = Math.max(0, this.video.currentTime - this.keyboardStep);
+            this.video.currentTime = Math.max(tl.start, this.video.currentTime - this.keyboardStep);
             this.onKeyboardSeek?.(-this.keyboardStep);
             e.preventDefault();
         }
     };
 
     private seekToRatio(ratio: number): void {
-        const duration = this.video.duration;
-        if (!Number.isFinite(duration) || duration <= 0) return;
-        this.video.currentTime = ratio * duration;
+        const tl = this.timeline();
+        if (!tl) return;
+        const time = tl.start + ratio * (tl.end - tl.start);
+        // Canlıda tam uca değil biraz gerisine — en son segmentin sonuna seek edince oynatma takılabiliyor.
+        this.video.currentTime = tl.live ? Math.min(time, tl.end - LIVE_EDGE_SAFETY_SEC) : time;
         // video'nun kendi 'timeupdate'i asenkron/gecikmeli olabilir —
         // sürüklerken parmak/imleçle thumb arasında gecikme hissi
         // bırakmamak için konumu HEMEN, burada çiziyoruz.
@@ -306,17 +331,22 @@ export class SeekBar {
     };
 
     private readonly render = (): void => {
-        const duration = this.video.duration;
-        // Süre yoksa (canlı yayın / henüz metadata yok) thumb gizlenir — CSS `.hp-seekbar[data-no-duration]`.
-        this.el.toggleAttribute('data-no-duration', !Number.isFinite(duration) || duration <= 0);
-        if (!Number.isFinite(duration) || duration <= 0) {
+        const tl = this.timeline();
+        // Zaman aralığı yoksa (geri sarılamayan canlı / henüz metadata yok) thumb gizlenir — CSS `.hp-seekbar[data-no-duration]`.
+        this.el.toggleAttribute('data-no-duration', !tl);
+        this.el.toggleAttribute('data-live', !!tl?.live);
+        if (!tl) {
+            this.hoverTimeEl.removeAttribute('data-visible');
+            this.hoverDotEl.removeAttribute('data-visible');
             this.playedEl.style.transform = 'scaleX(0)';
             this.thumbEl.style.translate = '-50% 0';
             this.bufferedEl.style.transform = 'scaleX(0)';
             return;
         }
+        const span = tl.end - tl.start;
+        const toRatio = (t: number): number => Math.min(1, Math.max(0, (t - tl.start) / span));
 
-        const playedRatio = this.video.currentTime / duration;
+        const playedRatio = toRatio(this.video.currentTime);
         // `translate` (transform DEĞİL): CSS'teki `scale` transform'u da ölçekleyip konumu kaydırırdı.
         this.thumbEl.style.translate = `calc(${this.xAtRatio(playedRatio)}px - 50%) 0`;
 
@@ -326,7 +356,7 @@ export class SeekBar {
                 bufferedEnd = Math.max(bufferedEnd, this.video.buffered.end(i));
             }
         }
-        const bufferedRatio = bufferedEnd / duration;
+        const bufferedRatio = toRatio(bufferedEnd);
 
         if (this.chapters.length) {
             // Her parça kendi yerel oranıyla dolar: önceki parçalar tam, sonrakiler boş.
@@ -341,7 +371,8 @@ export class SeekBar {
             this.bufferedEl.style.transform = `scaleX(${bufferedRatio})`;
         }
 
-        this.el.setAttribute('aria-valuemax', String(Math.floor(duration)));
+        this.el.setAttribute('aria-valuemin', String(Math.floor(tl.start)));
+        this.el.setAttribute('aria-valuemax', String(Math.floor(tl.end)));
         this.el.setAttribute('aria-valuenow', String(Math.floor(this.video.currentTime)));
     };
 

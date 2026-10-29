@@ -7,6 +7,11 @@ export interface LiveWallClockPlayerContext {
     addControlElement(el: HTMLElement): void;
     /** UI dili (chrome metinleri) — `options.locale` (Intl saat biçimlendirme locale'i, ör. 'tr-TR') ile KARIŞTIRILMASIN, ayrı bir kavram. */
     i18n: HopeLocaleStrings;
+    /**
+     * Şu an oynatılan anın gerçek tarihi — HLS `EXT-X-PROGRAM-DATE-TIME`'dan (hls.js `playingDate`, Safari `getStartDate()`).
+     * Yoksa null; saat o zaman "canlı uçtan geride kalınan süre"den tahmin edilir.
+     */
+    getPlayingDate?(): Date | null;
 }
 
 const DEFAULTS: Required<LiveWallClockOptions> = {
@@ -17,8 +22,8 @@ const DEFAULTS: Required<LiveWallClockOptions> = {
 };
 
 /**
- * Canlı yayında duvar saati + seek bar hover tooltip'i. Canlı uç = seekable (yoksa buffered) sonu;
- * uç anının şu anki duvar saati olduğu varsayılır.
+ * Canlı yayında duvar saati + seek bar hover tooltip'i. Yayında PROGRAM-DATE-TIME varsa saat doğrudan oradan okunur
+ * (encoder/CDN gecikmesi dahil doğru); yoksa canlı uç (seekable, yoksa buffered sonu) anının şu anki saat olduğu varsayılır.
  */
 export class LiveWallClock {
     private readonly clockEl: HTMLElement;
@@ -83,6 +88,21 @@ export class LiveWallClock {
         return null;
     }
 
+    /** Geri sarılabilir pencerenin başı — kayan pencereli canlıda 0 değil (ör. 3600). */
+    private windowStart(): number {
+        const { seekable, buffered } = this.ctx.videoEl;
+        if (seekable.length) return seekable.start(0);
+        if (buffered.length) return buffered.start(0);
+        return 0;
+    }
+
+    /** `mediaTime` anının duvar saati (ms) — PROGRAM-DATE-TIME varsa ondan, yoksa canlı uca göre tahmin. */
+    private wallClockAt(mediaTime: number, liveEdge: number): number {
+        const playing = this.ctx.getPlayingDate?.();
+        if (playing && Number.isFinite(playing.getTime())) return playing.getTime() + (mediaTime - this.ctx.videoEl.currentTime) * 1000;
+        return Date.now() - Math.max(0, liveEdge - mediaTime) * 1000;
+    }
+
     // ── saat ──
 
     private startClockTick(): void {
@@ -115,9 +135,7 @@ export class LiveWallClock {
             return;
         }
 
-        const behindSec = Math.max(0, liveNow - ct);
-        const watchedMs = Date.now() - behindSec * 1000;
-        this.clockEl.textContent = this.formatClock(new Date(watchedMs));
+        this.clockEl.textContent = this.formatClock(new Date(this.wallClockAt(ct, liveNow)));
         this.clockEl.classList.remove('hp:hidden');
     }
 
@@ -177,9 +195,11 @@ export class LiveWallClock {
             return;
         }
 
-        const secondsBehind = Math.max(0, liveEdge - this.lastSeekBarPoint * liveEdge);
-        const hoveredMs = Date.now() - secondsBehind * 1000;
-        const wallClock = this.formatClock(new Date(hoveredMs));
+        // Seek bar canlıda geri sarılabilir pencereyi (başı → canlı uç) temsil eder.
+        const start = Math.min(this.windowStart(), liveEdge);
+        const hoveredTime = start + this.lastSeekBarPoint * (liveEdge - start);
+        const secondsBehind = Math.max(0, liveEdge - hoveredTime);
+        const wallClock = this.formatClock(new Date(this.wallClockAt(hoveredTime, liveEdge)));
         const minus = `-${this.formatDuration(secondsBehind)}`;
 
         this.tooltipEl.innerHTML = '';

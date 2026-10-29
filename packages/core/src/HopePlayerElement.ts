@@ -1,15 +1,28 @@
 import tailwindCss from './theme/tailwind.css?inline';
 import type { AdsOptions, HopePlayerOptions } from './types';
-import { SourceManager, type HlsQualityLevel, type PlaybackEngineInfo } from './hls/SourceManager';
+import type Hls from 'hls.js';
+import { SourceManager, type HlsQualityLevel, type PlaybackEngineInfo, type StreamAudioTrack, type StreamTextTrack } from './hls/SourceManager';
 import { ControlBar } from './controls/ControlBar';
 import { TooltipController } from './controls/Tooltip';
 import { KeyboardController } from './keyboard/KeyboardController';
 import { LoadingSpinner } from './screens/LoadingSpinner';
 import { ErrorScreen } from './screens/ErrorScreen';
-import { attachSubtitleTracks, clearSubtitleTracks, selectSubtitleTrack, type AttachedTrack } from './subtitles/attachTracks';
+import {
+    attachSubtitleTracks,
+    clearPooledTracks,
+    clearSubtitleTracks,
+    isPooledTrack,
+    pooledTrack,
+    selectSubtitleTrack,
+    type AttachedTrack,
+} from './subtitles/attachTracks';
 import { CaptionRenderer, type CaptionFontSize } from './subtitles/CaptionRenderer';
 import { MiniProgress } from './controls/MiniProgress';
 import { SeekFeedback } from './controls/SeekFeedback';
+import { ContextMenu } from './controls/ContextMenu';
+import { seekBy } from './utils/seek-by';
+import type { TapGestures } from './plugins/tap-gestures';
+import type { StatsPanel } from './plugins/stats';
 import type { SettingsCaptionAppearance, SettingsColorOption } from './controls/SettingsMenu';
 import { createIcon } from './icons/Icon';
 import { injectIconFont } from './icons/injectIconFont';
@@ -37,12 +50,18 @@ import type { HopeLocaleStrings } from './i18n/types';
 const DEFAULT_PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 /** options.autoHideDelayMs verilmezse kullanılan varsayılan. */
 const DEFAULT_AUTO_HIDE_DELAY_MS = 1200;
+/** options.cursorHideDelayMs verilmezse — fare bu kadar kıpırdamazsa imleç gizlenir. */
+const DEFAULT_CURSOR_HIDE_DELAY_MS = 5000;
 /** Basış ile kalkış arasındaki imleç/parmak hareketi bu eşiği aşarsa "tık" değil sürükleme sayılır — toggle tetiklenmez. */
 const TAP_MAX_MOVE_PX = 10;
 /** options.skipButtons'ta süre verilmezse. */
 const DEFAULT_SKIP_SECONDS = 10;
 /** options.keyboardSeekStep verilmezse ←/→ ve J/L ile sarma süresi (sn). */
 const DEFAULT_KEYBOARD_SEEK_STEP = 5;
+/** Yayının alternatif ses izleri için ayarlar alt menüsü. */
+const STREAM_AUDIO_SUBMENU_KEY = 'stream-audio';
+/** Paket sürümü — build sırasında package.json'dan gömülür. */
+export const HOPE_PLAYER_VERSION = __HOPE_VERSION__;
 
 const TEMPLATE = /* html */ `
   <div class="video-area">
@@ -78,6 +97,17 @@ export class HopePlayerElement extends HTMLElement {
     private readonly errorScreen: ErrorScreen;
     /** İleri/geri sarmada sağda/solda beliren anlık bildirim. */
     private readonly seekFeedback: SeekFeedback;
+    private readonly contextMenu: ContextMenu;
+    /** options.contextMenu çözülmüş hali — null = kapalı (tarayıcının kendi menüsü). */
+    private contextMenuConfig: { stats: boolean } | null = { stats: false };
+    /** İlk açılışta yüklenir (plugins/stats). */
+    private statsPanel: StatsPanel | null = null;
+    /** Son basılan işaretçi türü — sağ tık menüsü yalnızca fareyle (dokunmatikte uzun basma gesture'a ait). */
+    private lastPointerType = 'mouse';
+    /** options.tapGestures kuruluysa (plugins/tap-gestures). */
+    private tapGestures: TapGestures | null = null;
+    /** Dokunmadan sonra tarayıcının ürettiği uyumluluk mouse olayları ikinci bir dokunuş sayılmasın. */
+    private lastTouchEndAt = 0;
     private adsController: AdsController | null = null;
     private gestureControls: GestureControls | null = null;
     private loopSection: LoopSection | null = null;
@@ -103,6 +133,15 @@ export class HopePlayerElement extends HTMLElement {
     private selectCaption: ((label: string | null) => void) | null = null;
     /** `applyOptions()`'ta aktif bir altyazı track'i seçiliyken `true` — dil değişince Boyut/Konum görünümünü tazelemek için. */
     private captionTrackActive = false;
+    /** `options.subtitles` izleri. */
+    private optionTracks: AttachedTrack[] = [];
+    /** Yayının izleri: hls.js'ten (havuzda, `sub:`/`cc:`) ya da tarayıcının native HLS in-band izleri (`native:`). */
+    private streamTracks: (AttachedTrack & { id: string })[] = [];
+    /** hls.js aynı cue'yu (seek sonrası) yeniden gönderebilir — iz başına eklenenler. */
+    private streamCueKeys = new Map<TextTrack, Set<string>>();
+    /** Seçili altyazı — yayın izleri sonradan gelince seçim korunur. */
+    private activeCaptionLabel: string | null = null;
+    private streamAudio: { tracks: StreamAudioTrack[]; active: number } = { tracks: [], active: -1 };
     /**
      * countdownScreen varken gerçek init (kaynak + içerik plugin'leri) ertelenir; en güncel options snapshot'ı.
      * onComplete kaydı tek sefer yapılır (bkz. playbackInitRegistered) — init birden fazla kez tetiklenmesin.
@@ -117,6 +156,9 @@ export class HopePlayerElement extends HTMLElement {
     private bootGraceTimer: ReturnType<typeof setTimeout> | null = null;
     private _options: HopePlayerOptions = {};
     private hideTimer: ReturnType<typeof setTimeout> | null = null;
+    private cursorTimer: ReturnType<typeof setTimeout> | null = null;
+    /** null = imleç hiç gizlenmez (options.cursorHideDelayMs: false). */
+    private cursorHideDelayMs: number | null = DEFAULT_CURSOR_HIDE_DELAY_MS;
     /** Fare kontrollerin (buton/seek bar) üzerinde mi — üzerindeyken otomatik gizlenmez; videonun üstünde hareketsizse gizlenir. */
     private pointerOverControls = false;
     /** Kalite menüsünde şu an HLS seviyeleri mi var (kaynak değişince temizlemek için). */
@@ -174,8 +216,14 @@ export class HopePlayerElement extends HTMLElement {
         centerChip.style.borderRadius = '9999px';
         centerChip.appendChild(createIcon('play', 'hp:text-2xl'));
         this.centerPlayButton.appendChild(centerChip);
-        this.centerPlayButton.addEventListener('click', () => {
-            if (this.videoEl.paused) void this.videoEl.play();
+        this.centerPlayButton.addEventListener('click', (e) => {
+            const play = (): void => {
+                if (this.videoEl.paused) void this.videoEl.play();
+            };
+            // Duraklatılmışken bu buton tüm alanı kaplar — dokunuşlar çift dokunma hareketlerinden (tapGestures) geçsin.
+            const pointer = this.lastPointerType === 'pen' ? 'pen' : this.lastPointerType === 'touch' ? 'touch' : null;
+            if (pointer && this.tapGestures?.handleTap(e.clientX, pointer, play)) return;
+            play();
         });
         this.videoArea.appendChild(this.centerPlayButton);
 
@@ -184,7 +232,13 @@ export class HopePlayerElement extends HTMLElement {
         this.chromeEl.className = 'hp-chrome hp:absolute hp:inset-0 hp:z-20 hp:pointer-events-none';
         this.videoArea.appendChild(this.chromeEl);
 
-        this.sourceManager = new SourceManager(this.videoEl, this.onHlsLevelsChanged);
+        this.sourceManager = new SourceManager(this.videoEl, {
+            onLevelsChanged: this.onHlsLevelsChanged,
+            onAudioTracksChanged: this.onStreamAudioTracks,
+            onTextTracksFound: this.onStreamTextTracks,
+            onCues: this.onStreamCues,
+            onFatalError: (kind) => this.errorScreen.showStreamError(kind === 'network' ? 2 : 3),
+        });
         this.errorScreen.setShouldShow(() => !this.sourceManager.isRecovering());
 
         this.controlBar = new ControlBar(
@@ -192,6 +246,7 @@ export class HopePlayerElement extends HTMLElement {
             DEFAULT_PLAYBACK_RATES,
             {
                 onRequestFullscreen: () => this.requestFullscreenCompat(),
+                liveSyncPosition: () => this.sourceManager.hlsInstance?.liveSyncPosition ?? null,
                 onExitFullscreen: () => this.exitFullscreenCompat(),
                 isFullscreen: () => this.isFullscreenActive(),
                 // adsController sonradan kurulur — closure'lar her çağrıda güncel this.adsController'ı okur.
@@ -226,6 +281,7 @@ export class HopePlayerElement extends HTMLElement {
         // bu yüzden tooltip'in konum hesaplaması bu kapsayıcıya göre doğru çalışır.
         this.tooltip = new TooltipController(this.videoArea);
 
+        this.contextMenu = new ContextMenu(this.videoArea);
         this.seekFeedback = new SeekFeedback(this.i18n);
         this.videoArea.appendChild(this.seekFeedback.el);
         this.controlBar.onSkip = (delta) => this.seekFeedback.show(delta);
@@ -265,6 +321,11 @@ export class HopePlayerElement extends HTMLElement {
         // iPhone video tam ekranı (webkitEnterFullscreen) kendi olaylarını yayınlar.
         this.videoEl.addEventListener('webkitbeginfullscreen', this.onFullscreenChange);
         this.videoEl.addEventListener('webkitendfullscreen', this.onFullscreenChange);
+        this.addEventListener('contextmenu', this.onContextMenu);
+        this.addEventListener('pointerdown', this.onPointerTypeTrack, true);
+        // Safari native HLS manifest altyazılarını kendisi textTracks'e ekler — menüye bunları da al.
+        this.videoEl.textTracks.addEventListener('addtrack', this.onNativeTextTracksChanged);
+        this.videoEl.textTracks.addEventListener('removetrack', this.onNativeTextTracksChanged);
         // Ayarlar menüsü açıkken kontroller gizlenmesin (mobilde menü de onlarla kayboluyordu).
         this.controlBar.settingsMenu.onOpenChange = (open) => {
             if (open && this.hideTimer) clearTimeout(this.hideTimer);
@@ -289,6 +350,7 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     disconnectedCallback(): void {
+        this.showCursor();
         this.miniProgress?.destroy();
         this.miniProgress = null;
         this.videoEl.removeEventListener('play', this.onPlay);
@@ -301,6 +363,10 @@ export class HopePlayerElement extends HTMLElement {
         document.removeEventListener('webkitfullscreenchange', this.onFullscreenChange);
         this.videoEl.removeEventListener('webkitbeginfullscreen', this.onFullscreenChange);
         this.videoEl.removeEventListener('webkitendfullscreen', this.onFullscreenChange);
+        this.removeEventListener('contextmenu', this.onContextMenu);
+        this.removeEventListener('pointerdown', this.onPointerTypeTrack, true);
+        this.videoEl.textTracks.removeEventListener('addtrack', this.onNativeTextTracksChanged);
+        this.videoEl.textTracks.removeEventListener('removetrack', this.onNativeTextTracksChanged);
         this.videoEl.removeEventListener('mousedown', this.onVideoPressStart);
         this.videoEl.removeEventListener('mouseup', this.onVideoPressEnd);
         this.videoEl.removeEventListener('mouseleave', this.onVideoPressCancel);
@@ -314,6 +380,9 @@ export class HopePlayerElement extends HTMLElement {
         this.loadingSpinner.destroy();
         this.errorScreen.destroy();
         this.seekFeedback.destroy();
+        this.contextMenu.destroy();
+        this.statsPanel?.destroy();
+        this.tapGestures?.destroy();
         this.sourceManager.destroy();
         this.adsController?.destroy();
         this.gestureControls?.destroy();
@@ -375,6 +444,46 @@ export class HopePlayerElement extends HTMLElement {
         return this.sourceManager.engine;
     }
 
+    /** Paket sürümü (ör. "1.0.4"). */
+    static readonly version = HOPE_PLAYER_VERSION;
+
+    /** Teknik istatistik panelini aç/kapat (`force`: true = aç, false = kapat). Sağ tık menüsündeki "İstatistikler" ile aynı. */
+    async toggleStats(force?: boolean): Promise<void> {
+        if (!this.statsPanel) {
+            if (force === false) return;
+            const { installStats } = await import('./plugins/stats');
+            this.statsPanel ??= installStats({
+                videoEl: this.videoEl,
+                containerEl: this.videoArea,
+                i18n: this.i18n,
+                version: HOPE_PLAYER_VERSION,
+                getEngine: () => this.sourceManager.engine,
+                getHls: () => this.sourceManager.hlsInstance,
+            });
+        }
+        this.statsPanel.toggle(force);
+    }
+
+    private readonly onPointerTypeTrack = (e: PointerEvent): void => {
+        this.lastPointerType = e.pointerType;
+    };
+
+    /** Sağ tık: tarayıcı menüsü yerine player adı + sürüm (options.contextMenu). */
+    private readonly onContextMenu = (e: MouseEvent): void => {
+        const config = this.contextMenuConfig;
+        if (!config || this.lastPointerType !== 'mouse') return;
+        e.preventDefault();
+        this.contextMenu.show(e.clientX, e.clientY, [
+            { label: 'HopeCorePlayer', meta: `v${HOPE_PLAYER_VERSION}` },
+            ...(config.stats ? [{ label: this.i18n.statsTitle, onSelect: () => void this.toggleStats(true) }] : []),
+        ]);
+    };
+
+    /** hls.js ile oynatılıyorsa hls.js instance'ı (olaylar, `bandwidthEstimate`, `levels`...); değilse `null`. */
+    get hls(): Hls | null {
+        return this.sourceManager.hlsInstance;
+    }
+
     /** `options.qrResume` kuruluysa "telefonundan devam et" QR ekranını manuel göster (ör. entegratörün kendi "telefona gönder" butonu) — otomatik gösterim kuralları (minElapsed/minRemaining) burada uygulanmaz. */
     showQrResume(): void {
         this.qrResume?.show();
@@ -415,6 +524,8 @@ export class HopePlayerElement extends HTMLElement {
         this.videoEl.playsInline = true;
         this.videoEl.setAttribute('webkit-playsinline', '');
         this.autoHideDelayMs = options.autoHideDelayMs ?? DEFAULT_AUTO_HIDE_DELAY_MS;
+        this.cursorHideDelayMs = options.cursorHideDelayMs === false ? null : (options.cursorHideDelayMs ?? DEFAULT_CURSOR_HIDE_DELAY_MS);
+        if (this.cursorHideDelayMs === null) this.showCursor();
         if (options.miniProgress && !this.miniProgress) {
             this.miniProgress = new MiniProgress(this.videoEl);
             this.videoArea.appendChild(this.miniProgress.el);
@@ -424,6 +535,9 @@ export class HopePlayerElement extends HTMLElement {
             this.miniProgress = null;
         }
         // Yalnızca DEĞER değişince uygula — başka bir option güncellemesi kullanıcının tıklayarak seçtiği modu sıfırlamasın.
+        this.contextMenuConfig =
+            options.contextMenu === false ? null : { stats: typeof options.contextMenu === 'object' && options.contextMenu.stats === true };
+        if (!this.contextMenuConfig) this.contextMenu.close();
         const seekStep = options.keyboardSeekStep && options.keyboardSeekStep > 0 ? options.keyboardSeekStep : DEFAULT_KEYBOARD_SEEK_STEP;
         this.keyboard.seekStep = seekStep;
         this.controlBar.seekBar.keyboardStep = seekStep;
@@ -454,6 +568,8 @@ export class HopePlayerElement extends HTMLElement {
         this.qrResume?.refreshLabels();
         this.pauseAd?.refreshLabels();
         this.dubbing?.refreshLabels();
+        this.onStreamAudioTracks(this.streamAudio.tracks, this.streamAudio.active);
+        this.statsPanel?.refreshLabels();
         this.liveWallClock?.refreshLabels();
         this.loopSection?.refreshLabels();
         this.markProgress?.refreshLabels();
@@ -502,6 +618,8 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     private async initPlayback(options: HopePlayerOptions): Promise<void> {
+        this.sourceManager.configure(options.hls);
+        this.errorScreen.dismiss();
         const sources = options.sources?.length ? options.sources : options.src ? [{ src: options.src, label: this.i18n.autoQuality }] : [];
         // Tek kaynakta önceki kaynağın (MP4 sources) kalite listesi kalmasın — yüklemeden ÖNCE temizle,
         // ki hls.js'in birazdan bildireceği seviyeler silinmesin.
@@ -686,6 +804,30 @@ export class HopePlayerElement extends HTMLElement {
             });
         }
 
+        if (options.tapGestures && !this.tapGestures) {
+            const { installTapGestures } = await import('./plugins/tap-gestures');
+            this.tapGestures = installTapGestures(
+                {
+                    areaEl: this.videoArea,
+                    seekBy: (delta) => {
+                        if (this.controlBar.seekBar.el.style.pointerEvents === 'none') return; // DAI reklam arası
+                        seekBy(this.videoEl, delta);
+                        this.seekFeedback.show(delta);
+                    },
+                    togglePlay: () => (this.videoEl.paused ? void this.videoEl.play().catch(() => {}) : this.videoEl.pause()),
+                    toggleFullscreen: () => (this.isFullscreenActive() ? this.exitFullscreenCompat() : this.requestFullscreenCompat()),
+                    toggleMute: () => {
+                        this.videoEl.muted = !this.videoEl.muted;
+                    },
+                },
+                []
+            );
+        }
+        if (this.tapGestures) {
+            const { DEFAULT_TAP_GESTURES } = await import('./plugins/tap-gestures');
+            this.tapGestures.setGestures(options.tapGestures === true ? DEFAULT_TAP_GESTURES : options.tapGestures || []);
+        }
+
         if (options.pauseAd?.adUnitPath && !this.pauseAd) {
             const { installPauseAd } = await import('./plugins/pause-ad');
             this.pauseAd = installPauseAd(
@@ -717,9 +859,19 @@ export class HopePlayerElement extends HTMLElement {
                     seekBarEl: this.controlBar.seekBar.el,
                     addControlElement: (el) => this.controlBar.addElement(el),
                     i18n: this.i18n,
+                    getPlayingDate: () => {
+                        const playing = this.sourceManager.hlsInstance?.playingDate;
+                        if (playing) return playing;
+                        // Safari native HLS: yayının başlangıç tarihi + konum.
+                        const start = (this.videoEl as HTMLVideoElement & { getStartDate?: () => Date }).getStartDate?.();
+                        const ms = start?.getTime() ?? NaN;
+                        return Number.isFinite(ms) && ms > 0 ? new Date(ms + this.videoEl.currentTime * 1000) : null;
+                    },
                 },
                 liveWallClockOptions
             );
+            // Canlıda seek bar hover'ında duvar saati tooltip'i gösterilir, varsayılan "-1:24" değil.
+            this.controlBar.seekBar.liveHoverHandled = true;
         }
 
         if (options.dai && !this.daiController) {
@@ -738,37 +890,140 @@ export class HopePlayerElement extends HTMLElement {
         }
 
         if (options.subtitles?.length) {
-            this.subtitleTracks = attachSubtitleTracks(this.videoEl, options.subtitles);
-            const defaultTrack = options.subtitles.find((s) => s.default);
-            // selectCaption: altyazı seçiminin tek doğruluk kaynağı (track mode + renderer + ayarlar menüsü).
-            const selectCaption = (label: string | null): void => {
-                const track = selectSubtitleTrack(this.subtitleTracks, label);
-                this.captionRenderer.setActiveTrack(track);
-                this.captionTrackActive = track !== null;
-                this.controlBar.settingsMenu.setActiveCaption(label ?? this.i18n.captionsOff);
-                this.controlBar.settingsMenu.setCaptionAppearance(track !== null ? this.buildCaptionAppearance() : null);
-            };
-            this.selectCaption = selectCaption;
-            this.controlBar.setCaptions(
-                [
-                    { label: this.i18n.captionsOff, onSelect: () => selectCaption(null) },
-                    ...this.subtitleTracks.map(({ label }) => ({
-                        label,
-                        onSelect: () => selectCaption(label),
-                    })),
-                ],
-                defaultTrack?.label ?? this.i18n.captionsOff
-            );
-            selectCaption(defaultTrack?.label ?? null);
+            this.optionTracks = attachSubtitleTracks(this.videoEl, options.subtitles);
         } else {
             clearSubtitleTracks(this.videoEl);
-            this.subtitleTracks = [];
+            this.optionTracks = [];
+        }
+        this.rebuildCaptions(options.subtitles?.find((s) => s.default)?.label ?? null);
+    }
+
+    /** Altyazı menüsünü `options.subtitles` + yayın izlerinden kurar; `activeLabel` varsa onu seçer. */
+    private rebuildCaptions(activeLabel: string | null): void {
+        this.subtitleTracks = [...this.optionTracks, ...this.streamTracks];
+        if (!this.subtitleTracks.length) {
             this.selectCaption = null;
+            this.activeCaptionLabel = null;
+            this.controlBar.setCaptions([], this.i18n.captionsOff);
             this.captionRenderer.setActiveTrack(null);
             this.captionTrackActive = false;
             this.controlBar.settingsMenu.setCaptionAppearance(null);
+            this.sourceManager.selectTextTrack(null);
+            return;
         }
+        // selectCaption: altyazı seçiminin tek doğruluk kaynağı (track mode + renderer + ayarlar menüsü + hls.js).
+        const selectCaption = (label: string | null): void => {
+            const track = selectSubtitleTrack(this.subtitleTracks, label);
+            this.activeCaptionLabel = track ? label : null;
+            this.sourceManager.selectTextTrack(this.streamTracks.find((t) => t.label === label)?.id ?? null);
+            this.captionRenderer.setActiveTrack(track);
+            this.captionTrackActive = track !== null;
+            this.controlBar.settingsMenu.setActiveCaption(track ? label! : this.i18n.captionsOff);
+            this.controlBar.settingsMenu.setCaptionAppearance(track !== null ? this.buildCaptionAppearance() : null);
+        };
+        this.selectCaption = selectCaption;
+        const active = activeLabel && this.subtitleTracks.some((t) => t.label === activeLabel) ? activeLabel : null;
+        this.controlBar.setCaptions(
+            [
+                { label: this.i18n.captionsOff, onSelect: () => selectCaption(null) },
+                ...this.subtitleTracks.map(({ label }) => ({ label, onSelect: () => selectCaption(label) })),
+            ],
+            active ?? this.i18n.captionsOff
+        );
+        selectCaption(active);
     }
+
+    /**
+     * Yayın izinin menü adı: manifestteki ad teknik/boşsa ("stream_5", "und", dil kodunun kendisi) dil kodundan
+     * player diliyle dil adı üretilir ("en" → "İngilizce" / "English").
+     */
+    private streamTrackLabel(name: string, lang: string): string {
+        const generic = !name || name.toLowerCase() === lang.toLowerCase() || /^(stream|audio|track|text|sub|subtitle|und)[\s_-]*\d*$/i.test(name);
+        if (!generic || !lang || lang === 'und') return name || lang;
+        try {
+            const display = new Intl.DisplayNames([this.localeCode], { type: 'language' }).of(lang);
+            if (display) return display.charAt(0).toLocaleUpperCase(this.localeCode) + display.slice(1);
+        } catch {
+            // Geçersiz dil kodu — ham adı kullan.
+        }
+        return name || lang;
+    }
+
+    /** Aynı adlı iz varsa (ör. options.subtitles'ta da "English") dil/sırayla ayırt edilir. */
+    private uniqueLabel(label: string, suffix: string, taken: Set<string>): string {
+        const unique = taken.has(label) ? `${label} (${suffix})` : label;
+        taken.add(unique);
+        return unique;
+    }
+
+    private readonly onStreamTextTracks = (tracks: StreamTextTrack[]): void => {
+        const native = this.streamTracks.filter((t) => t.id.startsWith('native:'));
+        if (!tracks.length) {
+            clearPooledTracks(this.videoEl, 'stream');
+            this.streamCueKeys.clear();
+            this.streamTracks = native;
+        } else {
+            const taken = new Set([...this.optionTracks, ...native].map((t) => t.label));
+            this.streamTracks = [
+                ...native,
+                ...tracks.map((t) => {
+                    // CEA-608 genelde manifest altyazısıyla aynı adı taşır ("English") — "(CC)" ile ayırt edilir.
+                    const label = this.uniqueLabel(this.streamTrackLabel(t.label, t.lang) || t.id, t.kind === 'captions' ? 'CC' : t.lang || t.kind, taken);
+                    return { id: t.id, label, track: pooledTrack(this.videoEl, 'stream', t.kind, label, t.lang) };
+                }),
+            ];
+        }
+        this.rebuildCaptions(this.activeCaptionLabel);
+    };
+
+    private readonly onStreamCues = (trackId: string, cues: VTTCue[]): void => {
+        const track = this.streamTracks.find((t) => t.id === trackId)?.track;
+        if (!track) return;
+        let keys = this.streamCueKeys.get(track);
+        if (!keys) this.streamCueKeys.set(track, (keys = new Set()));
+        for (const cue of cues) {
+            const key = `${cue.startTime}|${cue.endTime}|${cue.text}`;
+            if (keys.has(key)) continue;
+            keys.add(key);
+            track.addCue(cue);
+        }
+    };
+
+    /** Tarayıcının kendi (native HLS) altyazı izleri — bizim havuz izlerimiz ve metadata izleri hariç. */
+    private readonly onNativeTextTracksChanged = (): void => {
+        const list = Array.from(this.videoEl.textTracks).filter((t) => (t.kind === 'subtitles' || t.kind === 'captions') && !isPooledTrack(t));
+        const hadNative = this.streamTracks.some((t) => t.id.startsWith('native:'));
+        if (!list.length && !hadNative) return;
+        const fromHls = this.streamTracks.filter((t) => !t.id.startsWith('native:'));
+        const taken = new Set([...this.optionTracks, ...fromHls].map((t) => t.label));
+        this.streamTracks = [
+            ...fromHls,
+            ...list.map((track, i) => ({
+                id: `native:${i}`,
+                label: this.uniqueLabel(track.label || track.language || `${this.i18n.captions} ${i + 1}`, track.language || String(i + 1), taken),
+                track,
+            })),
+        ];
+        this.rebuildCaptions(this.activeCaptionLabel);
+    };
+
+    /** Yayında birden fazla ses izi varsa ayarlarda "Ses" alt menüsü (HLS alternatif ses / Safari audioTracks). */
+    private readonly onStreamAudioTracks = (tracks: StreamAudioTrack[], active: number): void => {
+        this.streamAudio = { tracks, active };
+        const menu = this.controlBar.settingsMenu;
+        const taken = new Set<string>();
+        const labels = new Map(tracks.map((t) => [t.index, this.uniqueLabel(this.streamTrackLabel(t.label, t.lang), String(t.index + 1), taken)]));
+        if (tracks.length <= 1) {
+            menu.unregisterSubmenu(STREAM_AUDIO_SUBMENU_KEY);
+            return;
+        }
+        menu.registerSubmenu({
+            key: STREAM_AUDIO_SUBMENU_KEY,
+            title: this.i18n.audioTrack,
+            getValueLabel: () => labels.get(active) ?? '',
+            getItems: () => tracks.map((t) => ({ label: labels.get(t.index)!, active: t.index === active, onSelect: () => this.sourceManager.setAudioTrack(t.index) })),
+        });
+    };
 
     /** Ayarlar menüsünün "Altyazı" alt menüsüne eklenen Boyut/Renk/Konum satırları — her zaman GÜNCEL `this.i18n`'i okur (dil sonradan değişse bile). */
     private buildCaptionAppearance(): SettingsCaptionAppearance {
@@ -934,6 +1189,8 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     private readonly onPlay = (): void => {
+        // Oynat'a tıklayıp fareyi kıpırdatmayan kullanıcı için de imleç sayacı başlasın.
+        if (this.matches(':hover')) this.scheduleCursorHide();
         if (!this.isChromeBlocked) {
             this.centerPlayButton.style.opacity = '0';
             this.centerPlayButton.style.pointerEvents = 'none';
@@ -945,6 +1202,7 @@ export class HopePlayerElement extends HTMLElement {
     private readonly onPause = (): void => {
         // Oynarken kurulan gizleme zamanlayıcısını iptal et — yoksa duraklatınca kontroller birazdan kayboluyordu.
         if (this.hideTimer) clearTimeout(this.hideTimer);
+        this.showCursor();
         if (!this.isChromeBlocked) {
             this.centerPlayButton.style.opacity = '1';
             this.centerPlayButton.style.pointerEvents = 'auto';
@@ -973,13 +1231,23 @@ export class HopePlayerElement extends HTMLElement {
         if (this.isChromeBlocked) return;
         if (this.gestureControls?.isCurrentlyHolding()) return;
 
-        const point = 'changedTouches' in e ? e.changedTouches[0] : e;
+        const isTouch = 'changedTouches' in e;
+        // Dokunmadan hemen sonra gelen uyumluluk mouse olayları — dokunuş zaten işlendi.
+        if (!isTouch && Date.now() - this.lastTouchEndAt < 800) return;
+        if (isTouch) this.lastTouchEndAt = Date.now();
+        const point = isTouch ? e.changedTouches[0] : e;
         if (point) {
             const moved = Math.hypot(point.clientX - this.tapStartX, point.clientY - this.tapStartY);
             if (moved > TAP_MAX_MOVE_PX) return;
         }
-        if (this.videoEl.paused) void this.videoEl.play().catch(() => {});
-        else this.videoEl.pause();
+        const singleTap = (): void => {
+            if (this.videoEl.paused) void this.videoEl.play().catch(() => {});
+            else this.videoEl.pause();
+        };
+        // Bu bölgede çift dokunma hareketi varsa tek dokunuş, ikinci dokunuş gelmezse uygulanır.
+        const pointer = isTouch ? 'touch' : (this.lastPointerType as 'mouse' | 'pen');
+        if (point && this.tapGestures?.handleTap(point.clientX, pointer === 'pen' ? 'pen' : pointer, singleTap)) return;
+        singleTap();
     };
 
     private readonly onVideoPressCancel = (): void => {
@@ -1068,13 +1336,33 @@ export class HopePlayerElement extends HTMLElement {
         // chromeEl pointer-events-none; olay yolunda yalnızca imleç bir kontrolün (pointer-events-auto) üzerindeyse görünür.
         this.pointerOverControls = e.pointerType === 'mouse' && e.composedPath().includes(this.chromeEl);
         this.scheduleAutoHide();
+        if (e.pointerType === 'mouse') this.scheduleCursorHide();
     };
 
     private readonly onPointerLeave = (e: PointerEvent): void => {
         if (e.pointerType !== 'mouse') return;
         this.pointerOverControls = false;
         this.scheduleAutoHide();
+        this.showCursor();
     };
+
+    /** Fare kıpırdadı: imleci göster, hareketsiz kalırsa gizlemek için sayacı yeniden kur (tailwind.css `:host([data-cursor-hidden])`). */
+    private scheduleCursorHide(): void {
+        this.showCursor();
+        if (this.cursorHideDelayMs === null) return;
+        this.cursorTimer = setTimeout(() => {
+            this.cursorTimer = null;
+            // Duraklatılmışken, menü açıkken ya da imleç bir kontrolün üzerindeyken gizleme (YouTube gibi).
+            if (this.videoEl.paused || this.pointerOverControls || this.controlBar.settingsMenu.isOpen) return;
+            this.setAttribute('data-cursor-hidden', '');
+        }, this.cursorHideDelayMs);
+    }
+
+    private showCursor(): void {
+        if (this.cursorTimer) clearTimeout(this.cursorTimer);
+        this.cursorTimer = null;
+        this.removeAttribute('data-cursor-hidden');
+    }
 
     private readonly scheduleAutoHide = (): void => {
         this.showChrome();

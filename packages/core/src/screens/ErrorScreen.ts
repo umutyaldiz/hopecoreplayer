@@ -53,7 +53,7 @@ export class ErrorScreen {
         this.retryText.textContent = labels.retry;
         this.retryBtn.appendChild(this.retryText);
         this.retryBtn.addEventListener('click', () => {
-            this.hide();
+            this.dismiss();
             this.onRetry?.();
         });
         card.appendChild(this.retryBtn);
@@ -71,6 +71,23 @@ export class ErrorScreen {
         this.shouldShow = fn;
     }
 
+    /**
+     * hls.js'in ölümcül hataları `video.error` üretmez — player donmuş görünmesin diye ekran elle açılır.
+     * `code`: MediaError kodu (2 = ağ, 3 = çözümleme).
+     */
+    showStreamError(code: 2 | 3): void {
+        if (!this.shouldShow()) return;
+        this.streamErrorCode = code;
+        this.render();
+        this.el.setAttribute('data-visible', '');
+    }
+
+    /** Yeni kaynak yüklenirken önceki hatayı kapat. */
+    dismiss(): void {
+        this.streamErrorCode = 0;
+        this.hide();
+    }
+
     get visible(): boolean {
         return this.el.hasAttribute('data-visible');
     }
@@ -79,6 +96,9 @@ export class ErrorScreen {
         this.retryText.textContent = this.labels.retry;
         if (this.visible) this.render();
     }
+
+    /** showStreamError ile açılan hatanın kodu (video.error yokken). */
+    private streamErrorCode = 0;
 
     private readonly show = (): void => {
         // Kaynak yokken gelen hata (kaynak değişimi/temizliği sırasında) kullanıcıya gösterilmez —
@@ -90,7 +110,7 @@ export class ErrorScreen {
     };
 
     private render(): void {
-        const code = this.video.error?.code ?? 0;
+        const code = this.video.error?.code ?? this.streamErrorCode;
         const messages: Record<number, string> = {
             1: this.labels.errorAborted,
             2: this.labels.errorNetwork,

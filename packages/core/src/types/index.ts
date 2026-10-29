@@ -1,3 +1,4 @@
+import type { HlsConfig } from 'hls.js';
 import type { HopeLocale, HopeLocaleStrings } from '../i18n/types';
 export type { HopeLocale, HopeLocaleStrings };
 
@@ -365,6 +366,42 @@ export interface RedirectScreenOptions {
     suggestions?: RedirectScreenSuggestion[];
 }
 
+/** `options.hls` — HLS (.m3u8) oynatma ayarları. */
+export interface HopeHlsOptions {
+    /**
+     * `'auto'` (varsayılan): Safari/iOS'ta tarayıcının kendi HLS oynatıcısı, diğerlerinde hls.js.
+     * `'hls.js'`: MSE/ManagedMediaSource varsa her yerde hls.js — Safari'de de kalite/ses menüsü ve buffer ayarları.
+     * `'native'`: tarayıcı destekliyorsa her zaman kendi HLS oynatıcısı.
+     */
+    engine?: 'auto' | 'hls.js' | 'native';
+    /** hls.js ayarları — olduğu gibi `new Hls(config)`'e geçer (buffer, ABR, düşük gecikme, ağ...). Yalnızca hls.js ile oynarken etkili. */
+    config?: Partial<HlsConfig>;
+    /** Manifest/segment isteklerinde cookie ve kimlik bilgisi gönder (CORS `credentials: include`). */
+    withCredentials?: boolean;
+}
+
+/** Çoklu dokunuş hareketi türü — ileride `'tripletap'` eklenebilir. */
+export type TapGestureType = 'doubletap';
+/** Ekranın bölgesi: sol/sağ üçte bir, orta, ya da tamamı. */
+export type TapRegion = 'left' | 'center' | 'right' | 'full';
+export type TapPointer = 'touch' | 'mouse' | 'pen' | 'any';
+export type TapAction = 'seekStep' | 'togglePlay' | 'toggleFullscreen' | 'toggleMute';
+
+export interface TapGesture {
+    type: TapGestureType;
+    region: TapRegion;
+    /** Hangi işaretçiyle — varsayılan `'touch'` (masaüstünde çift tık normal davranışını korur). */
+    pointer?: TapPointer;
+    action: TapAction;
+    /** `seekStep` için saniye; negatif = geri. Verilmezse solda -10, sağda +10. */
+    value?: number;
+}
+
+export interface ContextMenuOptions {
+    /** Menüye "İstatistikler" satırı ekler — player üstünde canlı teknik bilgi paneli açar. Varsayılan false. */
+    stats?: boolean;
+}
+
 export interface SkipButtonsOptions {
     /** Geri sarma süresi (sn); `false` geri butonunu gizler. Varsayılan 10. */
     back?: number | false;
@@ -444,6 +481,8 @@ export interface HopePlayerOptions {
     playbackRates?: number[];
     /** Fare video üzerinden ayrılınca kontrol çubuğunun/merkez play butonunun kaybolmadan önce beklediği süre (ms). Varsayılan 1200. */
     autoHideDelayMs?: number;
+    /** Video oynarken fare bu süre (ms) kıpırdamazsa imleç gizlenir; `false` = hiç gizleme. Varsayılan 5000. */
+    cursorHideDelayMs?: number | false;
     /**
      * Sayfa açılınca ne kadarının önceden yükleneceği (HTML `preload`). Varsayılan `'metadata'`:
      * yalnızca süre/boyut bilgisi — veri harcamaz, süre ve ilk kare hazır olur.
@@ -457,6 +496,12 @@ export interface HopePlayerOptions {
     skipButtons?: boolean | SkipButtonsOptions;
     /** ←/→ ve J/L klavye kısayollarıyla kaç saniye sarılır. Varsayılan 5. */
     keyboardSeekStep?: number;
+    /** HLS oynatma ayarları — motor seçimi, hls.js config'i (buffer/ABR/düşük gecikme), kimlik bilgisi. */
+    hls?: HopeHlsOptions;
+    /** Sağ tık menüsü (player adı + sürüm). Varsayılan açık; `false` tarayıcının kendi menüsünü geri getirir. */
+    contextMenu?: boolean | ContextMenuOptions;
+    /** Ekranın sol/sağına çift dokunma hareketleri. `true` = solda 10 sn geri, sağda 10 sn ileri (dokunmatik). Varsayılan kapalı. */
+    tapGestures?: boolean | TapGesture[];
     /**
      * UI dili — hazır gelen `'tr'` (varsayılan) / `'en'`, ya da herhangi bir
      * string (yalnızca `labels` ile TAM override veriliyorsa). Kontrol

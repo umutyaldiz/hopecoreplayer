@@ -296,6 +296,215 @@ async function testHlsCorsFallsBackToNative(browser) {
     await page.close();
 }
 
+const MASTER_AV =
+    '#EXTM3U\n' +
+    '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="stream_1",LANGUAGE="en",DEFAULT=YES,AUTOSELECT=YES,URI="a-en.m3u8"\n' +
+    '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="Türkçe dublaj",LANGUAGE="tr",DEFAULT=NO,AUTOSELECT=YES,URI="a-tr.m3u8"\n' +
+    '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="sub_0",LANGUAGE="de",DEFAULT=NO,AUTOSELECT=YES,URI="s-de.m3u8"\n' +
+    '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Español",LANGUAGE="es",DEFAULT=NO,AUTOSELECT=YES,URI="s-es.m3u8"\n' +
+    '#EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=854x480,AUDIO="aud",SUBTITLES="subs"\nv480.m3u8\n' +
+    '#EXT-X-STREAM-INF:BANDWIDTH=450000,RESOLUTION=426x240,AUDIO="aud",SUBTITLES="subs"\nv240.m3u8\n';
+const SUB_PL = '#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:4,\ns0.vtt\n#EXT-X-ENDLIST\n';
+
+async function openHlsMock(browser, options) {
+    const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+    const requests = [];
+    await page.route('https://hls-av.example.test/**', (route) => {
+        const u = route.request().url();
+        requests.push(u.split('/').pop());
+        const headers = { 'access-control-allow-origin': route.request().headers()['origin'] ?? '*', 'access-control-allow-credentials': 'true' };
+        if (u.endsWith('master.m3u8')) return route.fulfill({ status: 200, contentType: 'application/vnd.apple.mpegurl', body: MASTER_AV, headers });
+        if (/\/s-[a-z]+\.m3u8$/.test(u)) return route.fulfill({ status: 200, contentType: 'application/vnd.apple.mpegurl', body: SUB_PL, headers });
+        if (u.endsWith('.m3u8')) return route.fulfill({ status: 200, contentType: 'application/vnd.apple.mpegurl', body: MEDIA_PL, headers });
+        if (u.endsWith('.vtt')) return route.fulfill({ status: 200, contentType: 'text/vtt', body: 'WEBVTT\n\n00:00:00.000 --> 00:00:03.000\nHallo\n', headers });
+        return route.fulfill({ status: 404, body: '', headers });
+    });
+    await page.goto(`${BASE}/`);
+    await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+    await page.evaluate((options) => { document.getElementById('player').options = { src: 'https://hls-av.example.test/master.m3u8', muted: true, ...options }; }, options);
+    await page.waitForFunction(() => document.getElementById('player').hls?.audioTracks?.length === 2, { timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(400);
+    return { page, requests };
+}
+
+/** Ayarlar → `row` alt menüsünün satırları; `pick` verilirse o satıra tıklar. */
+async function settingsSubmenu(page, row, pick) {
+    return page.evaluate(async ({ row, pick }) => {
+        const root = document.getElementById('player').shadowRoot;
+        const wait = () => new Promise((r) => setTimeout(r, 120));
+        root.querySelector('[aria-label="Ayarlar"]').click();
+        await wait();
+        const btn = Array.from(root.querySelectorAll('.hp-chip-panel button')).find((b) => b.textContent.trim().startsWith(row));
+        if (!btn) {
+            root.querySelector('[aria-label="Ayarlar"]').click();
+            return null;
+        }
+        btn.click();
+        await wait();
+        const items = Array.from(root.querySelectorAll('.hp-chip-panel button')).slice(1);
+        const labels = items.map((b) => b.textContent.trim());
+        if (pick) items.find((b) => b.textContent.trim().startsWith(pick))?.click();
+        await wait();
+        if (!root.querySelector('.hp-chip-panel').classList.contains('hp:hidden')) root.querySelector('[aria-label="Ayarlar"]').click();
+        return labels;
+    }, { row, pick });
+}
+
+async function testHlsAudioAndSubtitleMenus(browser) {
+    console.log('\n[4g] HLS: alternatif ses izleri "Ses" menüsünde, manifest altyazıları altyazı menüsünde (<track> olmadan), seçim hls.js\'e gidiyor');
+    const { page } = await openHlsMock(browser, {});
+    try {
+        const audio = await settingsSubmenu(page, 'Ses');
+        ok(JSON.stringify(audio) === JSON.stringify(['İngilizce', 'Türkçe dublaj']), `ses menüsü: teknik ad dil adına çevrildi, gerçek ad korundu ${JSON.stringify(audio)}`);
+        await settingsSubmenu(page, 'Ses', 'Türkçe dublaj');
+        const audioTrack = await page.evaluate(() => document.getElementById('player').hls.audioTrack);
+        ok(audioTrack === 1, `"Türkçe dublaj" seçilince hls.audioTrack = 1 (${audioTrack})`);
+
+        const subs = await settingsSubmenu(page, 'Altyazı');
+        ok(JSON.stringify(subs) === JSON.stringify(['Kapalı', 'Almanca', 'Español']), `altyazı menüsü: manifest altyazıları ${JSON.stringify(subs)}`);
+        await settingsSubmenu(page, 'Altyazı', 'Español');
+        let st = await page.evaluate(() => {
+            const el = document.getElementById('player');
+            const v = el.shadowRoot.querySelector('video');
+            const es = Array.from(v.textTracks).find((t) => t.label === 'Español');
+            return { sub: el.hls.subtitleTrack, mode: es?.mode, trackEls: v.querySelectorAll('track').length };
+        });
+        ok(st.sub === 1 && st.mode === 'hidden' && st.trackEls === 0, `"Español" seçildi → hls.subtitleTrack 1, iz hidden (bizim katman çizer), <track> yok ${JSON.stringify(st)}`);
+        await settingsSubmenu(page, 'Altyazı', 'Kapalı');
+        st = await page.evaluate(() => ({ sub: document.getElementById('player').hls.subtitleTrack }));
+        ok(st.sub === -1, `altyazı kapatılınca hls.subtitleTrack -1 (${st.sub})`);
+
+        // Altyazısız/tek sesli kaynağa geçince menüler temizleniyor.
+        await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4', muted: true }; });
+        await page.waitForTimeout(400);
+        ok((await settingsSubmenu(page, 'Ses')) === null && (await settingsSubmenu(page, 'Altyazı')) === null, 'MP4\'e geçince "Ses" ve "Altyazı" menüleri kalktı');
+    } finally {
+        await page.close();
+    }
+}
+
+async function testHlsOptions(browser) {
+    console.log('\n[4h] options.hls: config hls.js\'e aynen geçiyor, withCredentials, engine: "native"');
+    let { page } = await openHlsMock(browser, { hls: { config: { maxBufferLength: 12, backBufferLength: 30, capLevelToPlayerSize: true }, withCredentials: true } });
+    try {
+        const cfg = await page.evaluate(() => {
+            const c = document.getElementById('player').hls.config;
+            return { maxBufferLength: c.maxBufferLength, backBufferLength: c.backBufferLength, cap: c.capLevelToPlayerSize, native: c.renderTextTracksNatively, xhr: typeof c.xhrSetup, fetch: typeof c.fetchSetup, liveInf: c.liveDurationInfinity };
+        });
+        ok(cfg.maxBufferLength === 12 && cfg.backBufferLength === 30 && cfg.cap === true, `buffer/ABR ayarları hls.js'te ${JSON.stringify(cfg)}`);
+        ok(cfg.native === false && cfg.xhr === 'function' && cfg.fetch === 'function', 'hls.js <track> oluşturmuyor (renderTextTracksNatively: false), withCredentials istek kancaları kurulu');
+        ok(cfg.liveInf === true, 'hls.js canlıda duration = Infinity veriyor (liveDurationInfinity) — canlı rozeti / duvar saati / DVR buna bağlı');
+    } finally {
+        await page.close();
+    }
+
+    // engine: 'native' — tarayıcı "maybe" diyorsa hls.js yerine native HLS.
+    page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+    try {
+        await page.addInitScript(() => {
+            const orig = HTMLMediaElement.prototype.canPlayType;
+            HTMLMediaElement.prototype.canPlayType = function (t) {
+                return /mpegurl/i.test(t) ? 'maybe' : orig.call(this, t);
+            };
+        });
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+        await page.evaluate(() => { document.getElementById('player').options = { src: 'https://hls-av.example.test/master.m3u8', muted: true, hls: { engine: 'native' } }; });
+        await page.waitForTimeout(500);
+        const engine = await page.evaluate(() => ({ info: document.getElementById('player').playbackEngine, hls: document.getElementById('player').hls }));
+        ok(engine.info.engine === 'native-hls' && engine.info.reason === 'option' && engine.hls === null, `engine: 'native' → native HLS, player.hls null ${JSON.stringify(engine)}`);
+    } finally {
+        await page.close();
+    }
+}
+
+async function testLiveDvrSeekBar(browser) {
+    console.log('\n[4i] Canlı DVR: seek bar yayının geri sarma penceresinde çalışıyor (tıklama, hover "-0:45"), pencere kısaysa pasif');
+    const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+    try {
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video')?.readyState >= 1);
+        const setWindow = (start, end, t) =>
+            page.evaluate(({ start, end, t }) => {
+                const video = document.getElementById('player').shadowRoot.querySelector('video');
+                let current = t;
+                Object.defineProperty(video, 'duration', { value: Infinity, configurable: true });
+                Object.defineProperty(video, 'seekable', { value: { length: 1, start: () => start, end: () => end }, configurable: true });
+                Object.defineProperty(video, 'buffered', { value: { length: 1, start: () => start, end: () => end }, configurable: true });
+                Object.defineProperty(video, 'currentTime', { get: () => current, set: (v) => { current = v; }, configurable: true });
+                video.dispatchEvent(new Event('durationchange'));
+                video.dispatchEvent(new Event('timeupdate'));
+            }, { start, end, t });
+        const state = () =>
+            page.evaluate(() => {
+                const root = document.getElementById('player').shadowRoot;
+                const bar = root.querySelector('[part="seek-bar"]');
+                return {
+                    active: !bar.hasAttribute('data-no-duration'),
+                    t: Math.round(root.querySelector('video').currentTime * 10) / 10,
+                    hover: root.querySelector('[part="seek-time"]')?.hasAttribute('data-visible') ? root.querySelector('[part="seek-time"]').textContent : null,
+                    behind: root.querySelector('[part="live-badge"]').hasAttribute('data-behind'),
+                };
+            });
+        const box = await page.evaluate(() => { const r = document.getElementById('player').shadowRoot.querySelector('[part="seek-bar"]').getBoundingClientRect(); return { x: r.left, w: r.width, y: r.top + r.height / 2 }; });
+
+        await setWindow(100, 160, 158);
+        let s = await state();
+        ok(s.active && !s.behind, `60 sn'lik pencere → seek bar aktif, uçta "canlı" ${JSON.stringify(s)}`);
+        await page.mouse.move(box.x + box.w * 0.25, box.y);
+        await page.waitForTimeout(150);
+        s = await state();
+        ok(s.hover === '-0:45', `hover: canlıdan ne kadar geride (${s.hover})`);
+        await page.mouse.click(box.x + box.w * 0.25, box.y);
+        // Taklit currentTime gerçek video gibi timeupdate göndermiyor.
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').dispatchEvent(new Event('timeupdate')));
+        await page.waitForTimeout(150);
+        s = await state();
+        ok(Math.abs(s.t - 115) < 1 && s.behind, `%25'e tıklayınca pencere içinde 115. saniyeye gidildi, rozet "geride" ${JSON.stringify(s)}`);
+        await page.mouse.click(box.x + box.w - 1, box.y);
+        await page.waitForTimeout(150);
+        s = await state();
+        ok(s.t <= 159.1 && s.t > 158, `en sağa tıklama tam uca değil 1 sn gerisine (${s.t})`);
+
+        await setWindow(155, 160, 159);
+        s = await state();
+        ok(!s.active && s.hover === null, `5 sn'lik pencere (geri sarmasız yayın) → seek bar pasif, hover zamanı gizli ${JSON.stringify(s)}`);
+    } finally {
+        await page.close();
+    }
+}
+
+async function testHlsFatalErrorScreen(browser) {
+    console.log('\n[4j] hls.js kurtarılamayan ağ hatası (kalite listesi 404) → hata ekranı açılıyor (video.error oluşmasa da)');
+    const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+    try {
+        await page.route('https://hls-dead.example.test/**', (route) => {
+            const u = route.request().url();
+            const headers = { 'access-control-allow-origin': '*' };
+            if (u.endsWith('master.m3u8')) return route.fulfill({ status: 200, contentType: 'application/vnd.apple.mpegurl', body: MASTER_3, headers });
+            return route.fulfill({ status: 404, body: '', headers });
+        });
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+        await page.evaluate(() => {
+            document.getElementById('player').options = { src: 'https://hls-dead.example.test/master.m3u8', muted: true, hls: { config: { levelLoadingMaxRetry: 0, levelLoadingRetryDelay: 50 } } };
+        });
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('[part="error-screen"]').hasAttribute('data-visible'), { timeout: 15000 }).catch(() => {});
+        const r = await page.evaluate(() => {
+            const root = document.getElementById('player').shadowRoot;
+            const e = root.querySelector('[part="error-screen"]');
+            return { visible: e.hasAttribute('data-visible'), code: root.querySelector('.hp-error-code').textContent, videoError: root.querySelector('video').error };
+        });
+        ok(r.visible && r.code === 'Hata kodu 2' && r.videoError === null, `hata ekranı açıldı: "${r.code}" (video.error: ${r.videoError})`);
+        await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4', muted: true }; });
+        await page.waitForTimeout(300);
+        const closed = await page.evaluate(() => !document.getElementById('player').shadowRoot.querySelector('[part="error-screen"]').hasAttribute('data-visible'));
+        ok(closed, 'yeni kaynak yüklenince hata ekranı kapandı');
+    } finally {
+        await page.close();
+    }
+}
+
 async function testNativeHlsFallsBackToHlsJs(browser) {
     console.log('\n[4d] Kod 4 (Safari): native HLS "oynatırım" deyip oynatamazsa hata ekranı açılmadan hls.js\'e geçiliyor mu?');
     // Native-önce yolu yalnızca Safari/iOS'ta — Safari tarayıcı kimliğiyle.
@@ -407,6 +616,10 @@ async function testDai(browser) {
         await testNativeHlsFallsBackToHlsJs(browser);
         await testHlsQualityMenuInChrome(browser);
         await testHlsCorsFallsBackToNative(browser);
+        await testHlsAudioAndSubtitleMenus(browser);
+        await testHlsOptions(browser);
+        await testLiveDvrSeekBar(browser);
+        await testHlsFatalErrorScreen(browser);
         await testDai(browser);
     } finally {
         await browser.close();

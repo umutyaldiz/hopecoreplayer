@@ -1,6 +1,6 @@
 {
   "name": "@hopeplayer/core",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "HopePlayer core — dependency-free <hope-player> custom element (Shadow DOM + Tailwind)",
   "repository": {
     "type": "git",
@@ -39,7 +39,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "hls.js": "^1.7.3",
+    "hls.js": "^1.7.4",
     "qrcode-generator": "2.0.4"
   },
   "devDependencies": {

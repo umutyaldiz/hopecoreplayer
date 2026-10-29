@@ -52,6 +52,10 @@ Every interactive surface — icon buttons (play/pause, volume, settings gear, P
 | `--hp-chip-shadow` | Full `box-shadow` value — swap for a neomorphic dual-shadow, or `none` | soft drop shadow |
 | `--hp-chip-radius` | Corner radius | `10px` |
 | `--hp-chip-text` | Icon/text color inside chips | `var(--hp-color-on-surface)` |
+| `--hp-chrome-scrim` | Gradient behind the controls (bottom, and top in compact layout) for legibility on bright video; `none` to remove | dark-to-transparent gradient (`none` on `neo-dark`) |
+| `--hp-chrome-scrim-height` | Height of that gradient | `min(150px, 45%)` |
+| `--hp-chip-backdrop-brightness` | Darkens the video behind the control groups / center play button (`backdrop-filter: brightness()`); `1` = off | `0.78` (`1` on `glass-dark` / `neo-dark`) |
+| `--hp-ctrl-shadow` | `filter` on control icons and the time label; `none` to remove | `drop-shadow(0 1px 1.5px rgba(0,0,0,.55))` (`none` on `neo-dark`) |
 | `--hp-panel-bg` | Background for **text-bearing panels** (the settings menu dropdown) — more opaque than `--hp-chip-bg`, but still glass; see `--hp-panel-blur` below for how it stays readable without going solid | `rgba(255,255,255,0.72)` |
 | `--hp-panel-blur` | `backdrop-filter: blur(...)` for panels — stronger than `--hp-chip-blur`, carrying most of the readability: video behind the panel gets blurred into mush rather than the panel having to go opaque | `26px` |
 | `--hp-panel-border` | Panel border | `rgba(15,17,23,0.10)` |
@@ -150,6 +154,8 @@ hope-player::part(center-play-button) { /* ... */ }
 | `seek-time` | Time shown above the seek bar while hovering (default, no plugin needed; hidden when sprite-thumbnails/segments show their own time, and on live streams). Follows the `--hp-tooltip-*` tokens |
 | `play-pause-button` | Play/pause icon button |
 | `skip-back-button` / `skip-forward-button` | Skip back / forward buttons (`options.skipButtons`); the duration is drawn in `.hp-skip-num` |
+| `context-menu` | Right-click menu (`options.contextMenu`); follows the `--hp-panel-*` tokens |
+| `stats-panel` | Technical stats panel opened from the context menu / `toggleStats()`; follows the `--hp-panel-*` tokens |
 | `seek-feedback` | Notice shown on the right/left while skipping ("+30 s"); follows the `--hp-chip-*` tokens |
 | `volume-button` / `volume-slider` | Mute toggle / the vertical slider popup |
 | `center-play-button` | The big center play button (outer full-area click target — the visual circle is an inner `<span class="hp-chip">`, not a separate part) |

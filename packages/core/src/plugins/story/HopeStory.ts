@@ -228,10 +228,12 @@ export class HopeStory {
         listBtn.type = 'button';
         listBtn.setAttribute('aria-label', this.ctx.i18n.storyAllVideos);
         listBtn.setAttribute('aria-expanded', 'false');
+        // Konum tailwind.css `.hp-story-list-btn` — dar (dikey) player'da üst bara (ayarlar/PiP) taşınan butonların altında.
         listBtn.className =
-            'hp:absolute hp:top-2 hp:right-2 hp:flex hp:items-center hp:justify-center hp:w-8 hp:h-8 hp:rounded-full ' +
+            'hp-story-list-btn hp:absolute hp:flex hp:items-center hp:justify-center hp:w-9 hp:h-9 hp:rounded-full ' +
             'hp:bg-black/40 hp:text-white hp:border-0 hp:cursor-pointer hp:pointer-events-auto';
-        listBtn.appendChild(createIcon('settings', 'hp:text-sm'));
+        listBtn.setAttribute('part', 'story-list-button');
+        listBtn.appendChild(createIcon('grid', 'hp:text-base'));
 
         overlay.append(progressBar, meta, dots, navWrap, listBtn);
 

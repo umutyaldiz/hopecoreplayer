@@ -27,6 +27,12 @@
     --hp-chip-shadow: 0 4px 18px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.07);
     --hp-chip-radius: 10px;
     --hp-chip-text: var(--hp-color-on-surface, #fff);
+    /* Açık/hareketli görüntüde okunabilirlik: kontrollerin arkasında alttan koyulaşan gölge, cam grupların
+       arkasındaki görüntüyü hafif karartma ve ikon/yazı gölgesi. Opak yüzeyli temalar (neo-dark) kapatır. */
+    --hp-chrome-scrim: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.24) 50%, rgba(0, 0, 0, 0) 100%);
+    --hp-chrome-scrim-height: min(150px, 45%);
+    --hp-chip-backdrop-brightness: 0.78;
+    --hp-ctrl-shadow: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
 
     /* Metin taşıyan paneller (ayarlar menüsü): butonlardan daha opak + güçlü blur — saydam kalırken okunur.
        Temaya göre açık/koyu (bkz. koyu preset bloğu). */
@@ -143,9 +149,114 @@ button.hp-chip:active {
     background: var(--hp-chip-bg);
     border: 1px solid var(--hp-chip-border);
     border-radius: 9999px;
-    backdrop-filter: blur(var(--hp-chip-blur)) saturate(160%);
-    -webkit-backdrop-filter: blur(var(--hp-chip-blur)) saturate(160%);
+    backdrop-filter: blur(var(--hp-chip-blur)) saturate(160%) brightness(var(--hp-chip-backdrop-brightness, 1));
+    -webkit-backdrop-filter: blur(var(--hp-chip-blur)) saturate(160%) brightness(var(--hp-chip-backdrop-brightness, 1));
     box-shadow: var(--hp-chip-shadow);
+}
+/* ── Yükleme halkası (ControlBar): medya beklenirken sol grubun kenarında dolaşan ışık. Maske katmanı kutuyu
+   kenara kırpar, içindeki conic-gradient döner (@property Shadow DOM'da çalışmadığı için açı değil, kutu döner);
+   dış katmandaki drop-shadow parıltıyı verir (maskeden önce uygulansaydı kırpılırdı). */
+.hp-group-left {
+    position: relative;
+}
+.hp-loading-ring {
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 220ms ease;
+    filter: drop-shadow(0 0 3px color-mix(in srgb, var(--hp-color-accent, #fff) 70%, transparent));
+}
+.hp-loading-ring-mask {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2px;
+    overflow: hidden;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.hp-loading-ring-mask > span {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 160px);
+    aspect-ratio: 1;
+    translate: -50% -50%;
+    background: conic-gradient(
+        from 0deg,
+        transparent 0deg 150deg,
+        color-mix(in srgb, var(--hp-color-accent, #fff) 30%, transparent) 260deg,
+        var(--hp-color-accent, #fff) 340deg,
+        transparent 360deg
+    );
+    animation: hp-loading-ring-spin 1.1s linear infinite;
+    animation-play-state: paused;
+}
+.hp-group-left[data-loading] > .hp-loading-ring {
+    opacity: 1;
+}
+.hp-group-left[data-loading] > .hp-loading-ring .hp-loading-ring-mask > span {
+    animation-play-state: running;
+}
+@keyframes hp-loading-ring-spin {
+    to {
+        rotate: 360deg;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .hp-loading-ring-mask > span {
+        animation: none;
+        background: var(--hp-color-accent, #fff);
+    }
+    .hp-group-left[data-loading] > .hp-loading-ring {
+        animation: hp-loading-ring-pulse 1.6s ease-in-out infinite;
+    }
+}
+@keyframes hp-loading-ring-pulse {
+    50% {
+        opacity: 0.35;
+    }
+}
+
+/* Merkezdeki büyük play butonu da aynı karartmayı alır (ayarlar paneli gibi açık renkli .hp-chip'ler değil). */
+.hp-center-play > .hp-chip {
+    backdrop-filter: blur(var(--hp-chip-blur)) saturate(160%) brightness(var(--hp-chip-backdrop-brightness, 1));
+    -webkit-backdrop-filter: blur(var(--hp-chip-blur)) saturate(160%) brightness(var(--hp-chip-backdrop-brightness, 1));
+}
+.hp-group .hp-icon,
+.hp-group [part='time-display'],
+.hp-group .hp-live-badge,
+.hp-group [part='live-clock'],
+.hp-group .hp-skip-num,
+.hp-center-play .hp-icon {
+    filter: var(--hp-ctrl-shadow, none);
+}
+/* Kontrollerin arkasındaki gölge — chrome katmanının içinde, onunla birlikte görünüp kaybolur. */
+.hp-chrome::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--hp-chrome-scrim-height);
+    background: var(--hp-chrome-scrim);
+    pointer-events: none;
+}
+/* Kompakt (mobil) düzende sağ grup üstte — üst kenara da hafif gölge. */
+.video-area[data-compact] > .hp-chrome::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: min(90px, 30%);
+    background: var(--hp-chrome-scrim);
+    transform: scaleY(-1);
+    opacity: 0.7;
+    pointer-events: none;
 }
 .hp-group button.hp-chip {
     background: transparent;
@@ -188,6 +299,8 @@ button.hp-chip:active {
     --hp-chip-border-hover: rgba(255, 255, 255, 0.16);
     --hp-chip-shadow: 0 4px 18px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
     --hp-panel-bg: rgba(8, 8, 12, 0.72);
+    /* Yüzey zaten koyu — arkasını ayrıca karartmaya gerek yok. */
+    --hp-chip-backdrop-brightness: 1;
 }
 
 /* neo-dark — neomorphism (soft-UI): şeffaflık/blur YOK, çift yönlü yumuşak
@@ -206,6 +319,10 @@ button.hp-chip:active {
        değil, zaten solid bir yüzey taşıyor; text-shadow'a gerek yok. */
     --hp-panel-bg: #1e1e23;
     --hp-panel-text-shadow: none;
+    /* Opak yüzey — okunabilirlik zaten sağlanıyor, gölge/karartma tasarımı bozmasın. */
+    --hp-chrome-scrim: none;
+    --hp-chip-backdrop-brightness: 1;
+    --hp-ctrl-shadow: none;
 }
 :host([data-theme='neo-dark']) button.hp-chip:active {
     box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.5), inset -2px -2px 5px rgba(255, 255, 255, 0.03);
@@ -357,6 +474,18 @@ button.hp-chip:active {
     pointer-events: auto;
 }
 
+/* Story "tüm videolar" butonu: sağ üstte, kompakt düzende üst bara taşınan ayarlar/PiP grubunun (top 8px + buton + iç boşluk) altında. */
+.hp-story-list-btn {
+    top: calc(8px + var(--hp-ctrl-btn-size) + 18px);
+    right: 12px;
+}
+
+/* İmleç gizleme (options.cursorHideDelayMs): oynarken fare hareketsiz kalınca — tüm player'da, tam ekranda dahil. */
+:host([data-cursor-hidden]),
+:host([data-cursor-hidden]) * {
+    cursor: none !important;
+}
+
 /* ── Dokunmatik: ses butonu gizli; sessiz oynarken "Sesi aç" rozeti (chrome dışında, z-25 — reklamın sesi de açılabilsin) ── */
 .hp-unmute-badge {
     display: none;
@@ -491,6 +620,117 @@ button.hp-chip:active {
         padding: 5px 12px 5px 10px;
         font-size: 12px;
     }
+}
+
+/* ── Sağ tık menüsü (controls/ContextMenu) + istatistik paneli (plugins/stats) — ayarlar paneliyle aynı tema token'ları. */
+.hp-context-menu,
+.hp-stats {
+    position: absolute;
+    border: 1px solid var(--hp-panel-border);
+    border-radius: 10px;
+    background: var(--hp-panel-bg);
+    backdrop-filter: blur(var(--hp-panel-blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--hp-panel-blur)) saturate(160%);
+    color: var(--hp-panel-text);
+    text-shadow: var(--hp-panel-text-shadow, none);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+.hp-context-menu {
+    z-index: 40;
+    display: none;
+    min-width: 200px;
+    padding: 4px;
+    font-size: 13px;
+}
+.hp-context-menu[data-open] {
+    display: block;
+    animation: hp-context-menu-in 120ms ease;
+}
+@keyframes hp-context-menu-in {
+    from {
+        opacity: 0;
+        transform: scale(0.97);
+    }
+}
+.hp-context-menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.hp-context-menu-item[data-info] {
+    cursor: default;
+    font-weight: 600;
+}
+button.hp-context-menu-item:hover,
+button.hp-context-menu-item:focus-visible {
+    background: color-mix(in srgb, var(--hp-panel-text) 10%, transparent);
+    outline: none;
+}
+.hp-context-menu-item + .hp-context-menu-item {
+    margin-top: 2px;
+}
+.hp-context-menu-meta {
+    color: var(--hp-panel-text-muted);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+.hp-stats {
+    top: 10px;
+    left: 10px;
+    z-index: 28;
+    width: min(360px, calc(100% - 20px));
+    max-height: calc(100% - 20px);
+    overflow: auto;
+    padding: 8px 12px 10px;
+    font-size: 11.5px;
+}
+.hp-stats-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 700;
+}
+.hp-stats-close {
+    display: inline-flex;
+    padding: 4px;
+    border: 0;
+    border-radius: 9999px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+.hp-stats-close:hover {
+    background: color-mix(in srgb, var(--hp-panel-text) 12%, transparent);
+}
+.hp-stats-body {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 3px 12px;
+    margin: 0;
+}
+.hp-stats-body dt {
+    color: var(--hp-panel-text-muted);
+    white-space: nowrap;
+}
+.hp-stats-body dd {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
 }
 
 /* ── Sarma bildirimi (controls/SeekFeedback): ileride sağda, geride solda beliren cam hap — üç ok sırayla
@@ -1054,7 +1294,7 @@ button.hp-chip:active {
     touch-action: none;
     user-select: none;
     /* Yalnızca transform animasyonlanır; bottom her zaman anında yazılır (bkz. CaptionRenderer.setRowIndex). */
-    transition: transform 180ms ease;
+    transition: transform 240ms cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 /* Konum (`bottom`) JS'te `style.bottom` ile px olarak yazılıyor — yukarıdaki
    `bottom: 0` yalnızca ilk `recomputePosition()` çağrısından ÖNCEki an için

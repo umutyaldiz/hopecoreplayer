@@ -507,7 +507,7 @@ async function testSubtitlesWithoutTrackElements(browser) {
 
         await page.evaluate(async () => {
             const v = document.getElementById('player').shadowRoot.querySelector('video');
-            v.currentTime = 1;
+            v.currentTime = 4; // ilk cue 3. saniyede başlıyor
             await new Promise((r) => setTimeout(r, 400));
         });
         const caption = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-caption-bubble')?.textContent?.trim());
