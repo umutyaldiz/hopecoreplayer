@@ -50,6 +50,8 @@ import type { HopeLocaleStrings } from './i18n/types';
 const DEFAULT_PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 /** options.autoHideDelayMs verilmezse kullanılan varsayılan. */
 const DEFAULT_AUTO_HIDE_DELAY_MS = 1200;
+/** Dokunmayla açılan kontroller en az bu kadar (ms) açık kalır — fare süresi (1,2 sn) parmak için çok kısa. */
+const TOUCH_AUTO_HIDE_DELAY_MS = 3000;
 /** options.cursorHideDelayMs verilmezse — fare bu kadar kıpırdamazsa imleç gizlenir. */
 const DEFAULT_CURSOR_HIDE_DELAY_MS = 5000;
 /** Basış ile kalkış arasındaki imleç/parmak hareketi bu eşiği aşarsa "tık" değil sürükleme sayılır — toggle tetiklenmez. */
@@ -1249,7 +1251,11 @@ export class HopePlayerElement extends HTMLElement {
         const point = isTouch ? e.changedTouches[0] : e;
         if (point) {
             const moved = Math.hypot(point.clientX - this.tapStartX, point.clientY - this.tapStartY);
-            if (moved > TAP_MAX_MOVE_PX) return;
+            if (moved > TAP_MAX_MOVE_PX) {
+                // Dokunuş değil kaydırma — dokunmatikte kontrolleri göster (pointermove artık açmıyor).
+                if (isTouch && !this.isChromeBlocked) this.scheduleAutoHide();
+                return;
+            }
         }
         const pointer = isTouch ? 'touch' : (this.lastPointerType as 'mouse' | 'pen');
         const singleTap = (): void =>
@@ -1404,8 +1410,15 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     private readonly onPointerMove = (e: PointerEvent): void => {
+        // Dokunmatikte pointermove kontrolleri AÇMAZ, yalnızca açıksa süresini uzatır: Android'de (ör. Honor/Magic OS)
+        // parmak dokunurken 1-2px kayıp pointermove üretiyor — kontroller açılıp hemen ardından gelen dokunuş
+        // ("açıksa gizle") onları kapatıyor, toolbar yanıp sönüyordu. Dokunmada aç/kapa kararı onBackgroundTap'te.
+        if (e.pointerType !== 'mouse') {
+            if (this.chromeVisible) this.scheduleAutoHide();
+            return;
+        }
         // chromeEl pointer-events-none; olay yolunda yalnızca imleç bir kontrolün (pointer-events-auto) üzerindeyse görünür.
-        this.pointerOverControls = e.pointerType === 'mouse' && e.composedPath().includes(this.chromeEl);
+        this.pointerOverControls = e.composedPath().includes(this.chromeEl);
         this.scheduleAutoHide();
         if (e.pointerType === 'mouse') this.scheduleCursorHide();
     };
@@ -1443,6 +1456,6 @@ export class HopePlayerElement extends HTMLElement {
             // Duraklatılmışken, fare kontrollerin üzerindeyken ya da ayarlar menüsü açıkken gizleme.
             if (this.videoEl.paused || this.pointerOverControls || this.controlBar.settingsMenu.isOpen) return;
             this.setChromeOpacity('0');
-        }, this.autoHideDelayMs);
+        }, this.lastPointerType === 'mouse' ? this.autoHideDelayMs : Math.max(this.autoHideDelayMs, TOUCH_AUTO_HIDE_DELAY_MS));
     };
 }

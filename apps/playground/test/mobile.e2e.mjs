@@ -397,6 +397,48 @@ async function testCenterPlayClearOfSeekBar(browser) {
     }
 }
 
+async function testAndroidJitterTap(browser) {
+    console.log('\n[10] Android (Honor/Magic OS) titreyen dokunuş: kontroller yanıp sönmüyor, açılıp ~3 sn kalıyor; ikinci dokunuş kapatıyor');
+    const { context, page } = await openPlayer(browser, { width: 360, touch: true });
+    try {
+        const cdp = await context.newCDPSession(page);
+        await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4', muted: true, loop: true }; });
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 2);
+        await page.evaluate(async () => { await document.getElementById('player').shadowRoot.querySelector('video').play(); });
+        await page.waitForTimeout(2200);
+        const pt = await page.evaluate(() => {
+            const r = document.getElementById('player').shadowRoot.querySelector('.video-area').getBoundingClientRect();
+            return { x: r.left + r.width * 0.3, y: r.top + r.height * 0.3 };
+        });
+        const chrome = () => page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-chrome').style.opacity);
+        // Parmak dokunurken 1-2px kayıyor → pointermove (gerçek Android cihazlardaki gibi).
+        const jitterTap = async () => {
+            await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: pt.x, y: pt.y, id: 1 }] });
+            await page.waitForTimeout(30);
+            await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: pt.x + 1, y: pt.y + 1, id: 1 }] });
+            await page.waitForTimeout(20);
+            await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: pt.x + 2, y: pt.y + 1, id: 1 }] });
+            await page.waitForTimeout(30);
+            await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        };
+
+        ok((await chrome()) === '0', 'başlangıç: oynarken kontroller gizli');
+        await jitterTap();
+        await page.waitForTimeout(300);
+        const a = await chrome();
+        await page.waitForTimeout(1500);
+        const b = await chrome();
+        ok(a === '1' && b === '1', `titreyen dokunuş kontrolleri açtı ve açık kaldı (300ms=${a}, 1800ms=${b})`);
+        await jitterTap();
+        await page.waitForTimeout(250);
+        ok((await chrome()) === '0', 'açıkken ikinci dokunuş kontrolleri kapattı');
+        const paused = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').paused);
+        ok(!paused, 'dokunuşlar videoyu duraklatmadı (dar player)');
+    } finally {
+        await context.close();
+    }
+}
+
 async function testUnmuteBadge(browser) {
     console.log('\n[2] Mobil: sessiz oynayan videoda "Sesi aç" rozeti görünüyor, dokununca ses açılıyor ve rozet kayboluyor');
     const { context, page } = await openPlayer(browser, { width: 360, touch: true });
@@ -504,6 +546,7 @@ async function testCaptionsDropToBottom(browser) {
         await testTapGestures(browser);
         await testTapToPlayCompact(browser);
         await testCenterPlayClearOfSeekBar(browser);
+        await testAndroidJitterTap(browser);
     } finally {
         await browser.close();
     }
