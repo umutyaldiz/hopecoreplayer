@@ -16,3 +16,7 @@ npx expo start
 Then scan the QR code with **Expo Go** on your phone (Android or iOS), or press `a` / `i` for an emulator / simulator.
 
 The app loads `@hopeplayer/react-native` from npm. To try local changes to the package instead, build it (`npm run build --workspace=packages/react-native` at the repo root) and change the dependency to `"file:../../packages/react-native"`.
+
+## Expo Snack
+
+[`snack/App.js`](./snack/App.js) is a plain JavaScript copy of `App.tsx` for [Expo Snack](https://snack.expo.dev), which opens code loaded through `sourceUrl` as `App.js`. Keep it in sync when `App.tsx` changes.
