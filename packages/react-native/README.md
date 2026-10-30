@@ -2,6 +2,8 @@
 
 React Native wrapper for [HopeCorePlayer](https://umutyaldiz.com/hopecoreplayer). It runs `<hope-player>` inside a [`react-native-webview`](https://github.com/react-native-webview/react-native-webview) and bridges props, commands and events, so it takes **the same options and callbacks as `@hopeplayer/react`**. Every feature works as on the web: HLS (quality / audio / subtitle menus), ads, subtitles, themes, skip buttons, double-tap gestures, stats.
 
+Live demo: [Expo Snack](https://snack.expo.dev/@umutyaldiz/hopecoreplayer) (iOS / Android preview or Expo Go).
+
 ## Install
 
 ```bash

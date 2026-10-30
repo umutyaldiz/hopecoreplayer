@@ -1,5 +1,7 @@
 # HopeCorePlayer — React Native (Expo) example
 
+[Open in Expo Snack](https://snack.expo.dev/@umutyaldiz/hopecoreplayer) — runs on your phone with Expo Go or in Snack's iOS / Android preview.
+
 A small Expo app using `@hopeplayer/react-native`: an HLS stream and an MP4 with subtitles, skip buttons, double-tap gestures, the stats panel, `ref` commands (play / pause / +10 s / stats) and an event log.
 
 This folder is **not** part of the monorepo's npm workspaces (React Native needs React 19; the web packages are developed with React 18). Install it on its own.

@@ -43,7 +43,7 @@ Editable examples that run in the browser on StackBlitz (best in Chrome / Edge),
 | Web Component | [Open in StackBlitz](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/vanilla?file=src/main.ts) · [`examples/vanilla`](./examples/vanilla) |
 | React | [Open in StackBlitz](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/react?file=src/App.tsx) · [`examples/react`](./examples/react) |
 | Vue | [Open in StackBlitz](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/vue?file=src/App.vue) · [`examples/vue`](./examples/vue) |
-| React Native | [`examples/react-native-expo`](./examples/react-native-expo) (Expo Go) |
+| React Native | [Open in Expo Snack](https://snack.expo.dev/@umutyaldiz/hopecoreplayer) · [`examples/react-native-expo`](./examples/react-native-expo) |
 
 ## Why
 

@@ -15,7 +15,7 @@ npm'deki paketleri kullanan, tarayıcıda StackBlitz üzerinde çalışan düzen
 | Web Component | [StackBlitz'te aç](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/vanilla?file=src/main.ts) · [`examples/vanilla`](./examples/vanilla) |
 | React | [StackBlitz'te aç](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/react?file=src/App.tsx) · [`examples/react`](./examples/react) |
 | Vue | [StackBlitz'te aç](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/vue?file=src/App.vue) · [`examples/vue`](./examples/vue) |
-| React Native | [`examples/react-native-expo`](./examples/react-native-expo) (Expo Go) |
+| React Native | [Expo Snack'te aç](https://snack.expo.dev/@umutyaldiz/hopecoreplayer) · [`examples/react-native-expo`](./examples/react-native-expo) |
 
 ## Kurulum
 
