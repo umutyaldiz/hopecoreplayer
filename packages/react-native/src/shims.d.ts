@@ -21,6 +21,7 @@ declare module 'react-native-webview' {
         source?: { html: string; baseUrl?: string } | { uri: string };
         onMessage?: (event: WebViewMessageEvent) => void;
         style?: StyleProp<ViewStyle>;
+        containerStyle?: StyleProp<ViewStyle>;
         originWhitelist?: string[];
         javaScriptEnabled?: boolean;
         domStorageEnabled?: boolean;

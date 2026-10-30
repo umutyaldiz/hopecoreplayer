@@ -26,7 +26,7 @@ export interface HopePlayerProps extends HopePlayerOptions {
     /** Player yüklenene kadar görünen arka plan. Varsayılan #000. */
     backgroundColor?: string;
     /** WebView'a ek prop'lar (ör. `onShouldStartLoadWithRequest`). */
-    webViewProps?: Omit<WebViewProps, 'source' | 'onMessage' | 'style'>;
+    webViewProps?: Omit<WebViewProps, 'source' | 'onMessage' | 'style' | 'containerStyle'>;
     onReady?: () => void;
     onPlay?: () => void;
     onPause?: () => void;
@@ -203,7 +203,11 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
             bounces={false}
             overScrollMode="never"
             {...props.webViewProps}
-            style={[{ backgroundColor: props.backgroundColor ?? '#000' }, props.style]}
+            // Kutu boyutu WebView'ın dış sarmalayıcısına verilir. Sarmalayıcı varsayılan olarak `flex: 1` olduğundan
+            // boş alanı doldurmak için uzuyordu; `aspectRatio` içteki WebView'a gidince genişlik bu uzamış yükseklikten
+            // hesaplanıyor, player ekrandan taşıp sağdan kesiliyordu. `flex: 0` + kullanıcının style'ı, WebView da kutuyu doldurur.
+            containerStyle={[{ flex: 0, backgroundColor: props.backgroundColor ?? '#000' }, props.style]}
+            style={{ flex: 1, backgroundColor: props.backgroundColor ?? '#000' }}
         />
     );
 });

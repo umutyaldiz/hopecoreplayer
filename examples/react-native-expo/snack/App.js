@@ -1,7 +1,8 @@
 // Expo Snack için App.tsx'in düz JavaScript kopyası: Snack, sourceUrl ile gelen kodu App.js olarak açıyor.
 // App.tsx değişirse bunu da güncelleyin.
 import { useRef, useState } from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { HopePlayer } from '@hopeplayer/react-native';
 
@@ -19,54 +20,56 @@ export default function App() {
     const add = (line) => setLog((l) => [line, ...l].slice(0, 8));
 
     return (
-        <SafeAreaView style={styles.screen}>
-            <StatusBar style="light" />
-            <HopePlayer
-                ref={player}
-                style={styles.player}
-                src={SOURCES[source]}
-                muted
-                theme="glass-dark"
-                locale="tr"
-                skipButtons={{ back: 10, forward: 10 }}
-                tapGestures
-                contextMenu={{ stats: true }}
-                subtitles={
-                    source === 'mp4'
-                        ? [{ src: 'https://www.umutyaldiz.com/hopecoreplayer/sample.vtt', label: 'Türkçe', srclang: 'tr', default: true }]
-                        : undefined
-                }
-                onReady={() => add('ready')}
-                onPlay={() => add('play')}
-                onPause={() => add('pause')}
-                onEnded={() => add('ended')}
-                onError={(message) => add(`error: ${message}`)}
-                onQualityChange={(label) => add(`quality: ${label}`)}
-                onTimeUpdate={setTime}
-            />
+        <SafeAreaProvider>
+            <SafeAreaView style={styles.screen}>
+                <StatusBar style="light" />
+                <HopePlayer
+                    ref={player}
+                    style={styles.player}
+                    src={SOURCES[source]}
+                    muted
+                    theme="glass-dark"
+                    locale="tr"
+                    skipButtons={{ back: 10, forward: 10 }}
+                    tapGestures
+                    contextMenu={{ stats: true }}
+                    subtitles={
+                        source === 'mp4'
+                            ? [{ src: 'https://www.umutyaldiz.com/hopecoreplayer/sample.vtt', label: 'Türkçe', srclang: 'tr', default: true }]
+                            : undefined
+                    }
+                    onReady={() => add('ready')}
+                    onPlay={() => add('play')}
+                    onPause={() => add('pause')}
+                    onEnded={() => add('ended')}
+                    onError={(message) => add(`error: ${message}`)}
+                    onQualityChange={(label) => add(`quality: ${label}`)}
+                    onTimeUpdate={setTime}
+                />
 
-            <View style={styles.row}>
-                <Button label="Oynat" onPress={() => player.current?.play()} />
-                <Button label="Duraklat" onPress={() => player.current?.pause()} />
-                <Button label="+10 sn" onPress={() => player.current?.seek(time.currentTime + 10)} />
-                <Button label="İstatistik" onPress={() => player.current?.toggleStats()} />
-            </View>
-            <View style={styles.row}>
-                <Button label="HLS" active={source === 'hls'} onPress={() => setSource('hls')} />
-                <Button label="MP4 + altyazı" active={source === 'mp4'} onPress={() => setSource('mp4')} />
-            </View>
+                <View style={styles.row}>
+                    <Button label="Oynat" onPress={() => player.current?.play()} />
+                    <Button label="Duraklat" onPress={() => player.current?.pause()} />
+                    <Button label="+10 sn" onPress={() => player.current?.seek(time.currentTime + 10)} />
+                    <Button label="İstatistik" onPress={() => player.current?.toggleStats()} />
+                </View>
+                <View style={styles.row}>
+                    <Button label="HLS" active={source === 'hls'} onPress={() => setSource('hls')} />
+                    <Button label="MP4 + altyazı" active={source === 'mp4'} onPress={() => setSource('mp4')} />
+                </View>
 
-            <Text style={styles.time}>
-                {time.currentTime.toFixed(1)} sn / {time.duration != null ? `${time.duration.toFixed(1)} sn` : 'canlı'}
-            </Text>
-            <ScrollView style={styles.log}>
-                {log.map((line, i) => (
-                    <Text key={i} style={styles.logLine}>
-                        {line}
-                    </Text>
-                ))}
-            </ScrollView>
-        </SafeAreaView>
+                <Text style={styles.time}>
+                    {time.currentTime.toFixed(1)} sn / {time.duration != null ? `${time.duration.toFixed(1)} sn` : 'canlı'}
+                </Text>
+                <ScrollView style={styles.log}>
+                    {log.map((line, i) => (
+                        <Text key={i} style={styles.logLine}>
+                            {line}
+                        </Text>
+                    ))}
+                </ScrollView>
+            </SafeAreaView>
+        </SafeAreaProvider>
     );
 }
 
