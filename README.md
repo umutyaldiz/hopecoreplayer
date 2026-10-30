@@ -34,6 +34,17 @@ npx expo install @hopeplayer/react-native react-native-webview   # React Native
 
 See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for full React/Vue examples, props, and events.
 
+## Live demos
+
+Editable examples that run in the browser on StackBlitz (best in Chrome / Edge), using the packages published on npm:
+
+| | |
+|---|---|
+| Web Component | [Open in StackBlitz](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/vanilla?file=src/main.ts) · [`examples/vanilla`](./examples/vanilla) |
+| React | [Open in StackBlitz](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/react?file=src/App.tsx) · [`examples/react`](./examples/react) |
+| Vue | [Open in StackBlitz](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/vue?file=src/App.vue) · [`examples/vue`](./examples/vue) |
+| React Native | [`examples/react-native-expo`](./examples/react-native-expo) (Expo Go) |
+
 ## Why
 
 - **Zero runtime dependencies** besides `hls.js`, which is only downloaded (as its own chunk) when the source is HLS and the browser lacks native support.
@@ -60,9 +71,8 @@ packages/react    — thin React wrapper
 packages/vue      — thin Vue 3 wrapper
 packages/react-native — React Native wrapper (WebView bridge)
 apps/playground   — plain HTML/TS dev environment
-apps/demo-next    — Next.js demo app
-apps/demo-vue     — Vite + Vue 3 demo app
 docs/             — architecture / plugin / theming reference docs
+examples/vanilla, react, vue — StackBlitz live demos (separate install, not workspaces)
 examples/react-native-expo — Expo app (separate install, not a workspace)
 ```
 

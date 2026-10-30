@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="tr">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>HopeCorePlayer — Web Component</title>
+    </head>
+    <body>
+        <main>
+            <h1>HopeCorePlayer — Web Component</h1>
+            <p>@hopeplayer/core ile çerçevesiz &lt;hope-player&gt; kullanımı.</p>
+
+            <div id="player-slot"></div>
+
+            <div class="row">
+                <button type="button" data-action="play">Oynat</button>
+                <button type="button" data-action="pause">Duraklat</button>
+                <button type="button" data-action="stats">İstatistik</button>
+            </div>
+            <div class="row">
+                <button type="button" data-source="hls">HLS</button>
+                <button type="button" data-source="mp4">MP4 + altyazı</button>
+            </div>
+
+            <div class="log" id="log"></div>
+        </main>
+        <script type="module" src="/src/main.ts"></script>
+    </body>
+</html>

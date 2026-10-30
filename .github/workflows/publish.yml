@@ -49,16 +49,20 @@ jobs:
 
       - name: Publish @hopeplayer/core
         working-directory: packages/core
-        run: npm publish --provenance --access public
+        # Sürüm npm'de zaten varsa atlanır — yarıda kalan bir çalışma güvenle yeniden çalıştırılabilsin.
+        run: bash ../../.github/scripts/publish-if-new.sh
 
       - name: Publish @hopeplayer/react
         working-directory: packages/react
-        run: npm publish --provenance --access public
+        # Sürüm npm'de zaten varsa atlanır — yarıda kalan bir çalışma güvenle yeniden çalıştırılabilsin.
+        run: bash ../../.github/scripts/publish-if-new.sh
 
       - name: Publish @hopeplayer/vue
         working-directory: packages/vue
-        run: npm publish --provenance --access public
+        # Sürüm npm'de zaten varsa atlanır — yarıda kalan bir çalışma güvenle yeniden çalıştırılabilsin.
+        run: bash ../../.github/scripts/publish-if-new.sh
 
       - name: Publish @hopeplayer/react-native
         working-directory: packages/react-native
-        run: npm publish --provenance --access public
+        # Sürüm npm'de zaten varsa atlanır — yarıda kalan bir çalışma güvenle yeniden çalıştırılabilsin.
+        run: bash ../../.github/scripts/publish-if-new.sh

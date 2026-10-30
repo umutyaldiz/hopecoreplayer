@@ -1,6 +1,6 @@
 {
   "name": "@hopeplayer/core",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "HopePlayer core — dependency-free <hope-player> custom element (Shadow DOM + Tailwind)",
   "repository": {
     "type": "git",
@@ -18,7 +18,8 @@
   "type": "module",
   "sideEffects": [
     "./src/index.ts",
-    "./dist/hope-player.js"
+    "./dist/hope-player.js",
+    "./dist/chunks/*.js"
   ],
   "main": "./dist/hope-player.js",
   "module": "./dist/hope-player.js",

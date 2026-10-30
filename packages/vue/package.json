@@ -1,6 +1,6 @@
 {
   "name": "@hopeplayer/vue",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Thin Vue 3 wrapper around <hope-player> (@hopeplayer/core) — prop/event bridge only, no state duplication",
   "repository": {
     "type": "git",
@@ -34,11 +34,11 @@
     "typecheck": "vue-tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
-    "@hopeplayer/core": "^1.0.7",
+    "@hopeplayer/core": "^1.0.8",
     "vue": ">=3.3"
   },
   "devDependencies": {
-    "@hopeplayer/core": "^1.0.7",
+    "@hopeplayer/core": "^1.0.8",
     "@vitejs/plugin-vue": "^6.0.0",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",

@@ -1,7 +1,7 @@
 {
   "name": "hopecoreplayer",
   "private": true,
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "HopePlayer — dependency-free (except hls.js), TypeScript, Shadow DOM + Tailwind video player core",
   "repository": {
     "type": "git",
@@ -32,7 +32,6 @@
     "test:theme": "node apps/playground/test/theme.e2e.mjs",
     "test:i18n": "node apps/playground/test/i18n.e2e.mjs",
     "test": "npm run test:ads && npm run test:prebid && npm run test:interaction && npm run test:content-ops && npm run test:live && npm run test:theme && npm run test:i18n && npm run test:mobile && npm run test:react-native",
-    "test:react-wrapper": "node apps/demo-next/test/react-wrapper.e2e.mjs",
     "test:docs-site": "node apps/docs/test/static-site.e2e.mjs",
     "test:mobile": "node apps/playground/test/mobile.e2e.mjs",
     "test:react-native": "node packages/react-native/test/bridge.e2e.mjs"
