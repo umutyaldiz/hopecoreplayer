@@ -96,6 +96,8 @@ export interface SourceManagerCallbacks {
     onCues(trackId: string, cues: VTTCue[]): void;
     /** hls.js kurtarılamayan bir hata verdi (video.error oluşmaz) — `network` = yayın/segment indirilemiyor, `media` = çözümlenemiyor. */
     onFatalError(kind: 'network' | 'media'): void;
+    /** hls.js'in her hatası (kurtarılanlar dahil) — hata ayıklama kaydı için. */
+    onStreamError?(info: { type: string; details: string; fatal: boolean; url?: string; httpStatus?: number; reason?: string }): void;
 }
 
 interface NativeAudioTrack {
@@ -257,6 +259,17 @@ export class SourceManager {
         // Manifest indirilemezse (çoğunlukla CDN'in CORS izni yok — hls.js fetch kullanır, native oynatıcı
         // CORS'a tabi değil) ve tarayıcı native HLS oynatabiliyorsa ona düş: yayın oynar, kalite menüsü olmaz.
         hls.on(Hls.Events.ERROR, (_event, data) => {
+            if (this.hls === hls) {
+                const d = data as unknown as { url?: string; frag?: { url?: string }; context?: { url?: string }; response?: { code?: number }; reason?: string; error?: Error };
+                this.callbacks.onStreamError?.({
+                    type: String(data.type),
+                    details: String(data.details),
+                    fatal: !!data.fatal,
+                    url: d.url ?? d.frag?.url ?? d.context?.url,
+                    httpStatus: d.response?.code,
+                    reason: d.reason ?? d.error?.message,
+                });
+            }
             if (!data.fatal || this.hls !== hls) return;
             // Yalnızca İNDİREMEME (CORS/ağ/zaman aşımı) — bozuk manifest'i native de oynatamaz.
             const loadFailed = [Hls.ErrorDetails.MANIFEST_LOAD_ERROR, Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT].includes(data.details);

@@ -7,6 +7,8 @@ export class KeyboardController {
     seekStep = 5;
     /** Klavyeyle sarıldığında (sn, negatif = geri) — sarma bildirimi için. */
     onSeek: ((delta: number) => void) | null = null;
+    /** Space/K'den önce sorulur — true dönerse işlenmiştir (ör. preroll beklemesini iptal). */
+    interceptTogglePlay: (() => boolean) | null = null;
 
     constructor(host: HTMLElement, video: HTMLVideoElement, toggleFullscreen: () => void) {
         this.host = host;
@@ -25,6 +27,10 @@ export class KeyboardController {
         switch (e.key) {
             case ' ':
             case 'k':
+                if (this.interceptTogglePlay?.()) {
+                    e.preventDefault();
+                    break;
+                }
                 if (this.video.paused) void this.video.play();
                 else this.video.pause();
                 e.preventDefault();

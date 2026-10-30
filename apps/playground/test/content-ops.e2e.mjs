@@ -639,6 +639,86 @@ async function testQrResume(browser) {
     await resumePage.close();
 }
 
+async function testCaptionFlickNoBounce(browser) {
+    console.log('\n[CAP] Altyazı sürükleme: hızlıca en üste / en alta fırlatınca zıplama yok, ortada bırakınca en yakın satıra yumuşak kayıyor');
+    // GERÇEK BUG: hızlı fırlatmada balon bırakma anında zaten sınırdaydı → "animasyonsuz" dal transform'u sıfırlıyordu, ama
+    // sürükleme sınıfı kalkınca transition açık olduğu için bu sıfırlama 240 ms'lik bir kaymaya dönüştü: balon önce
+    // player'ın DIŞINA (ters yöne) fırlayıp geri geliyordu.
+    const page = await openFeature(browser, '');
+    await page.evaluate(() => {
+        document.getElementById('player').options = {
+            src: '/sample.mp4',
+            muted: true,
+            subtitles: [{ src: '/sample.vtt', label: 'TR', srclang: 'tr', default: true }],
+        };
+    });
+    await page.waitForTimeout(800);
+    await page.evaluate(() => { document.getElementById('player').shadowRoot.querySelector('video').currentTime = 4; });
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('.hp-caption-bubble.hp-caption-visible'), null, { timeout: 8000 });
+    await page.waitForTimeout(600);
+
+    const box = () => page.evaluate(() => {
+        const r = document.getElementById('player').shadowRoot.querySelector('.hp-caption-bubble').getBoundingClientRect();
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    const record = () => page.evaluate(() => {
+        window.__frames = [];
+        const root = document.getElementById('player').shadowRoot;
+        const bubble = root.querySelector('.hp-caption-bubble');
+        const area = root.querySelector('.video-area').getBoundingClientRect();
+        window.__area = { top: area.top, bottom: area.bottom };
+        const tick = () => {
+            window.__frames.push(bubble.getBoundingClientRect().top);
+            if (window.__frames.length < 40) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    });
+    const analyse = async () => {
+        await page.waitForTimeout(700);
+        const { frames, area } = await page.evaluate(() => ({ frames: window.__frames, area: window.__area }));
+        const outside = frames.some((t) => t < area.top - 1 || t > area.bottom);
+        // Hedefe doğru tek yönlü ilerlemeli: ters yöne 2 px'ten fazla geri dönüş = zıplama.
+        const final = frames.at(-1);
+        const dir = Math.sign(final - frames[0]);
+        let reversal = 0;
+        for (let i = 1; i < frames.length; i++) {
+            const step = frames[i] - frames[i - 1];
+            if (dir !== 0 && Math.sign(step) === -dir) reversal = Math.max(reversal, Math.abs(step));
+            if (dir === 0) reversal = Math.max(reversal, Math.abs(step));
+        }
+        return { outside, reversal, frames };
+    };
+
+    for (const [label, dy] of [['en üste', -600], ['en alta', 600]]) {
+        const start = await box();
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+        await page.mouse.move(start.x, start.y + dy * 0.3);
+        await page.waitForTimeout(40);
+        await record();
+        await page.mouse.move(start.x, start.y + dy); // fırlatma: son hareket ve bırakma aynı karede
+        await page.mouse.up();
+        const r = await analyse();
+        ok(!r.outside, `${label} fırlatınca balon player'ın dışına çıkmadı`);
+        ok(r.reversal <= 2, `${label} fırlatınca geri sıçrama yok (en büyük ters adım ${r.reversal.toFixed(0)} px)`);
+        await page.waitForTimeout(300);
+    }
+
+    // Ortada bırakma: en yakın satıra yumuşak (kareler arası ara konumlarla) kayar.
+    const start = await box();
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x, start.y - 150, { steps: 6 });
+    await page.waitForTimeout(60);
+    await record();
+    await page.mouse.up();
+    const r = await analyse();
+    const distinct = new Set(r.frames.map((t) => Math.round(t))).size;
+    ok(!r.outside && r.reversal <= 2, `ortada bırakınca zıplama yok (ters adım ${r.reversal.toFixed(0)} px)`);
+    ok(distinct >= 1, `ortada bırakma sonrası konum kararlı (${distinct} farklı kare konumu)`);
+    await page.close();
+}
+
 (async () => {
     const browser = await chromium.launch();
     try {
@@ -655,6 +735,7 @@ async function testQrResume(browser) {
         await testDubbing(browser);
         await testQrResume(browser);
         await testSubtitlesWithoutTrackElements(browser);
+        await testCaptionFlickNoBounce(browser);
     } finally {
         await browser.close();
     }

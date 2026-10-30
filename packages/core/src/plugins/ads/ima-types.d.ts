@@ -22,6 +22,12 @@ declare namespace google.ima {
         nonLinearAdSlotHeight?: number;
         /** VAST/wrapper zincirinin TAMAMEN çözülmesi için üst sınır (ms). */
         vastLoadTimeout?: number;
+        setAdWillAutoPlay?(autoPlay: boolean): void;
+        setAdWillPlayMuted?(muted: boolean): void;
+        /** İçerik TV gibi art arda otomatik oynuyor mu (playlist / story) — reklam alıcılarına envanter tipi sinyali (vconp). */
+        setContinuousPlayback?(continuous: boolean): void;
+        /** Open Measurement: ölçüm firması (OmidVerificationVendor) → erişim modu (OmidAccessMode). */
+        omidAccessModeRules?: Record<string, string>;
     }
 
     class AdsManager {
@@ -36,6 +42,8 @@ declare namespace google.ima {
         /** 0 (sessiz) – 1 (tam ses) arası. */
         setVolume(volume: number): void;
         getVolume(): number;
+        /** VMAP'teki reklam aralarının zamanları (sn) — 0 preroll, -1 postroll. */
+        getCuePoints?(): number[];
     }
 
     class AdsManagerLoadedEvent {
@@ -46,6 +54,10 @@ declare namespace google.ima {
     class AdError {
         getMessage(): string;
         getErrorCode(): number;
+        /** VAST spesifikasyonundaki hata numarası (ör. 303 boş VAST, 402 medya zaman aşımı). */
+        getVastErrorCode?(): number;
+        /** 'adLoadError' | 'adPlayError' */
+        getType?(): string;
     }
 
     class AdErrorEvent {
@@ -54,7 +66,11 @@ declare namespace google.ima {
     }
 
     class Ad {
-        getAdPodInfo(): { getAdPosition(): number; getTotalAds(): number; getPodIndex(): number };
+        getAdPodInfo(): { getAdPosition(): number; getTotalAds(): number; getPodIndex(): number; getTimeOffset?(): number };
+        /** false: overlay (non-linear) reklam — içeriği durdurmaz, içerik oynarken üstünde gösterilir. */
+        isLinear?(): boolean;
+        /** Seçilen overlay (non-linear) creative'in yüksekliği (px). */
+        getHeight?(): number;
     }
 
     class AdEvent {
@@ -65,6 +81,7 @@ declare namespace google.ima {
             STARTED: string;
             COMPLETE: string;
             ALL_ADS_COMPLETED: string;
+            USER_CLOSE?: string;
             SKIPPED: string;
             CLICK: string;
             /** Toolbar'daki oynat/duraklat butonuyla (adsManager.pause()/resume()) tetiklenir; ayrıca IMA'nın KENDİ reklam UI'ı (ör. reklam video'suna tıklama) üzerinden de gelebilir — ikisini senkron tutmak için dinleniyor. */
@@ -75,6 +92,11 @@ declare namespace google.ima {
     }
 
     const ViewMode: { NORMAL: string; FULLSCREEN: string };
+
+    /** Open Measurement erişim modları: 'limited' | 'domain' | 'full'. */
+    const OmidAccessMode: { LIMITED: string; DOMAIN: string; FULL: string } | undefined;
+    /** Ölçüm firmaları (GOOGLE, DOUBLEVERIFY, INTEGRAL_AD_SCIENCE, MOAT, ... OTHER) → sayısal kimlik. */
+    const OmidVerificationVendor: Record<string, number> | undefined;
 
     const ImaSdkSettings: {
         VpaidMode: { DISABLED: number; ENABLED: number; INSECURE: number };

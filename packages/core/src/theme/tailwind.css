@@ -624,7 +624,8 @@ button.hp-chip:active {
 
 /* ── Sağ tık menüsü (controls/ContextMenu) + istatistik paneli (plugins/stats) — ayarlar paneliyle aynı tema token'ları. */
 .hp-context-menu,
-.hp-stats {
+.hp-stats,
+.hp-debug {
     position: absolute;
     border: 1px solid var(--hp-panel-border);
     border-radius: 10px;
@@ -1315,4 +1316,199 @@ button.hp-context-menu-item:focus-visible {
 }
 .hp-caption-bubble.hp-caption-dragging {
     cursor: grabbing;
+}
+
+/* Overlay (non-linear) reklam: içerik oynarken görünür; kontrol çubuğunun üstünde durur. Katmanın kendisi ve IMA'nın tam
+   boyutlu kapsayıcıları tıklamayı geçirir — yalnızca overlay'in kendisi (iframe / görsel) tıklanabilir, player kullanılmaya
+   devam eder. */
+[part='ad-layer'][data-nonlinear] {
+    top: auto;
+    bottom: var(--hp-nonlinear-ad-offset, 72px);
+    height: var(--hp-nonlinear-ad-height, 33%);
+    pointer-events: none;
+}
+[part='ad-layer'][data-nonlinear] * {
+    pointer-events: none;
+}
+[part='ad-layer'][data-nonlinear] :is(iframe, img, a, button) {
+    pointer-events: auto;
+}
+
+/* ── Hata ayıklama penceresi (plugins/debug, options.debug): tüm player alanını kaplar, liste kendi içinde kayar,
+   uzun satırlar (URL'ler) kırılır — yatay taşma yok. Kontrollerin (20) ve istatistik panelinin (28) üstünde.
+   Okunmak için var: temadan bağımsız koyu, neredeyse opak zemin (açık cam temada arkadaki video yazıya karışıyordu). */
+.hp-debug {
+    --hp-panel-text: #f1f1f4;
+    --hp-panel-text-muted: rgba(241, 241, 244, 0.62);
+    --hp-panel-border: rgba(255, 255, 255, 0.12);
+    background: rgba(14, 14, 18, 0.95);
+    text-shadow: none;
+    inset: 8px;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 1.45;
+}
+.hp-debug:focus {
+    outline: none;
+}
+.hp-debug-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 8px 8px 12px;
+    border-bottom: 1px solid var(--hp-panel-border);
+    flex-shrink: 0;
+}
+.hp-debug-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.hp-debug-count {
+    padding: 1px 7px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, #f87171 22%, transparent);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+.hp-debug-count:empty {
+    display: none;
+}
+.hp-debug-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.hp-debug-btn {
+    padding: 4px 10px;
+    border: 1px solid var(--hp-panel-border);
+    border-radius: 9999px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+}
+.hp-debug-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--hp-panel-text) 12%, transparent);
+}
+.hp-debug-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+.hp-debug-list {
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    padding: 6px 12px 10px;
+    list-style: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+}
+.hp-debug-row {
+    padding: 8px 0 8px 10px;
+    border-left: 2px solid color-mix(in srgb, var(--hp-panel-text) 25%, transparent);
+    min-width: 0;
+}
+.hp-debug-row + .hp-debug-row {
+    margin-top: 6px;
+}
+.hp-debug-row[data-fatal] {
+    border-left-color: #f87171;
+}
+.hp-debug-row-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2px;
+}
+.hp-debug-time {
+    color: var(--hp-panel-text-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+}
+.hp-debug-source,
+.hp-debug-fatal {
+    padding: 1px 7px;
+    border-radius: 9999px;
+    font-size: 10.5px;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--hp-panel-text) 12%, transparent);
+}
+.hp-debug-source[data-source='ads'] {
+    background: color-mix(in srgb, #f5c451 24%, transparent);
+}
+.hp-debug-source[data-source='stream'],
+.hp-debug-source[data-source='media'] {
+    background: color-mix(in srgb, #60a5fa 24%, transparent);
+}
+.hp-debug-fatal {
+    background: color-mix(in srgb, #f87171 28%, transparent);
+}
+.hp-debug-message {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+.hp-debug-repeat {
+    color: var(--hp-panel-text-muted);
+    font-weight: 500;
+}
+.hp-debug-details {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 1px 10px;
+    margin: 4px 0 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+}
+.hp-debug-details dt {
+    color: var(--hp-panel-text-muted);
+}
+.hp-debug-details dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.hp-debug-empty {
+    margin: auto;
+    padding: 16px;
+    color: var(--hp-panel-text-muted);
+}
+.hp-debug-empty[hidden] {
+    display: none;
+}
+
+/* Reklam bitti: iPhone native tam ekranından / PiP'ten reklam için çıkıldıysa bir dokunuşla geri dönüş. */
+.hp-ad-return {
+    position: absolute;
+    right: 12px;
+    bottom: 64px;
+    z-index: 25;
+    padding: 10px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 999px;
+    background: rgba(14, 14, 18, 0.82);
+    color: #fff;
+    font: 600 14px/1.2 system-ui, -apple-system, sans-serif;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    animation: hp-ad-return-in 0.2s ease-out;
+}
+@keyframes hp-ad-return-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
 }

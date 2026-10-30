@@ -59,6 +59,13 @@ export interface ControlBarCallbacks {
     adVolume: VolumePanelAdHooks;
     /** hls.js'in hedef canlı konumu (canlı ucun ~3 segment gerisi) — rozet "geride" kararı ve "canlıya dön" için. */
     liveSyncPosition?(): number | null;
+    /**
+     * Oynat/duraklat butonu ve klavyeden önce sorulur — true dönerse tıklama orada işlenmiştir.
+     * Preroll beklenirken basılan "duraklat" beklemeyi iptal eder (video zaten duraklatılmış durumda).
+     */
+    interceptTogglePlay?(): boolean;
+    /** Yükleme halkası (medya takılması ya da preroll beklemesi) açıldı / kapandı — kontroller bu sırada gizlenmesin. */
+    onLoadingChange?(loading: boolean): void;
 }
 
 /** Alt kontrol çubuğunu kurar; alt bileşenleri (SeekBar/VolumePanel/SettingsMenu) birleştirir. */
@@ -80,11 +87,17 @@ export class ControlBar {
     private seekingEnabled = true;
     private readonly leftGroup: HTMLDivElement;
     private loadingTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Halkayı açık tutan sebepler: 'media' (buffer bekleniyor) ve player'ın verdikleri (ör. 'preroll'). */
+    private readonly loadingReasons = new Set<string>();
+    /** Preroll beklenirken video duraklatılmış olsa da kullanıcı oynatmak istedi — buton "duraklat" görünür. */
+    private pendingPlay = false;
     /** Sarma butonuyla sarıldığında (sn, negatif = geri) — sarma bildirimi için. */
     onSkip: ((delta: number) => void) | null = null;
     private readonly fullscreenButton: HTMLButtonElement;
     private readonly fullscreenIcon: HTMLElement;
     private readonly timeLabel: HTMLButtonElement;
+    /** Reklam sırasında süre etiketinin yerinde: "Reklam 2/3 · 0:12". */
+    private readonly adInfoEl: HTMLSpanElement;
     private showRemaining = false;
     /** Kompakt düzende (player < 480px) sağ grubun taşındığı üst bar; tam ekran altta kalır. */
     readonly topEl: HTMLDivElement;
@@ -165,6 +178,12 @@ export class ControlBar {
         this.timeLabel.addEventListener('click', this.onTimeClick);
         leftGroup.appendChild(this.timeLabel);
 
+        this.adInfoEl = document.createElement('span');
+        this.adInfoEl.setAttribute('part', 'ad-countdown');
+        this.adInfoEl.className = 'hp:text-xs hp:text-on-surface hp:tabular-nums hp:whitespace-nowrap hp:px-1 hp:select-none';
+        this.adInfoEl.setAttribute('aria-live', 'off');
+        this.adInfoEl.style.display = 'none';
+
         // Canlı yayında (duration === Infinity) süre etiketinin YERİNE —
         // YouTube tarzı "● CANLI": canlı uçtayken nokta kırmızı, geriye
         // sarılmışsa gri ve tıklayınca canlı uca döner.
@@ -181,6 +200,8 @@ export class ControlBar {
         this.liveBadge.style.display = 'none';
         this.liveBadge.addEventListener('click', this.goToLive);
         leftGroup.appendChild(this.liveBadge);
+        // Süre etiketi / canlı rozetinden sonra (reklam sırasında ikisi de gizli, gösterge onların yerinde görünür).
+        leftGroup.appendChild(this.adInfoEl);
 
         const spacer = document.createElement('div');
         spacer.className = 'hp:flex-1';
@@ -317,14 +338,27 @@ export class ControlBar {
         if (this.compact) this.fullscreenSlot.style.display = active ? 'none' : 'flex';
         // Süre etiketi / canlı rozeti hangisinin görüneceğine renderTime karar veriyor (ad modunda ikisi de gizli).
         this.renderTime();
-        const iconColor = active ? '#202020' : '';
-        this.playIcon.style.color = iconColor;
-        this.volumePanel.setIconColor(iconColor);
-        this.volumePanel.setSliderFillColor(iconColor);
+        if (!active) this.setAdInfo(null);
         // Oynat/duraklat ikonu + ses göstergesi, ad moduna girer/çıkarken
         // doğru kaynağı (reklam ya da içerik) hemen yansıtsın.
         this.renderPlayState();
         this.volumePanel.refreshForAdMode();
+    }
+
+    /**
+     * Reklam geri sayımı + pod göstergesi ("Reklam 2/3 · 0:12"). `null` → gizle. Pod tek reklamsa yalnızca "Reklam · 0:12";
+     * kalan süre bilinmiyorsa (bazı VPAID reklamları) yalnızca etiket.
+     */
+    setAdInfo(info: { remaining: number; position: number; total: number } | null): void {
+        if (!info || !this.adMode) {
+            this.adInfoEl.style.display = 'none';
+            this.adInfoEl.textContent = '';
+            return;
+        }
+        const pod = info.total > 1 ? ` ${info.position}/${info.total}` : '';
+        const time = info.remaining >= 0 ? ` · ${formatTime(Math.ceil(info.remaining))}` : '';
+        this.adInfoEl.textContent = `${this.labels.adLabel}${pod}${time}`;
+        this.adInfoEl.style.display = '';
     }
 
     /** `AdsController`'ın IMA'nın KENDİ UI'ı üzerinden (ör. reklam video'suna tıklama) gelen PAUSED/RESUMED event'leri için — oynat/duraklat ikonunu tazeler. */
@@ -375,6 +409,10 @@ export class ControlBar {
     }
 
     private togglePlay(): void {
+        if (this.callbacks.interceptTogglePlay?.()) {
+            this.renderPlayState();
+            return;
+        }
         if (this.callbacks.isAdActive()) {
             this.callbacks.adTogglePlay();
             this.renderPlayState();
@@ -401,8 +439,32 @@ export class ControlBar {
         else this.callbacks.onRequestFullscreen();
     }
 
+    /** Preroll beklemesi: video duraklatılmış ama oynatma istendi — buton "duraklat" görünsün. */
+    setPendingPlay(pending: boolean): void {
+        this.pendingPlay = pending;
+        this.renderPlayState();
+    }
+
+    /** Player'ın kendi bekleme durumları (ör. 'preroll') için yükleme halkası — medya takılmasından bağımsız. */
+    setLoading(reason: string, on: boolean): void {
+        if (on) this.loadingReasons.add(reason);
+        else this.loadingReasons.delete(reason);
+        this.renderLoading();
+    }
+
+    get isLoading(): boolean {
+        return this.loadingReasons.size > 0;
+    }
+
+    private renderLoading(): void {
+        const loading = this.loadingReasons.size > 0;
+        if (loading === this.leftGroup.hasAttribute('data-loading')) return;
+        this.leftGroup.toggleAttribute('data-loading', loading);
+        this.callbacks.onLoadingChange?.(loading);
+    }
+
     private readonly renderPlayState = (): void => {
-        const paused = this.callbacks.isAdActive() ? this.callbacks.adIsPaused() : this.video.paused;
+        const paused = this.callbacks.isAdActive() ? this.callbacks.adIsPaused() : this.video.paused && !this.pendingPlay;
         setIconName(this.playIcon, paused ? 'play' : 'pause');
         setButtonLabel(this.playButton, paused ? this.labels.play : this.labels.pause);
     };
@@ -444,10 +506,10 @@ export class ControlBar {
     private readonly onLoadingStart = (e: Event): void => {
         // Buffer'lı bir yere atlarken (veri hazır) halka gösterilmez.
         if (e.type === 'seeking' && this.video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) return;
-        if (this.loadingTimer || this.leftGroup.hasAttribute('data-loading')) return;
+        if (this.loadingTimer || this.loadingReasons.has('media')) return;
         this.loadingTimer = setTimeout(() => {
             this.loadingTimer = null;
-            this.leftGroup.setAttribute('data-loading', '');
+            this.setLoading('media', true);
         }, LOADING_RING_DELAY_MS);
     };
 
@@ -456,7 +518,7 @@ export class ControlBar {
         if (e.type === 'seeked' && this.video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA && !this.video.paused) return;
         if (this.loadingTimer) clearTimeout(this.loadingTimer);
         this.loadingTimer = null;
-        this.leftGroup.removeAttribute('data-loading');
+        this.setLoading('media', false);
     };
 
     private readonly goToLive = (): void => {

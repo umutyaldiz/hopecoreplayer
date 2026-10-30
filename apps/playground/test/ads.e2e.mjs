@@ -146,6 +146,8 @@ async function testRequestOnPlayDefersAdRequest(browser) {
 async function testVmapSplit(browser) {
     console.log('\n[2] VMAP-split: preroll bitince VMAP AYRI ve DEĞİŞTİRİLMEDEN isteniyor mu?');
     await withPage(browser, 'vmap', async (page) => {
+        // Preroll kapısı (1.0.12): yüklenen preroll, içerik oynatılmak istenene kadar start() edilmez.
+        await page.evaluate(() => document.getElementById('player').play());
         await page.evaluate(() => {
             const loader = window.__mockIma.adsLoaderInstances[0];
             const mgr = new window.google.ima.AdsManager();
@@ -376,6 +378,14 @@ async function testOptionsBeforeConnect(browser) {
 async function testAdModeToolbar(browser) {
     console.log('\n[7] İstek üzerine: reklam sırasında kontrol çubuğu TAMAMEN gizlenmiyor — yalnızca oynat/duraklat + ses kalıyor, seek bar/süre/ayarlar/PIP/tam ekran gizleniyor');
     await withPage(browser, 'preroll', async (page) => {
+        // Reklam modundaki sade toolbar temanın kendi renklerini kullanır (istek üzerine — önceden #202020'ye zorlanıyordu).
+        const themeColors = await page.evaluate(() => {
+            const root = document.getElementById('player').shadowRoot;
+            return {
+                icon: getComputedStyle(root.querySelector('[part="play-pause-button"] .hp-icon')).color,
+                sliderFill: getComputedStyle(root.querySelector('[part="volume-slider"] > div > div')).backgroundColor,
+            };
+        });
         const before = await page.evaluate(() => {
             const root = document.getElementById('player').shadowRoot;
             return {
@@ -493,12 +503,11 @@ async function testAdModeToolbar(browser) {
             const root = document.getElementById('player').shadowRoot;
             return getComputedStyle(root.querySelector('[part="play-pause-button"] .hp-icon')).color;
         });
-        ok(iconColorDuringAd === 'rgb(32, 32, 32)', `reklam SIRASINDA ikon rengi #202020 (${iconColorDuringAd})`);
-        // İstek üzerine: ses çubuğunun dolgu (seviye) rengi de reklam sırasında #202020.
+        ok(iconColorDuringAd === themeColors.icon, `reklam SIRASINDA ikon rengi temanınkiyle aynı (${iconColorDuringAd})`);
         const sliderFillDuringAd = await page.evaluate(() =>
             getComputedStyle(document.getElementById('player').shadowRoot.querySelector('[part="volume-slider"] > div > div')).backgroundColor
         );
-        ok(sliderFillDuringAd === 'rgb(32, 32, 32)', `reklam SIRASINDA ses çubuğu dolgusu #202020 (${sliderFillDuringAd})`);
+        ok(sliderFillDuringAd === themeColors.sliderFill, `reklam SIRASINDA ses çubuğu dolgusu temanınkiyle aynı (${sliderFillDuringAd})`);
 
         await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="play-pause-button"]').click());
         const afterPauseClick = await page.evaluate(() => ({
@@ -543,11 +552,11 @@ async function testAdModeToolbar(browser) {
             const root = document.getElementById('player').shadowRoot;
             return getComputedStyle(root.querySelector('[part="play-pause-button"] .hp-icon')).color;
         });
-        ok(iconColorAfterAd !== 'rgb(32, 32, 32)', `reklam bitince ikon rengi #202020'den normale döndü (${iconColorAfterAd})`);
+        ok(iconColorAfterAd === themeColors.icon, `reklam bitince ikon rengi temanınkiyle aynı (${iconColorAfterAd})`);
         const sliderFillAfterAd = await page.evaluate(() =>
             getComputedStyle(document.getElementById('player').shadowRoot.querySelector('[part="volume-slider"] > div > div')).backgroundColor
         );
-        ok(sliderFillAfterAd !== 'rgb(32, 32, 32)', `reklam bitince ses çubuğu dolgusu tema accent'ine döndü (${sliderFillAfterAd})`);
+        ok(sliderFillAfterAd === themeColors.sliderFill, `reklam bitince ses çubuğu dolgusu temanınkiyle aynı (${sliderFillAfterAd})`);
 
         const after = await page.evaluate(() =>
             getComputedStyle(document.getElementById('player').shadowRoot.querySelector('[part="seek-bar"]')).display
@@ -708,6 +717,634 @@ async function testPauseAd(browser) {
     }
 }
 
+// --- Preroll kapısı (1.0.12) ---------------------------------------------------------------------------------------
+// İstek üzerine: "video hiç başlamadan prerollu beklesin" — önceden içerik 1-2 sn oynuyor, reklam cevabı gelince
+// duruyordu. Kapı: preroll sonuçlanana kadar içerik oynamaz; beklerken sol gruptaki halka döner, toolbar görünür kalır.
+
+const gateState = (page) => page.evaluate(() => {
+    const el = document.getElementById('player');
+    const root = el.shadowRoot;
+    const video = root.querySelector('video');
+    return {
+        paused: video.paused,
+        time: video.currentTime,
+        loading: root.querySelector('.hp-group-left').hasAttribute('data-loading'),
+        chromeOpacity: root.querySelector('[part="control-bar"]').parentElement.style.opacity,
+        centerOpacity: root.querySelector('[part="center-play-button"]').style.opacity,
+        playIcon: root.querySelector('[part="play-pause-button"]').getAttribute('aria-label'),
+        hpPlay: (window.__hpEvents || []).filter((e) => e === 'hp:play').length,
+        adErrors: (window.__hpEvents || []).filter((e) => e.startsWith('hp:aderror')),
+        log: window.__adsLog.map((e) => e.ev),
+    };
+});
+
+const trackHpEvents = (page) => page.evaluate(() => {
+    window.__hpEvents = [];
+    const el = document.getElementById('player');
+    el.addEventListener('hp:play', () => window.__hpEvents.push('hp:play'));
+    el.addEventListener('hp:aderror', (e) => window.__hpEvents.push(`hp:aderror:${e.detail.message}`));
+});
+
+const loadAdManager = (page, cuePoints) => page.evaluate((cues) => {
+    const loader = window.__mockIma.adsLoaderInstances[0];
+    const mgr = new window.google.ima.AdsManager();
+    if (cues) mgr.getCuePoints = () => cues;
+    window.__mockIma.adsManagerInstances.push(mgr);
+    loader.dispatch('adsManagerLoaded', new window.google.ima.AdsManagerLoadedEvent(mgr));
+}, cuePoints ?? null);
+
+const lastManager = (page, type) => page.evaluate((t) => {
+    const mgr = window.__mockIma.adsManagerInstances.at(-1);
+    mgr.dispatch(t, new window.google.ima.AdEvent(t));
+}, type);
+
+async function testPrerollGateAdReadyFirst(browser) {
+    console.log('\n[8] Preroll kapısı: reklam önce hazırsa start() play\'e kadar bekliyor, içerik HİÇ oynamadan reklam başlıyor');
+    await withPage(browser, 'preroll', async (page) => {
+        await trackHpEvents(page);
+        await loadAdManager(page);
+        let s = await gateState(page);
+        // init() de ertelenir: VMAP'te gerçek IMA init() anında preroll'u kendiliğinden oynatıyor.
+        ok(!s.log.includes('adsManager.init') && !s.log.includes('adsManager.start'), 'reklam yüklendi ama kullanıcı oynatmadan init()/start() çağrılmadı (AdError 400 de olmaz)');
+
+        await page.evaluate(() => document.getElementById('player').play());
+        await page.waitForTimeout(500);
+        s = await gateState(page);
+        ok(s.log.includes('adsManager.init') && s.log.includes('adsManager.start'), 'play() → bekleyen preroll anında init + start edildi');
+        ok(s.paused && s.time === 0, `içerik oynamadı (paused: ${s.paused}, t: ${s.time})`);
+        ok(s.hpPlay === 0, `içerik için hp:play gönderilmedi (${s.hpPlay})`);
+
+        await lastManager(page, 'contentPauseRequested');
+        await page.waitForTimeout(100);
+        s = await gateState(page);
+        ok(!s.loading, 'reklam başlayınca bekleme halkası kapandı');
+
+        await lastManager(page, 'contentResumeRequested');
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').currentTime > 0.2, null, { timeout: 5000 }).catch(() => {});
+        s = await gateState(page);
+        ok(!s.paused && s.time > 0.2, `reklam bitince içerik baştan başladı (t: ${s.time.toFixed(2)})`);
+    });
+}
+
+async function testPrerollGatePlayFirst(browser) {
+    console.log('\n[8b] Preroll kapısı: play önce, reklam sonra geliyor — beklerken halka döner, toolbar görünür, içerik 0. saniyede');
+    await withPage(browser, 'preroll', async (page) => {
+        await trackHpEvents(page);
+        // Kullanıcı yolu: doğrudan video.play() (merkez buton / dokunma bunu çağırıyor) — kapı 'play' olayını yutar.
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').play().catch(() => {}));
+        await page.waitForTimeout(2500); // otomatik gizleme süresinden (1200 ms) uzun
+        let s = await gateState(page);
+        // video.play() ile kapı arasında video 1 kare bile ilerleyebiliyor (~1 ms) — görünür bir oynatma değil.
+        ok(s.paused && s.time < 0.05, `reklam beklenirken içerik oynamadı (t: ${s.time})`);
+        ok(s.loading, 'sol gruptaki yükleme halkası dönüyor');
+        ok(s.chromeOpacity === '1', `toolbar beklerken görünür kaldı (opacity ${s.chromeOpacity})`);
+        ok(s.centerOpacity === '0', 'merkez oynat butonu beklerken gizli');
+        ok(s.playIcon !== null && s.hpPlay === 0, `hp:play gönderilmedi (${s.hpPlay})`);
+
+        await loadAdManager(page);
+        s = await gateState(page);
+        ok(s.log.includes('adsManager.start'), 'reklam gelince bekleyen oynatma isteğiyle hemen start() çağrıldı');
+    });
+}
+
+async function testPrerollGateNoFill(browser) {
+    console.log('\n[8c] Preroll kapısı: reklam gelmezse (hata / boş VAST) içerik hemen başlıyor');
+    await withPage(browser, 'preroll', async (page) => {
+        await trackHpEvents(page);
+        await page.evaluate(() => document.getElementById('player').play());
+        await page.waitForTimeout(300);
+        ok((await gateState(page)).paused, 'cevap gelene kadar içerik bekledi');
+        await page.evaluate(() => window.__mockIma.adsLoaderInstances[0].dispatch('adError', new window.google.ima.AdErrorEvent('no-fill')));
+        await page.waitForFunction(() => !document.getElementById('player').shadowRoot.querySelector('video').paused, null, { timeout: 3000 }).catch(() => {});
+        const s = await gateState(page);
+        ok(!s.paused, 'hata sonrası içerik başladı');
+        ok(!s.loading, 'halka kapandı');
+        ok(s.adErrors.some((e) => e.includes('no-fill')), `hp:aderror gönderildi (${s.adErrors.join(', ')})`);
+    });
+}
+
+async function testPrerollGateNoPlayNoAutostart(browser) {
+    console.log('\n[8d] Preroll kapısı: kullanıcı oynatmadan reklam hata verirse içerik KENDİLİĞİNDEN başlamıyor');
+    await withPage(browser, 'preroll', async (page) => {
+        await page.evaluate(() => window.__mockIma.adsLoaderInstances[0].dispatch('adError', new window.google.ima.AdErrorEvent('no-fill')));
+        await page.waitForTimeout(500);
+        let s = await gateState(page);
+        ok(s.paused && s.time === 0, 'içerik oynatılmadan başlamadı');
+        await page.evaluate(() => document.getElementById('player').play());
+        await page.waitForTimeout(500);
+        s = await gateState(page);
+        ok(!s.paused, 'kapı açıldıktan sonra play() normal çalıştı');
+    });
+}
+
+async function testPrerollGateTimeout(browser) {
+    console.log('\n[8e] Preroll kapısı: zaman aşımı (prerollTimeoutMs) dolunca içerik başlıyor, geç gelen reklam araya GİRMİYOR');
+    await withPage(browser, 'preroll-timeout', async (page) => {
+        await trackHpEvents(page);
+        await page.evaluate(() => document.getElementById('player').play());
+        await page.waitForTimeout(400);
+        ok((await gateState(page)).paused, 'süre dolmadan içerik bekliyor');
+        await page.waitForTimeout(900);
+        let s = await gateState(page);
+        ok(!s.paused, 'süre dolunca içerik reklamsız başladı');
+        ok(s.adErrors.some((e) => e.includes('preroll-timeout')), `hp:aderror: preroll-timeout (${s.adErrors.join(', ')})`);
+
+        await loadAdManager(page);
+        await page.waitForTimeout(300);
+        s = await gateState(page);
+        ok(s.log.includes('adsManager.destroy') && !s.log.includes('adsManager.start'), 'geç gelen preroll yok edildi, başlatılmadı');
+        ok(!s.paused, 'içerik kesilmeden oynamaya devam ediyor');
+    });
+}
+
+async function testPrerollGateVmapWithoutPreroll(browser) {
+    console.log('\n[8f] Preroll kapısı: yalnızca VMAP, 0 noktasında reklam yoksa içerik beklemeden başlıyor');
+    await withPage(browser, 'vmaponly', async (page) => {
+        await page.evaluate(() => document.getElementById('player').play());
+        await page.waitForTimeout(300);
+        ok((await gateState(page)).paused, 'VMAP cevabı gelene kadar bekledi');
+        await loadAdManager(page, [30, -1]);
+        await page.waitForFunction(() => !document.getElementById('player').shadowRoot.querySelector('video').paused, null, { timeout: 3000 }).catch(() => {});
+        const s = await gateState(page);
+        ok(!s.paused, 'preroll olmayan VMAP → içerik başladı');
+        ok(s.log.includes('adsManager.start'), 'midroll/postroll için VMAP yine başlatıldı');
+    });
+}
+
+async function testPrerollGateCancel(browser) {
+    console.log('\n[8g] Preroll kapısı: beklerken oynat/duraklat butonuna basmak beklemeyi iptal ediyor');
+    await withPage(browser, 'preroll', async (page) => {
+        await page.evaluate(() => document.getElementById('player').play());
+        await page.waitForTimeout(300);
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="play-pause-button"]').click());
+        await page.waitForTimeout(200);
+        let s = await gateState(page);
+        ok(!s.loading, 'iptal sonrası halka kapandı');
+        ok(s.centerOpacity === '1', 'merkez oynat butonu geri geldi');
+        await loadAdManager(page);
+        s = await gateState(page);
+        ok(!s.log.includes('adsManager.start'), 'iptalden sonra gelen reklam kendiliğinden başlamadı');
+    });
+}
+
+async function testPrerollGateAutoplay(browser) {
+    console.log('\n[8h] Preroll kapısı: autoplay — plugin yüklenmeden ÖNCE başlayan autoplay da kapıda tutuluyor');
+    await withPage(browser, 'preroll-autoplay', async (page) => {
+        await page.waitForTimeout(800);
+        let s = await gateState(page);
+        ok(s.paused && s.time < 0.05, `autoplay reklam beklenirken içeriği oynatmadı (t: ${s.time})`);
+        ok(s.loading, 'autoplay beklemesinde halka dönüyor');
+        await loadAdManager(page);
+        s = await gateState(page);
+        ok(s.log.includes('adsManager.start'), 'reklam gelince hemen başladı');
+    });
+}
+
+async function testVmapBreakTypesAndPostroll(browser) {
+    console.log('\n[8i] VMAP: aranın tipi IMA konumundan (midroll "preroll" diye bildirilmiyordu), içerik bitince contentComplete (postroll hiç oynamıyordu)');
+    await withPage(browser, 'vmaponly', async (page) => {
+        await page.evaluate(() => {
+            window.__types = [];
+            const el = document.getElementById('player');
+            el.addEventListener('hp:adstart', (e) => window.__types.push('start:' + e.detail.type));
+            el.addEventListener('hp:adend', (e) => window.__types.push('end:' + e.detail.type));
+            el.play();
+        });
+        await loadAdManager(page, [0, 15, -1]);
+        await page.evaluate(() => {
+            const mgr = window.__mockIma.adsManagerInstances.at(-1);
+            const ev = (type, offset) => {
+                const e = new window.google.ima.AdEvent(type);
+                e.getAd = () => ({ getAdPodInfo: () => ({ getAdPosition: () => 1, getTotalAds: () => 1, getPodIndex: () => 0, getTimeOffset: () => offset }) });
+                return e;
+            };
+            mgr.dispatch('contentPauseRequested', ev('contentPauseRequested', 0));
+            mgr.dispatch('contentResumeRequested', ev('contentResumeRequested', 0));
+            mgr.dispatch('contentPauseRequested', ev('contentPauseRequested', 15));
+            mgr.dispatch('contentResumeRequested', ev('contentResumeRequested', 15));
+        });
+        const types = await page.evaluate(() => window.__types);
+        ok(JSON.stringify(types) === JSON.stringify(['start:preroll', 'end:preroll', 'start:midroll', 'end:midroll']), `aralar doğru tiple bildirildi (${types.join(', ')})`);
+
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').dispatchEvent(new Event('ended')));
+        const log = await page.evaluate(() => window.__adsLog.map((e) => e.ev));
+        ok(log.filter((e) => e === 'contentComplete').length === 1, 'içerik bitince IMA\'ya contentComplete bildirildi (VMAP postroll için)');
+        ok(log.filter((e) => e === 'requestAds').length === 1, 'VMAP için ayrıca postroll isteği atılmadı');
+    });
+}
+
+async function testMediaStallKeepsToolbar(browser) {
+    console.log('\n[9] Medya takılınca: halka dönüyor ve toolbar otomatik gizlenmiyor; takılma bitince normal gizleniyor');
+    await withPage(browser, 'none', async (page) => {
+        await page.evaluate(() => document.getElementById('player').play());
+        await page.waitForTimeout(400);
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').dispatchEvent(new Event('waiting')));
+        await page.waitForTimeout(2500);
+        let s = await gateState(page);
+        ok(s.loading, 'takılmada halka dönüyor');
+        ok(s.chromeOpacity === '1', `takılma sürerken toolbar gizlenmedi (opacity ${s.chromeOpacity})`);
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').dispatchEvent(new Event('playing')));
+        await page.waitForTimeout(2500);
+        s = await gateState(page);
+        ok(!s.loading, 'takılma bitince halka kapandı');
+        ok(s.chromeOpacity === '0', `takılma bitince toolbar normal şekilde gizlendi (opacity ${s.chromeOpacity})`);
+    });
+}
+
+// --- requestWhen (1.0.12) -------------------------------------------------------------------------------------------
+// İstek üzerine: "uzun bir makalenin en altındaki, daha ekranda olmayan player için reklam isteği atmak sorun olabilir"
+// — varsayılan 'visible': istek player ekrana yaklaşınca (bir ekran boyu kala) atılır.
+
+/** Player'ı sayfanın çok altına iter (uzun makale), sayfa scriptleri çalışmadan önce. */
+const PUSH_PLAYER_DOWN = () => {
+    // initScript belge kurulmadan çalışıyor — stil <head> oluşur oluşmaz eklenir (sayfa scriptlerinden önce).
+    const add = () => {
+        if (!document.head || document.getElementById('push-down')) return false;
+        const style = document.createElement('style');
+        style.id = 'push-down';
+        style.textContent = 'hope-player#player { margin-top: 4000px !important; }';
+        document.head.appendChild(style);
+        return true;
+    };
+    if (add()) return;
+    const mo = new MutationObserver(() => { if (add()) mo.disconnect(); });
+    mo.observe(document, { childList: true, subtree: true });
+};
+
+async function withOffscreenPage(browser, scenario, fn) {
+    const page = await browser.newPage({ viewport: { width: 1000, height: 700 } });
+    await page.addInitScript(MOCK_IMA_INIT_SCRIPT);
+    await page.addInitScript(PUSH_PLAYER_DOWN);
+    await page.goto(`${BASE}/?ads=${scenario}`);
+    await page.waitForFunction(() => window.__mockIma.adsLoaderInstances.length > 0, null, { timeout: 8000 });
+    await page.waitForTimeout(500);
+    try {
+        await fn(page);
+    } finally {
+        await page.close();
+    }
+}
+
+const requestCount = (page) => page.evaluate(() => window.__adsLog.filter((e) => e.ev === 'requestAds').length);
+
+async function testRequestWhenVisible(browser) {
+    console.log('\n[10] requestWhen: \'visible\' (varsayılan) — sayfanın altındaki player için istek ekrana yaklaşınca atılıyor');
+    await withOffscreenPage(browser, 'preroll', async (page) => {
+        ok((await requestCount(page)) === 0, 'player ekrandan uzakken reklam isteği atılmadı');
+        // Bir ekran boyu kala: player'ın üst kenarı görünüm altından < 1 ekran boyu uzakta.
+        await page.evaluate(() => {
+            const top = document.getElementById('player').getBoundingClientRect().top + window.scrollY;
+            window.scrollTo(0, top - window.innerHeight * 1.8);
+        });
+        await page.waitForFunction(() => window.__adsLog.some((e) => e.ev === 'requestAds'), null, { timeout: 3000 }).catch(() => {});
+        ok((await requestCount(page)) === 1, 'player ekrana yaklaşınca (henüz görünmeden) tam 1 istek atıldı');
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await page.waitForTimeout(300);
+        ok((await requestCount(page)) === 1, 'yeniden görünüme girip çıkmak ikinci istek atmadı');
+    });
+}
+
+async function testRequestWhenVisiblePlayOffscreen(browser) {
+    console.log('\n[10b] requestWhen: \'visible\' — player görünmeden play() çağrılırsa istek hemen atılıyor');
+    await withOffscreenPage(browser, 'preroll', async (page) => {
+        await page.evaluate(() => document.getElementById('player').play());
+        await page.waitForTimeout(200);
+        ok((await requestCount(page)) === 1, 'programatik play() → istek beklemeden atıldı');
+    });
+}
+
+async function testRequestWhenLoad(browser) {
+    console.log('\n[10c] requestWhen: \'load\' — player ekrandan uzakta olsa da istek hemen atılıyor');
+    await withOffscreenPage(browser, 'preroll-load', async (page) => {
+        ok((await requestCount(page)) === 1, 'sayfa açılınca tam 1 istek');
+    });
+}
+
+async function testRequestWhenPlay(browser) {
+    console.log('\n[10d] requestWhen: \'play\' — istek oynatma isteğinde (preroll kapısı \'play\'i yutsa da) atılıyor');
+    await withPage(browser, 'preroll-play', async (page) => {
+        ok((await requestCount(page)) === 0, 'oynatmadan istek yok');
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').play().catch(() => {}));
+        await page.waitForTimeout(300);
+        ok((await requestCount(page)) === 1, 'oynat\'a basınca istek atıldı');
+        const paused = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').paused);
+        ok(paused, 'cevap gelene kadar içerik bekliyor');
+    });
+}
+
+async function testStalePrerollRefetched(browser) {
+    console.log('\n[10e] Hazırda bekleyen preroll 5 dakikadan eskiyse oynatılırken taze istek atılıyor');
+    await withPage(browser, 'preroll', async (page) => {
+        await page.waitForFunction(() => window.__adsLog.some((e) => e.ev === 'requestAds'), null, { timeout: 3000 });
+        await loadAdManager(page);
+        // 6 dakika ileri sar.
+        await page.evaluate(() => {
+            const real = Date.now.bind(Date);
+            Date.now = () => real() + 6 * 60 * 1000;
+        });
+        await page.evaluate(() => document.getElementById('player').play());
+        await page.waitForTimeout(300);
+        const log = await page.evaluate(() => window.__adsLog.map((e) => e.ev));
+        ok(log.filter((e) => e === 'requestAds').length === 2, 'eski reklam yerine ikinci (taze) istek atıldı');
+        ok(log.includes('adsManager.destroy') && !log.includes('adsManager.start'), 'eski reklam yok edildi, başlatılmadı');
+        const paused = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').paused);
+        ok(paused, 'taze reklam beklenirken içerik oynamıyor');
+    });
+}
+
+async function testNonLinearOverlay(browser) {
+    console.log('\n[11] Overlay (non-linear) reklam: içerik beklemeden başlıyor, katman alt şerit, video tıklanabilir, kapatınca gizleniyor');
+    // GERÇEK BUG: overlay içeriği durdurmuyor (CONTENT_PAUSE_REQUESTED gelmiyor) — preroll kapısı onu beklediği için içerik
+    // 8 sn zaman aşımına kadar bekliyor, overlay de hiç gösterilmiyordu. Google örnek tag'leri: nonlinear / VPAID non-linear.
+    await withPage(browser, 'preroll', async (page) => {
+        await page.evaluate(() => {
+            window.__nl = [];
+            const el = document.getElementById('player');
+            el.addEventListener('hp:adstart', (e) => window.__nl.push(`start:${e.detail.type}:${e.detail.linear}`));
+            el.addEventListener('hp:adend', (e) => window.__nl.push(`end:${e.detail.type}:${e.detail.linear}`));
+            el.play();
+        });
+        await loadAdManager(page);
+        await page.evaluate(() => {
+            const mgr = window.__mockIma.adsManagerInstances.at(-1);
+            const e = new window.google.ima.AdEvent('loaded');
+            e.getAd = () => ({ getAdPodInfo: () => ({ getTimeOffset: () => 0 }), isLinear: () => false, getHeight: () => 70 });
+            mgr.dispatch('loaded', e);
+        });
+        await page.waitForFunction(() => !document.getElementById('player').shadowRoot.querySelector('video').paused, null, { timeout: 3000 }).catch(() => {});
+        const s = await page.evaluate(() => {
+            const root = document.getElementById('player').shadowRoot;
+            const layer = root.querySelector('[part="ad-layer"]');
+            const area = root.querySelector('.video-area').getBoundingClientRect();
+            const lr = layer.getBoundingClientRect();
+            const mid = root.elementFromPoint(area.left + area.width / 2, area.top + area.height / 3);
+            return {
+                paused: root.querySelector('video').paused,
+                nonlinear: layer.hasAttribute('data-nonlinear'),
+                visible: !layer.classList.contains('hp:hidden'),
+                layerH: Math.round(lr.height),
+                areaH: Math.round(area.height),
+                midHit: mid?.tagName,
+                events: window.__nl.slice(),
+            };
+        });
+        ok(!s.paused, 'overlay yüklenince içerik zaman aşımı beklemeden başladı');
+        ok(s.nonlinear && s.visible, 'reklam katmanı overlay modunda görünür');
+        ok(s.layerH < s.areaH / 2, `katman yalnızca alt şerit (${s.layerH}px / ${s.areaH}px) — videonun üstü kapanmıyor`);
+        ok(s.midHit === 'VIDEO', `videonun üst kısmı tıklanabilir (${s.midHit})`);
+        ok(s.events.includes('start:preroll:false'), `hp:adstart linear:false (${s.events.join(', ')})`);
+
+        await page.evaluate(() => window.__mockIma.adsManagerInstances.at(-1).dispatch('userClose', new window.google.ima.AdEvent('userClose')));
+        const after = await page.evaluate(() => {
+            const layer = document.getElementById('player').shadowRoot.querySelector('[part="ad-layer"]');
+            return { nonlinear: layer.hasAttribute('data-nonlinear'), hidden: layer.classList.contains('hp:hidden'), events: window.__nl.slice() };
+        });
+        ok(!after.nonlinear && after.hidden, 'kullanıcı kapatınca katman gizlendi');
+        ok(after.events.includes('end:preroll:false'), 'hp:adend linear:false gönderildi');
+    });
+}
+
+async function testNoSpuriousAdEnd(browser) {
+    console.log('\n[11b] Preroll\'u olmayan VMAP: başlangıçtaki "içeriğe dön" sinyali sahte hp:adend üretmiyor');
+    await withPage(browser, 'vmaponly', async (page) => {
+        await page.evaluate(() => {
+            window.__ends = 0;
+            document.getElementById('player').addEventListener('hp:adend', () => window.__ends++);
+            document.getElementById('player').play();
+        });
+        await loadAdManager(page, [15, -1]);
+        await page.evaluate(() => {
+            const mgr = window.__mockIma.adsManagerInstances.at(-1);
+            mgr.dispatch('contentResumeRequested', new window.google.ima.AdEvent('contentResumeRequested'));
+        });
+        ok((await page.evaluate(() => window.__ends)) === 0, 'başlamamış bir ara için hp:adend gönderilmedi');
+    });
+}
+
+async function testAdCountdown(browser) {
+    console.log('\n[12] Reklam geri sayımı + pod göstergesi toolbar\'da ("Reklam 2/3 · 0:13"), reklam bitince gizleniyor');
+    await withPage(browser, 'preroll', async (page) => {
+        await page.evaluate(() => document.getElementById('player').play());
+        await loadAdManager(page);
+        await page.evaluate(() => {
+            const mgr = window.__mockIma.adsManagerInstances.at(-1);
+            mgr.getRemainingTime = () => 12.3;
+            mgr.dispatch('contentPauseRequested', new window.google.ima.AdEvent('contentPauseRequested'));
+            const e = new window.google.ima.AdEvent('started');
+            e.getAd = () => ({ isLinear: () => true, getAdPodInfo: () => ({ getAdPosition: () => 2, getTotalAds: () => 3, getPodIndex: () => 0 }) });
+            mgr.dispatch('started', e);
+        });
+        const text = await page.evaluate(() => {
+            const el = document.getElementById('player').shadowRoot.querySelector('[part="ad-countdown"]');
+            return el.style.display === 'none' ? null : el.textContent;
+        });
+        ok(text === 'Reklam 2/3 · 0:13', `gösterge "${text}"`);
+        await lastManager(page, 'contentResumeRequested');
+        const hidden = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="ad-countdown"]').style.display === 'none');
+        ok(hidden, 'reklam bitince gösterge gizlendi');
+    });
+}
+
+async function testAdErrorDetailsAndDebugLog(browser) {
+    console.log('\n[13] Gelişmiş hata ayrıntısı: hp:aderror IMA kodlarıyla; options.debug ile sağ tık → "Hata ayıklama" penceresi');
+    await withPage(browser, 'preroll', async (page) => {
+        await page.evaluate(() => {
+            window.__adErr = null;
+            const el = document.getElementById('player');
+            el.addEventListener('hp:aderror', (e) => (window.__adErr = e.detail));
+            const err = new window.google.ima.AdErrorEvent('No ads VAST response');
+            err.getError = () => ({ getMessage: () => 'No ads VAST response', getErrorCode: () => 1009, getVastErrorCode: () => 303, getType: () => 'adLoadError' });
+            window.__mockIma.adsLoaderInstances[0].dispatch('adError', err);
+        });
+        const detail = await page.evaluate(() => window.__adErr);
+        ok(detail?.code === 1009 && detail?.vastCode === 303 && detail?.errorType === 'adLoadError' && detail?.breakType === 'preroll',
+            `hp:aderror ayrıntıları (${JSON.stringify(detail)})`);
+
+        const rightClickMenu = () =>
+            page.evaluate(() => {
+                const el = document.getElementById('player');
+                const r = el.getBoundingClientRect();
+                el.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true, composed: true }));
+                el.dispatchEvent(new MouseEvent('contextmenu', { clientX: r.left + 50, clientY: r.top + 50, bubbles: true, composed: true, cancelable: true }));
+                return [...el.shadowRoot.querySelectorAll('.hp-context-menu-item')].map((i) => i.textContent);
+            });
+        let items = await rightClickMenu();
+        ok(!items.some((t) => t.startsWith('Hata ayıklama')), `debug kapalıyken menüde "Hata ayıklama" yok (${items.join(' | ')})`);
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-context-menu')?.removeAttribute('data-open'));
+
+        await page.evaluate(() => {
+            const el = document.getElementById('player');
+            el.options = { ...el.options, debug: true };
+        });
+        await page.waitForTimeout(200);
+        items = await rightClickMenu();
+        ok(items.some((t) => t.startsWith('Hata ayıklama')), `debug açıkken menüde "Hata ayıklama" var (${items.join(' | ')})`);
+        await page.evaluate(() => [...document.getElementById('player').shadowRoot.querySelectorAll('button.hp-context-menu-item')].at(-1).click());
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('.hp-debug'), null, { timeout: 3000 }).catch(() => {});
+        const panel = await page.evaluate(() => {
+            const root = document.getElementById('player').shadowRoot;
+            const p = root.querySelector('.hp-debug');
+            if (!p) return null;
+            const area = root.querySelector('.video-area').getBoundingClientRect();
+            const r = p.getBoundingClientRect();
+            const list = p.querySelector('.hp-debug-list');
+            return {
+                rows: p.querySelectorAll('.hp-debug-row').length,
+                text: p.textContent,
+                inside: r.left >= area.left && r.right <= area.right && r.top >= area.top && r.bottom <= area.bottom,
+                hOverflow: list.scrollWidth > list.clientWidth,
+            };
+        });
+        ok(panel && panel.rows >= 1, `pencere açıldı, ${panel?.rows} kayıt`);
+        ok(panel?.text.includes('1009') && panel?.text.includes('303'), 'kayıtta IMA hata kodu ve VAST kodu var');
+        ok(panel?.inside && !panel?.hOverflow, 'pencere player\'ın içinde, yatay taşma yok');
+
+        // Açıkken gelen yeni hata canlı eklenir.
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').dispatchEvent(new Event('error')));
+        await page.evaluate(() => {
+            document.getElementById('player').errorLog.add({ source: 'stream', message: 'networkError: fragLoadError', fatal: true, details: { httpStatus: 404 } });
+        });
+        const rows = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelectorAll('.hp-debug-row').length);
+        ok(rows === panel.rows + 1, `açık pencere canlı güncellendi (${rows} kayıt)`);
+        await page.keyboard.press('Escape');
+        const closed = await page.evaluate(() => !document.getElementById('player').shadowRoot.querySelector('.hp-debug'));
+        ok(closed, 'ESC ile kapandı');
+    });
+}
+
+async function testOmidAccess(browser) {
+    console.log('\n[15] Open Measurement: varsayılan tüm ölçüm firmalarına full; firma bazında ayar');
+    await withPage(browser, 'preroll', async (page) => {
+        const rules = await page.evaluate(() => window.__lastRequest?.omidAccessModeRules);
+        const vals = rules ? Object.values(rules) : [];
+        ok(vals.length === 9 && vals.every((v) => v === 'full'), `varsayılan: 9 firma, hepsi full (${JSON.stringify(rules)})`);
+        await page.evaluate(() => {
+            window.__mockIma.adsLoaderInstances.length = 0;
+            window.__lastRequest = null;
+            const el = document.createElement('hope-player');
+            document.body.appendChild(el);
+            el.options = {
+                muted: true,
+                src: '/sample.mp4',
+                ads: { adTagPreroll: 'https://example.com/vast/preroll', requestWhen: 'load', omidAccessMode: { default: 'limited', GOOGLE: 'full', DOUBLEVERIFY: 'domain' } },
+            };
+        });
+        await page.waitForFunction(() => window.__lastRequest, null, { timeout: 5000 }).catch(() => {});
+        const custom = await page.evaluate(() => window.__lastRequest?.omidAccessModeRules);
+        ok(custom?.[9] === 'full' && custom?.[3] === 'domain' && custom?.[1] === 'limited' && custom?.[4] === 'limited',
+            `firma bazında: GOOGLE full, DOUBLEVERIFY domain, diğerleri limited (${JSON.stringify(custom)})`);
+    });
+}
+
+async function testIosNativeFullscreen(browser) {
+    console.log('\n[16] iPhone native tam ekran: midroll başlarken çıkılıyor, bitince "Tam ekrana dön"; postroll’dan sonra buton yok');
+    await withPage(browser, 'vmaponly', async (page) => {
+        await page.evaluate(() => {
+            const el = document.getElementById('player');
+            const video = el.shadowRoot.querySelector('video');
+            window.__nativeFs = true;
+            window.__fsLog = [];
+            Object.defineProperty(video, 'webkitDisplayingFullscreen', { get: () => window.__nativeFs, configurable: true });
+            video.webkitExitFullscreen = () => { window.__nativeFs = false; window.__fsLog.push('exit'); };
+            video.webkitEnterFullscreen = () => { window.__nativeFs = true; window.__fsLog.push('enter'); };
+            // iPhone: element tam ekranı yok.
+            el.requestFullscreen = undefined;
+            el.webkitRequestFullscreen = undefined;
+            el.play();
+        });
+        await loadAdManager(page, [0, 15, -1]);
+        const ev = (type, offset) => page.evaluate(([type, offset]) => {
+            const mgr = window.__mockIma.adsManagerInstances.at(-1);
+            const e = new window.google.ima.AdEvent(type);
+            e.getAd = () => ({ getAdPodInfo: () => ({ getAdPosition: () => 1, getTotalAds: () => 1, getPodIndex: () => 0, getTimeOffset: () => offset }) });
+            mgr.dispatch(type, e);
+        }, [type, offset]);
+        const button = () => page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="ad-return"]')?.textContent ?? null);
+
+        await ev('contentPauseRequested', 15);
+        const afterStart = await page.evaluate(() => ({ log: window.__fsLog.slice(), fs: window.__nativeFs }));
+        ok(afterStart.log.includes('exit') && !afterStart.fs, `midroll başlarken native tam ekrandan çıkıldı (${afterStart.log.join(',')})`);
+        ok((await button()) === null, 'reklam sırasında geri dön butonu yok');
+
+        await ev('contentResumeRequested', 15);
+        const label = await button();
+        ok(label === 'Tam ekrana dön', `reklam bitince buton göründü ("${label}")`);
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="ad-return"]').click());
+        const afterClick = await page.evaluate(() => ({ log: window.__fsLog.slice(), fs: window.__nativeFs }));
+        ok(afterClick.log.at(-1) === 'enter' && afterClick.fs, 'butona dokununca native tam ekrana dönüldü');
+        ok((await button()) === null, 'dokununca buton kayboldu');
+
+        // Tam ekran açıkken postroll: çıkılır, ama içerik bittiği için geri dönüş önerilmez.
+        await ev('contentPauseRequested', -1);
+        await ev('contentResumeRequested', -1);
+        ok(!(await page.evaluate(() => window.__nativeFs)), 'postroll başlarken de çıkıldı');
+        ok((await button()) === null, 'postroll’dan sonra geri dön butonu yok');
+
+        // Tam ekranda değilken reklam: hiçbir şey yapılmaz.
+        await page.evaluate(() => { window.__fsLog.length = 0; });
+        await ev('contentPauseRequested', 15);
+        await ev('contentResumeRequested', 15);
+        ok((await page.evaluate(() => window.__fsLog.length)) === 0 && (await button()) === null, 'normal görünümde reklam: çıkış / buton yok');
+    });
+}
+
+async function testIosFullscreenDefer(browser) {
+    console.log('\n[16b] iosFullscreen: "defer" — native tam ekrandayken aralıklı midroll istenmiyor, çıkınca isteniyor');
+    await withPage(browser, 'preroll', async (page) => {
+        await page.evaluate(() => {
+            window.__mockIma.adsLoaderInstances.length = 0;
+            const el = document.createElement('hope-player');
+            el.id = 'defer-player';
+            document.body.appendChild(el);
+            el.options = {
+                muted: true,
+                src: '/sample.mp4',
+                ads: { adTagMidroll: 'https://example.com/vast/midroll', midrollIntervalSeconds: 5, iosFullscreen: 'defer' },
+            };
+        });
+        await page.waitForFunction(() => window.__mockIma.adsLoaderInstances.length > 0, null, { timeout: 5000 }).catch(() => {});
+        const requests = () => page.evaluate(() => window.__adsLog.filter((e) => e.ev === 'requestAds').length);
+        const before = await requests();
+        await page.evaluate(() => {
+            const video = document.getElementById('defer-player').shadowRoot.querySelector('video');
+            window.__nativeFs = true;
+            Object.defineProperty(video, 'webkitDisplayingFullscreen', { get: () => window.__nativeFs, configurable: true });
+            Object.defineProperty(video, 'currentTime', { value: 61, writable: true, configurable: true });
+            video.dispatchEvent(new Event('timeupdate'));
+        });
+        ok((await requests()) === before, 'tam ekrandayken midroll istenmedi');
+        await page.evaluate(() => {
+            window.__nativeFs = false;
+            document.getElementById('defer-player').shadowRoot.querySelector('video').dispatchEvent(new Event('timeupdate'));
+        });
+        ok((await requests()) === before + 1, 'tam ekrandan çıkınca midroll istendi');
+    });
+}
+
+async function testContinuousPlaybackSignal(browser) {
+    console.log('\n[14] Sürekli oynatma bildirimi: tekil videoda false, otomatik ilerleyen playlist\'te true');
+    await withPage(browser, 'preroll', async (page) => {
+        const single = await page.evaluate(() => window.__lastRequest?.continuousPlayback);
+        ok(single === false, `tekil video → setContinuousPlayback(false) (${single})`);
+        await page.evaluate(() => {
+            window.__mockIma.adsLoaderInstances.length = 0;
+            const el = document.createElement('hope-player');
+            el.id = 'playlist-player';
+            document.body.appendChild(el);
+            el.options = {
+                muted: true,
+                playlist: { items: [{ title: 'A', mp4: [{ src: '/sample.mp4', label: 'Oto', selected: true }] }, { title: 'B', mp4: [{ src: '/sample.mp4', label: 'Oto', selected: true }] }] },
+                ads: { adTagPreroll: 'https://example.com/vast/preroll', requestWhen: 'load' },
+            };
+        });
+        await page.waitForFunction(() => window.__mockIma.adsLoaderInstances.length > 0 && window.__lastRequest, null, { timeout: 5000 }).catch(() => {});
+        await page.waitForTimeout(300);
+        const playlist = await page.evaluate(() => window.__lastRequest?.continuousPlayback);
+        ok(playlist === true, `playlist (autoplayNext) → setContinuousPlayback(true) (${playlist})`);
+    });
+}
+
 (async () => {
     const browser = await chromium.launch();
     try {
@@ -725,6 +1362,29 @@ async function testPauseAd(browser) {
         await testOptionsBeforeConnect(browser);
         await testAdModeToolbar(browser);
         await testPauseAd(browser);
+        await testPrerollGateAdReadyFirst(browser);
+        await testPrerollGatePlayFirst(browser);
+        await testPrerollGateNoFill(browser);
+        await testPrerollGateNoPlayNoAutostart(browser);
+        await testPrerollGateTimeout(browser);
+        await testPrerollGateVmapWithoutPreroll(browser);
+        await testPrerollGateCancel(browser);
+        await testPrerollGateAutoplay(browser);
+        await testVmapBreakTypesAndPostroll(browser);
+        await testMediaStallKeepsToolbar(browser);
+        await testRequestWhenVisible(browser);
+        await testRequestWhenVisiblePlayOffscreen(browser);
+        await testRequestWhenLoad(browser);
+        await testRequestWhenPlay(browser);
+        await testStalePrerollRefetched(browser);
+        await testNonLinearOverlay(browser);
+        await testNoSpuriousAdEnd(browser);
+        await testAdCountdown(browser);
+        await testAdErrorDetailsAndDebugLog(browser);
+        await testContinuousPlaybackSignal(browser);
+        await testOmidAccess(browser);
+        await testIosNativeFullscreen(browser);
+        await testIosFullscreenDefer(browser);
     } finally {
         await browser.close();
     }

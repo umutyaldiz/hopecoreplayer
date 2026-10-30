@@ -234,13 +234,30 @@ export class CaptionRenderer {
         return Math.round(min + ratio * (max - min));
     }
 
+    /**
+     * Balonun EKRANDA şu an durduğu konum (bottom, px): yazılı `bottom` + o anki transform'un dikey kayması.
+     * Sürükleme her karede bir kez çiziliyor — hızlı fırlatmada son hareket çizilmeden bırakılınca, son fare konumundan
+     * başlayan animasyon balonu önce oraya ışınlıyordu (zıplama). Süren bir kayma animasyonunun ortası da böyle okunur.
+     */
+    private visualBottomPx(): number {
+        const bottom = parseFloat(this.bubbleEl.style.bottom || '0');
+        try {
+            const transform = getComputedStyle(this.bubbleEl).transform;
+            if (!transform || transform === 'none') return bottom;
+            // translateY pozitif = aşağı = daha küçük bottom.
+            return bottom - new DOMMatrixReadOnly(transform).m42;
+        } catch {
+            return bottom;
+        }
+    }
+
     /** FLIP: bottom anında yazılır, yalnızca transform animasyonlanır — bottom'u animasyonlamak bırakınca zıplatıyordu. */
-    private setRowIndex(rowIndex: number, animate: boolean, fromPx?: number): void {
+    private setRowIndex(rowIndex: number, animate: boolean): void {
         this.rowIndex = Math.min(ROWS - 1, Math.max(0, rowIndex));
         const targetPx = this.pxForRow(this.rowIndex);
-        const prevPx = fromPx ?? parseFloat(this.bubbleEl.style.bottom || `${targetPx}`);
+        const prevPx = this.visualBottomPx();
 
-        if (animate && prevPx !== targetPx) {
+        if (animate && Math.abs(prevPx - targetPx) > 0.5) {
             this.bubbleEl.classList.add('hp-caption-no-transition');
             this.bubbleEl.style.bottom = `${targetPx}px`;
             // bottom azalınca balon aşağı iner — eski yerinde görünmesi için o kadar YUKARI (negatif Y) kaydırılır.
@@ -250,8 +267,13 @@ export class CaptionRenderer {
             this.bubbleEl.classList.remove('hp-caption-no-transition');
             this.bubbleEl.style.transform = 'translateX(-50%)';
         } else {
+            // Anında konumlanma da geçişsiz yazılır: sürükleme bitince transition yeniden açık — transform'u sıfırlamak
+            // 240 ms'lik bir kaymaya dönüşüyor, balon (bottom zaten yeni yerindeyken) önce ters yöne fırlıyordu.
+            this.bubbleEl.classList.add('hp-caption-no-transition');
             this.bubbleEl.style.transform = 'translateX(-50%)';
             this.bubbleEl.style.bottom = `${targetPx}px`;
+            void this.bubbleEl.offsetHeight;
+            this.bubbleEl.classList.remove('hp-caption-no-transition');
         }
 
         try {
@@ -316,13 +338,14 @@ export class CaptionRenderer {
             cancelAnimationFrame(this.rafId);
             this.rafId = null;
         }
+        // Sınıfı kaldırmak transform'u değiştirmez — animasyon yine balonun ekrandaki yerinden başlar (bkz. visualBottomPx).
         this.bubbleEl.classList.remove('hp-caption-dragging');
         if (!this.dragMoved) return;
         const { min, max } = this.bounds();
         const finalBottom = Math.min(max, Math.max(min, this.dragStartBottomPx - this.pendingDeltaPx));
         const ratio = max > min ? (finalBottom - min) / (max - min) : 0;
         const snappedIndex = Math.round(ratio * (ROWS - 1));
-        this.setRowIndex(snappedIndex, true, finalBottom);
+        this.setRowIndex(snappedIndex, true);
     };
 
     destroy(): void {

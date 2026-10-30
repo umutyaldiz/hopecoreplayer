@@ -23,6 +23,8 @@ import { ContextMenu } from './controls/ContextMenu';
 import { seekBy } from './utils/seek-by';
 import type { TapGestures } from './plugins/tap-gestures';
 import type { StatsPanel } from './plugins/stats';
+import type { DebugPanel } from './plugins/debug';
+import { ErrorLog } from './debug/ErrorLog';
 import type { SettingsCaptionAppearance, SettingsColorOption } from './controls/SettingsMenu';
 import { createIcon } from './icons/Icon';
 import { injectIconFont } from './icons/injectIconFont';
@@ -45,6 +47,8 @@ import type { Dubbing } from './plugins/dubbing';
 import type { LiveWallClock } from './plugins/live';
 import type { DaiController } from './plugins/dai';
 import { createLocaleStrings, applyLocale } from './i18n';
+import { PrerollGate, expectsPreroll, DEFAULT_PREROLL_TIMEOUT_MS } from './plugins/ads/PrerollGate';
+import { preconnectAdHosts } from './plugins/ads/preconnect';
 import type { HopeLocaleStrings } from './i18n/types';
 
 const DEFAULT_PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -96,6 +100,15 @@ export class HopePlayerElement extends HTMLElement {
     private readonly tooltip: TooltipController;
     private readonly keyboard: KeyboardController;
     private readonly loadingSpinner: LoadingSpinner;
+    /**
+     * Preroll kapısı — reklam plugin'i yüklenmeden önce kurulur ki autoplay / ilk play araya kaçmasın.
+     * Video'nun 'play'/'pause' dinleyicilerinin İLKİ olmalı (yuttuğu olayları UI ve hp:play görmesin).
+     */
+    private readonly prerollGate: PrerollGate;
+    /** Ads plugin kurulumu sürüyor — erken başlatılan kurulum ile sonraki bekleme aynı promise'i paylaşır. */
+    private adsInstall: Promise<void> | null = null;
+    /** Yükleme halkası açık (medya takıldı / preroll bekleniyor) — kontroller bu sırada otomatik gizlenmez. */
+    private loadingActive = false;
     private readonly errorScreen: ErrorScreen;
     /** İleri/geri sarmada sağda/solda beliren anlık bildirim. */
     private readonly seekFeedback: SeekFeedback;
@@ -104,6 +117,11 @@ export class HopePlayerElement extends HTMLElement {
     private contextMenuConfig: { stats: boolean } | null = { stats: false };
     /** İlk açılışta yüklenir (plugins/stats). */
     private statsPanel: StatsPanel | null = null;
+    private debugPanel: DebugPanel | null = null;
+    /** options.debug — sağ tık menüsündeki "Hata ayıklama" girişini açar. */
+    private debugEnabled = false;
+    /** Player'ın tüm hataları (medya, yayın, reklam, altyazı) — her zaman tutulur; bkz. `errorLog`. */
+    private readonly log = new ErrorLog();
     /** Son basılan işaretçi türü — sağ tık menüsü yalnızca fareyle (dokunmatikte uzun basma gesture'a ait). */
     private lastPointerType = 'mouse';
     /** options.tapGestures kuruluysa (plugins/tap-gestures). */
@@ -211,6 +229,11 @@ export class HopePlayerElement extends HTMLElement {
         this.adLayerEl = this.root.querySelector('[part="ad-layer"]')!;
         this.instanceKey = `hp-${Math.random().toString(36).slice(2, 10)}`;
 
+        this.prerollGate = new PrerollGate(this.videoEl);
+        this.prerollGate.onWaitChange = (waiting) => this.onPrerollWaitChange(waiting);
+        this.videoEl.addEventListener('error', this.onMediaError);
+        this.videoEl.addEventListener('hp-internal:subtitle-error', this.onSubtitleError);
+
         this.loadingSpinner = new LoadingSpinner(this.videoEl);
         this.root.querySelector('.media-layer')!.appendChild(this.loadingSpinner.el);
 
@@ -261,6 +284,13 @@ export class HopePlayerElement extends HTMLElement {
             onTextTracksFound: this.onStreamTextTracks,
             onCues: this.onStreamCues,
             onFatalError: (kind) => this.errorScreen.showStreamError(kind === 'network' ? 2 : 3),
+            onStreamError: (e) =>
+                this.log.add({
+                    source: 'stream',
+                    message: `${e.type}: ${e.details}`,
+                    fatal: e.fatal,
+                    details: { url: e.url, httpStatus: e.httpStatus, reason: e.reason, engine: 'hls.js' },
+                }),
         });
         this.errorScreen.setShouldShow(() => !this.sourceManager.isRecovering());
 
@@ -274,6 +304,8 @@ export class HopePlayerElement extends HTMLElement {
                 isFullscreen: () => this.isFullscreenActive(),
                 // adsController sonradan kurulur — closure'lar her çağrıda güncel this.adsController'ı okur.
                 isAdActive: () => this.isAdPlaying(),
+                interceptTogglePlay: () => this.cancelPrerollWait(),
+                onLoadingChange: (loading) => this.onLoadingChange(loading),
                 adTogglePlay: () => this.adsController?.toggleAdPlayPause(),
                 adIsPaused: () => this.adsController?.isAdPaused() ?? true,
                 adVolume: {
@@ -309,6 +341,7 @@ export class HopePlayerElement extends HTMLElement {
         this.videoArea.appendChild(this.seekFeedback.el);
         this.controlBar.onSkip = (delta) => this.seekFeedback.show(delta);
         this.keyboard.onSeek = (delta) => this.seekFeedback.show(delta);
+        this.keyboard.interceptTogglePlay = () => this.cancelPrerollWait();
         this.controlBar.seekBar.onKeyboardSeek = (delta) => this.seekFeedback.show(delta);
 
         // 'boot': gerçek `.options` (ör. countdownScreen) gelene kadar chrome
@@ -406,6 +439,9 @@ export class HopePlayerElement extends HTMLElement {
         this.seekFeedback.destroy();
         this.contextMenu.destroy();
         this.statsPanel?.destroy();
+        this.debugPanel?.destroy();
+        this.videoEl.removeEventListener('error', this.onMediaError);
+        this.videoEl.removeEventListener('hp-internal:subtitle-error', this.onSubtitleError);
         this.tapGestures?.destroy();
         this.sourceManager.destroy();
         this.adsController?.destroy();
@@ -427,6 +463,7 @@ export class HopePlayerElement extends HTMLElement {
         this.dubbing?.destroy();
         this.liveWallClock?.destroy();
         this.daiController?.destroy();
+        this.prerollGate.release(false);
         if (this.hideTimer) clearTimeout(this.hideTimer);
         if (this.bootGraceTimer) clearTimeout(this.bootGraceTimer);
         // Tekrar sayfaya eklenirse seçenekler baştan uygulansın.
@@ -460,6 +497,8 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     play(): Promise<void> {
+        // Preroll bekleniyorsa istek kapıda tutulur; reklam (ya da reklamsız içerik) kapı açılınca başlar.
+        if (this.prerollGate.interceptPlay()) return Promise.resolve();
         return this.videoEl.play();
     }
 
@@ -474,6 +513,38 @@ export class HopePlayerElement extends HTMLElement {
 
     /** Paket sürümü (ör. "1.0.4"). */
     static readonly version = HOPE_PLAYER_VERSION;
+
+    /** Player'ın hata kaydı (medya, yayın, reklam, altyazı) — `options.debug` kapalıyken de tutulur. */
+    get errorLog(): ErrorLog {
+        return this.log;
+    }
+
+    /** Hata ayıklama penceresini aç (sağ tık menüsündeki "Hata ayıklama" ile aynı). */
+    async showDebugLog(): Promise<void> {
+        if (!this.debugPanel) {
+            const { installDebugPanel } = await import('./plugins/debug');
+            this.debugPanel ??= installDebugPanel({ containerEl: this.videoArea, i18n: this.i18n, log: this.log, version: HOPE_PLAYER_VERSION });
+        }
+        this.debugPanel.show();
+    }
+
+    private readonly onMediaError = (): void => {
+        const err = this.videoEl.error;
+        if (!err) return;
+        const names: Record<number, string> = { 1: 'MEDIA_ERR_ABORTED', 2: 'MEDIA_ERR_NETWORK', 3: 'MEDIA_ERR_DECODE', 4: 'MEDIA_ERR_SRC_NOT_SUPPORTED' };
+        const src = this.videoEl.currentSrc;
+        this.log.add({
+            source: 'media',
+            message: err.message || names[err.code] || `MediaError ${err.code}`,
+            fatal: true,
+            details: { code: err.code, name: names[err.code], src: src && !src.startsWith('blob:') ? src : src ? 'MediaSource (hls.js)' : undefined },
+        });
+    };
+
+    private readonly onSubtitleError = (e: Event): void => {
+        const d = (e as CustomEvent<{ src: string; message: string }>).detail;
+        this.log.add({ source: 'subtitles', message: `Subtitle file could not be loaded: ${d.message}`, details: { src: d.src } });
+    };
 
     /** Teknik istatistik panelini aç/kapat (`force`: true = aç, false = kapat). Sağ tık menüsündeki "İstatistikler" ile aynı. */
     async toggleStats(force?: boolean): Promise<void> {
@@ -504,6 +575,10 @@ export class HopePlayerElement extends HTMLElement {
         this.contextMenu.show(e.clientX, e.clientY, [
             { label: 'HopeCorePlayer', meta: `v${HOPE_PLAYER_VERSION}` },
             ...(config.stats ? [{ label: this.i18n.statsTitle, onSelect: () => void this.toggleStats(true) }] : []),
+            // Yalnızca debug açıkken ve kayıtlı bir hata varsa.
+            ...(this.debugEnabled && this.log.entries.length
+                ? [{ label: this.i18n.debugTitle, meta: String(this.log.entries.length), onSelect: () => void this.showDebugLog() }]
+                : []),
         ]);
     };
 
@@ -589,6 +664,8 @@ export class HopePlayerElement extends HTMLElement {
             this.miniProgress = null;
         }
         // Yalnızca DEĞER değişince uygula — başka bir option güncellemesi kullanıcının tıklayarak seçtiği modu sıfırlamasın.
+        this.debugEnabled = !!options.debug;
+        if (!this.debugEnabled) this.debugPanel?.hide();
         this.contextMenuConfig =
             options.contextMenu === false ? null : { stats: typeof options.contextMenu === 'object' && options.contextMenu.stats === true };
         if (!this.contextMenuConfig) this.contextMenu.close();
@@ -624,6 +701,7 @@ export class HopePlayerElement extends HTMLElement {
         this.dubbing?.refreshLabels();
         this.onStreamAudioTracks(this.streamAudio.tracks, this.streamAudio.active);
         this.statsPanel?.refreshLabels();
+        this.debugPanel?.refreshLabels();
         this.liveWallClock?.refreshLabels();
         this.loopSection?.refreshLabels();
         this.markProgress?.refreshLabels();
@@ -637,6 +715,17 @@ export class HopePlayerElement extends HTMLElement {
 
     /** applyOptions'ın asenkron kısmı — yalnızca queuePluginApply üzerinden, sırayla çalışır. */
     private async applyPluginsAndPlayback(options: HopePlayerOptions): Promise<void> {
+        if (options.ads && !this.adsController) {
+            const adsOptions: AdsOptions = options.ads === true ? {} : options.ads;
+            // Kapı kaynak yüklenmeden / autoplay denenmeden önce kurulur — içerik preroll'dan önce oynamasın.
+            if (expectsPreroll(adsOptions) && !this.prerollGate.isArmed) {
+                this.prerollGate.arm(adsOptions.prerollTimeoutMs ?? DEFAULT_PREROLL_TIMEOUT_MS);
+            }
+            preconnectAdHosts();
+            // IMA SDK + reklam isteği kaynak yüklemesiyle PARALEL başlasın (countdown varken reklam sonra istenir).
+            if (!options.countdownScreen) void this.installAdsOnce(options);
+        }
+
         // Gate plugin'leri (countdown/geo) KAYNAK YÜKLENMEDEN/autoplay denenmeden
         // ÖNCE kuruluyor ki blockChrome() + 'play' dinleyicisi zaten takılı olsun
         // — aksi halde autoplay bir an için gerçekten oynamaya başlayabilirdi.
@@ -701,27 +790,7 @@ export class HopePlayerElement extends HTMLElement {
             );
         }
 
-        if (options.ads && !this.adsController) {
-            const adsOptions: AdsOptions = options.ads === true ? {} : options.ads;
-            // Reklamsız entegrasyonlarda bu import hiç tetiklenmez — bkz. plan:
-            // "eklenmeyen plugin yük bindirmemeli" (dinamik import = ayrı chunk).
-            const { installAds } = await import('./plugins/ads');
-            this.adsController = await installAds(
-                {
-                    videoEl: this.videoEl,
-                    hostEl: this,
-                    adLayerEl: this.adLayerEl,
-                    hideChrome: () => this.blockChrome('ads', 'reduced'),
-                    showChrome: () => this.unblockChrome('ads'),
-                    // IMA'nın KENDİ UI'ı üzerinden (ör. reklam video'suna
-                    // tıklama) duraklatılır/devam ettirilirse toolbar'ımızın
-                    // ikonu da senkron kalsın diye.
-                    onAdPlayStateChange: () => this.controlBar.refreshAdPlayState(),
-                    locale: this.localeCode,
-                },
-                adsOptions
-            );
-        }
+        await this.installAdsOnce(options);
 
         if (options.gesture && !this.gestureControls) {
             const gestureOptions = options.gesture === true ? {} : options.gesture;
@@ -1493,13 +1562,92 @@ export class HopePlayerElement extends HTMLElement {
         this.removeAttribute('data-cursor-hidden');
     }
 
+    /** Ads plugin'ini bir kez kurar; erken (paralel) başlatılan kurulum varsa onu bekler. */
+    private installAdsOnce(options: HopePlayerOptions): Promise<void> {
+        if (!options.ads || this.adsController) return Promise.resolve();
+        if (!this.adsInstall) {
+            const adsOptions: AdsOptions = options.ads === true ? {} : options.ads;
+            this.adsInstall = (async () => {
+                // Reklamsız entegrasyonlarda bu import hiç tetiklenmez — bkz. plan:
+                // "eklenmeyen plugin yük bindirmemeli" (dinamik import = ayrı chunk).
+                const { installAds } = await import('./plugins/ads');
+                this.adsController = await installAds(
+                    {
+                        videoEl: this.videoEl,
+                        hostEl: this,
+                        adLayerEl: this.adLayerEl,
+                        hideChrome: () => this.blockChrome('ads', 'reduced'),
+                        showChrome: () => this.unblockChrome('ads'),
+                        // IMA'nın KENDİ UI'ı üzerinden (ör. reklam video'suna
+                        // tıklama) duraklatılır/devam ettirilirse toolbar'ımızın
+                        // ikonu da senkron kalsın diye.
+                        onAdPlayStateChange: () => this.controlBar.refreshAdPlayState(),
+                        locale: this.localeCode,
+                        prerollGate: this.prerollGate,
+                        log: (entry) => this.log.add({ source: 'ads', ...entry }),
+                        onAdProgress: (info) => this.controlBar.setAdInfo(info),
+                        // Sürekli oynatma (vconp): playlist / story bir sonraki içeriği kendiliğinden başlatıyorsa.
+                        isContinuousPlayback: () => {
+                            const o = this._options;
+                            const auto = (v: unknown) => !!v && (v as { autoplayNext?: boolean }).autoplayNext !== false;
+                            return auto(o.playlist) || auto(o.story);
+                        },
+                        surface: {
+                            videoEl: this.videoEl,
+                            containerEl: this.videoArea,
+                            enterFullscreen: () => this.requestFullscreenCompat(),
+                            labels: () => this.i18n,
+                        },
+                    },
+                    adsOptions
+                );
+            })().catch((err) => {
+                // Plugin parçası yüklenemedi — içerik reklamsız oynar, bekleyen oynatma isteği başlar.
+                this.prerollGate.release(true);
+                this.adsInstall = null;
+                this.dispatchEvent(new CustomEvent('hp:aderror', { detail: { message: String(err) } }));
+            });
+        }
+        return this.adsInstall;
+    }
+
+    /** Preroll beklemesi başladı / bitti: halka döner, toolbar görünür kalır, oynat butonu "duraklat" görünür. */
+    private onPrerollWaitChange(waiting: boolean): void {
+        this.controlBar.setPendingPlay(waiting);
+        this.controlBar.setLoading('preroll', waiting);
+        if (this.isChromeBlocked) return;
+        // Bekleme sırasında merkez "oynat" butonu görünmesin (video teknik olarak duraklatılmış durumda).
+        const showCenter = !waiting && this.videoEl.paused;
+        this.centerPlayButton.style.opacity = showCenter ? '1' : '0';
+        this.centerPlayButton.style.pointerEvents = showCenter ? 'auto' : 'none';
+    }
+
+    /** Preroll beklenirken basılan oynat/duraklat (buton, Space/K) beklemeyi iptal eder. */
+    private cancelPrerollWait(): boolean {
+        if (!this.prerollGate.isWaiting) return false;
+        this.prerollGate.cancelIntent();
+        return true;
+    }
+
+    /** Yükleme halkası açılınca kontroller görünür kalır ve gizlenmez; kapanınca normal otomatik gizleme sürer. */
+    private onLoadingChange(loading: boolean): void {
+        this.loadingActive = loading;
+        if (loading) {
+            if (this.hideTimer) clearTimeout(this.hideTimer);
+            this.hideTimer = null;
+            if (!this.isChromeFullyHidden) this.showChrome();
+        } else if (!this.videoEl.paused && !this.isChromeBlocked) {
+            this.scheduleAutoHide();
+        }
+    }
+
     private readonly scheduleAutoHide = (): void => {
         this.showChrome();
         if (this.hideTimer) clearTimeout(this.hideTimer);
-        if (this.videoEl.paused) return;
+        if (this.videoEl.paused || this.loadingActive) return;
         this.hideTimer = setTimeout(() => {
-            // Duraklatılmışken, fare kontrollerin üzerindeyken ya da ayarlar menüsü açıkken gizleme.
-            if (this.videoEl.paused || this.pointerOverControls || this.controlBar.settingsMenu.isOpen) return;
+            // Duraklatılmışken, yüklenirken, fare kontrollerin üzerindeyken ya da ayarlar menüsü açıkken gizleme.
+            if (this.videoEl.paused || this.loadingActive || this.pointerOverControls || this.controlBar.settingsMenu.isOpen) return;
             this.setChromeOpacity('0');
         }, this.lastPointerType === 'mouse' ? this.autoHideDelayMs : Math.max(this.autoHideDelayMs, TOUCH_AUTO_HIDE_DELAY_MS));
     };

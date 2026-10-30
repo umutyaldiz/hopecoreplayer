@@ -54,8 +54,11 @@ export type {
     LiveWallClockOptions,
     DaiOptions,
     LiveAdsOptions,
+    OmidAccessMode,
+    OmidVendor,
 } from './types';
 export type { SettingsSubmenuDef, SettingsSubmenuItem } from './controls/SettingsMenu';
+export type { ErrorLog, PlayerLogEntry, PlayerLogSource } from './debug/ErrorLog';
 
 declare global {
     interface HTMLElementTagNameMap {

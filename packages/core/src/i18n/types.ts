@@ -27,6 +27,23 @@ export interface HopeLocaleStrings {
     statsSpeedVolume: string;
     statsSource: string;
     statsVersion: string;
+    /** Sağ tık menüsü + hata ayıklama penceresi (options.debug). */
+    debugTitle: string;
+    debugClose: string;
+    debugCopy: string;
+    debugCopied: string;
+    debugClear: string;
+    debugEmpty: string;
+    debugFatal: string;
+    debugSourceMedia: string;
+    debugSourceStream: string;
+    debugSourceAds: string;
+    debugSourceSubtitles: string;
+    debugSourcePlayer: string;
+    /** Reklam sırasında toolbar'daki gösterge ("Reklam 2/3 · 0:12"). */
+    adLabel: string;
+    adReturnFullscreen: string;
+    adReturnPip: string;
     fullscreenEnter: string;
     fullscreenExit: string;
     playbackSpeed: string;

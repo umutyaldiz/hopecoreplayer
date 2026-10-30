@@ -52,6 +52,11 @@ const PREBID_BIDDERS = [{ bidder: 'ix', params: { siteId: '123456', size: [640, 
 
 const adsOptionsByScenario: Record<string, import('@hopeplayer/core').AdsOptions> = {
     preroll: { adTagPreroll: 'https://example.com/vast/preroll' },
+    // Preroll kapısı testi: kısa zaman aşımı (varsayılan 8 sn yerine).
+    'preroll-timeout': { adTagPreroll: 'https://example.com/vast/preroll', prerollTimeoutMs: 800 },
+    // requestWhen testleri.
+    'preroll-load': { adTagPreroll: 'https://example.com/vast/preroll', requestWhen: 'load' },
+    'preroll-play': { adTagPreroll: 'https://example.com/vast/preroll', requestWhen: 'play' },
     vmap: { adTagPreroll: 'https://example.com/vast/preroll', adTagVmap: 'https://example.com/vmap/full' },
     vmaponly: { adTagVmap: 'https://example.com/vmap/full' },
     postroll: { adTagPostroll: 'https://example.com/vast/postroll' },

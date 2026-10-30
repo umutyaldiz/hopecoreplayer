@@ -79,6 +79,11 @@ export interface PrebidOptions extends PrebidBreakOptions {
     midroll?: PrebidBreakOptions;
 }
 
+export type OmidAccessMode = 'full' | 'domain' | 'limited';
+export type OmidVendor =
+    | 'COMSCORE' | 'DOUBLEVERIFY' | 'GOOGLE' | 'INTEGRAL_AD_SCIENCE' | 'MEETRICS' | 'MOAT'
+    | 'NIELSEN' | 'PIXELATE' | 'OTHER';
+
 export interface AdsOptions {
     /** Tek VAST URL ya da sıralı fallback zinciri. */
     adTagPreroll?: string | string[];
@@ -91,8 +96,20 @@ export interface AdsOptions {
     adTagVmap?: string;
     /** Saniye — ilk midrollden önce bekleme + midroll'ler arası aralık. */
     midrollIntervalSeconds?: number;
-    /** false (varsayılan): reklam options.ads set edilir edilmez istenir. true: kullanıcı oynatana kadar ertelenir. */
+    /**
+     * İlk preroll/VMAP isteğinin zamanı. 'visible' (varsayılan): player ekrana yaklaşınca (bir ekran boyu kala) —
+     * sayfanın altındaki player için boşa istek atılmaz, kullanıcı oraya ulaştığında reklam çoğunlukla hazırdır.
+     * 'load': hemen. 'play': oynatma isteğinde (bekleme istek süresi kadar uzar). Hazırda bekleyen preroll 5 dakikadan
+     * eskiyse oynatılırken yeniden istenir.
+     */
+    requestWhen?: 'visible' | 'load' | 'play';
+    /** Eski ad: `true` = `requestWhen: 'play'`. */
     requestOnPlay?: boolean;
+    /**
+     * Preroll beklenirken içeriğin en fazla bekletileceği süre (ms). İçerik preroll sonuçlanmadan (reklam başladı /
+     * gelmedi / hata) oynamaz; bu süre dolarsa reklamsız başlar ve geç gelen preroll gösterilmez. Varsayılan 8000.
+     */
+    prerollTimeoutMs?: number;
     retry?: AdsRetryOptions;
     /**
      * Opt-in — varsayılan kapalı. true olduğunda sayfadaki CMP (varsa)
@@ -115,6 +132,22 @@ export interface AdsOptions {
      * (bkz. `breakTimeoutMs` — IMA bu sürede cevap vermezse içerik devam eder).
      */
     live?: LiveAdsOptions;
+    /**
+     * iPhone'un yerleşik (native) tam ekranında ve Picture-in-Picture'da reklam görünmez (yalnızca içerik videosu görünür).
+     * 'exit' (varsayılan): lineer reklam arası başlarken bu yüzeyden çıkılır, reklam sayfada (görünür, tıklanabilir) oynar;
+     * bitince bir dokunuşla geri dönmek için "Tam ekrana dön" butonu gösterilir.
+     * 'defer': `midrollIntervalSeconds` midroll'ları kullanıcı yüzeyden çıkana kadar ertelenir. VMAP / SCTE-35 araları
+     * zamanını IMA / yayın belirlediği için ertelenemez — bunlarda 'exit' davranışı uygulanır.
+     */
+    iosFullscreen?: 'exit' | 'defer';
+    /**
+     * Open Measurement (OM SDK) — reklamın içindeki ölçüm kodlarına (IAS, DoubleVerify, Moat, Google...) verilen erişim.
+     * 'full' (varsayılan): ölçüm kodu sayfaya doğrudan erişir, görünürlüğü en doğru ölçer — premium alıcılar bunu ister.
+     * 'domain': sayfayla aynı origin'de ama ayrı bir iframe'de. 'limited': izole iframe, yalnızca IMA'nın verdiği sinyaller.
+     * Firma bazında: `{ default: 'limited', GOOGLE: 'full', DOUBLEVERIFY: 'full' }` (anahtarlar
+     * `google.ima.OmidVerificationVendor` adları; `default` geri kalanlar için).
+     */
+    omidAccessMode?: OmidAccessMode | ({ default?: OmidAccessMode } & Partial<Record<OmidVendor, OmidAccessMode>>);
     /** Takip edilecek maksimum VAST wrapper (redirect) sayısı — setNumRedirects. Varsayılan 15 (SDK varsayılanı 4). */
     numRedirects?: number;
     /** VAST/wrapper zincirinin çözülmesi için üst sınır (ms) — AdsRequest.vastLoadTimeout. Varsayılan 10000. */
@@ -522,6 +555,12 @@ export interface HopePlayerOptions {
     labels?: Partial<HopeLocaleStrings>;
     /** true ya da bir AdsOptions objesi — plugin yalnızca bu alan varsa dinamik yüklenir. */
     ads?: boolean | AdsOptions;
+    /**
+     * true: player'ın tüm hataları (medya, yayın, reklam, altyazı) sağ tık menüsündeki "Hata ayıklama" penceresinde
+     * ayrıntılarıyla listelenir (giriş yalnızca kayıtlı hata varsa görünür). Kayıt her zaman tutulur —
+     * `player.errorLog` ile kodla da okunabilir.
+     */
+    debug?: boolean;
     /** Basılı tut → ileri sar/hızlandır. */
     gesture?: boolean | GestureOptions;
     /** A/B döngü — "son N saniye" veya manuel iki nokta. */
@@ -583,9 +622,20 @@ export type HopePlayerEventMap = {
     'hp:error': CustomEvent<{ message: string }>;
     'hp:qualitychange': CustomEvent<{ label: string }>;
     'hp:ratechange': CustomEvent<{ rate: number }>;
-    'hp:adstart': CustomEvent<{ type: 'preroll' | 'midroll' | 'postroll' }>;
-    'hp:adend': CustomEvent<{ type: 'preroll' | 'midroll' | 'postroll' }>;
-    'hp:aderror': CustomEvent<{ message: string }>;
+    /** `linear: false` → overlay (non-linear) reklam: içerik durmaz, reklam içeriğin üstünde gösterilir. */
+    'hp:adstart': CustomEvent<{ type: 'preroll' | 'midroll' | 'postroll'; linear?: boolean }>;
+    'hp:adend': CustomEvent<{ type: 'preroll' | 'midroll' | 'postroll'; linear?: boolean }>;
+    /**
+     * Reklam gösterilemedi. `code`: IMA hata kodu (ör. 1009 boş VAST, 301 zaman aşımı), `vastCode`: VAST hata numarası,
+     * `errorType`: 'adLoadError' | 'adPlayError', `breakType`: hangi ara. Zaman aşımında `message` = 'preroll-timeout'.
+     */
+    'hp:aderror': CustomEvent<{
+        message: string;
+        code?: number;
+        vastCode?: number;
+        errorType?: string;
+        breakType?: 'preroll' | 'midroll' | 'postroll';
+    }>;
     'hp:itemchange': CustomEvent<{ index: number; source: 'playlist' | 'story' }>;
     'hp:sticky': CustomEvent<{ sticky: boolean; corner?: StickyCorner }>;
     'hp:pausead': CustomEvent<{ state: 'shown' | 'hidden' | 'empty'; size?: [number, number]; reason?: 'closed' | 'resumed' }>;

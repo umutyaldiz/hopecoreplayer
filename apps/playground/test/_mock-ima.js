@@ -38,6 +38,7 @@ AdEvent.Type = {
   CLICK: 'click',
   PAUSED: 'pause',
   RESUMED: 'resume',
+  USER_CLOSE: 'userClose',
 };
 
 class AdDisplayContainer {
@@ -46,7 +47,11 @@ class AdDisplayContainer {
   destroy() {}
 }
 
-class AdsRequest {}
+class AdsRequest {
+  setAdWillAutoPlay(v) { this.adWillAutoPlay = v; }
+  setAdWillPlayMuted(v) { this.adWillPlayMuted = v; }
+  setContinuousPlayback(v) { this.continuousPlayback = v; }
+}
 
 class AdsManager {
   constructor() { this._listeners = {}; this._volume = 1; }
@@ -100,10 +105,12 @@ const settings = {
   setPrivacySettings(value) { window.__adsLog.push({ ev: 'setPrivacySettings', value }); },
 };
 const ImaSdkSettings = { VpaidMode: { DISABLED: 0, ENABLED: 1, INSECURE: 2 } };
+const OmidAccessMode = { LIMITED: 'limited', DOMAIN: 'domain', FULL: 'full' };
+const OmidVerificationVendor = { OTHER: 1, MOAT: 2, DOUBLEVERIFY: 3, INTEGRAL_AD_SCIENCE: 4, PIXELATE: 5, NIELSEN: 6, COMSCORE: 7, MEETRICS: 8, GOOGLE: 9 };
 
 window.google = {
   ima: {
     AdDisplayContainer, AdsLoader, AdsRequest, AdsManager, AdsManagerLoadedEvent,
-    AdError, AdErrorEvent, Ad, AdEvent, ViewMode, ImaSdkSettings, settings,
+    AdError, AdErrorEvent, Ad, AdEvent, ViewMode, ImaSdkSettings, settings, OmidAccessMode, OmidVerificationVendor,
   },
 };

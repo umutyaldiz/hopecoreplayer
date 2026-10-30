@@ -247,14 +247,6 @@ export class VolumePanel {
         this.render();
     }
 
-    setIconColor(color: string): void {
-        this.iconEl.style.color = color;
-    }
-
-    setSliderFillColor(color: string): void {
-        this.sliderFill.style.background = color;
-    }
-
     destroy(): void {
         if (this.hideTimer) clearTimeout(this.hideTimer);
         this.el.removeEventListener('mouseenter', this.openNow);
