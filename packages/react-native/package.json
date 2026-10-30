@@ -1,6 +1,6 @@
 {
   "name": "@hopeplayer/react-native",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "React Native wrapper for HopeCorePlayer — runs <hope-player> in a WebView with a prop/event bridge (same options and callbacks as @hopeplayer/react)",
   "repository": {
     "type": "git",
@@ -49,7 +49,7 @@
     "test": "node test/bridge.e2e.mjs"
   },
   "dependencies": {
-    "@hopeplayer/core": "^1.0.8"
+    "@hopeplayer/core": "^1.0.9"
   },
   "peerDependencies": {
     "react": ">=18",
