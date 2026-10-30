@@ -106,6 +106,11 @@ export class AdsController {
     /** Preroll zaman aşımına uğradı — geç gelen cevap gösterilmez (içerik çoktan başladı). */
     private prerollAbandoned = false;
     private readonly surfaceGuard: AdSurfaceGuard | null;
+    /** Player boyutu değişince (tam ekran, pencere, yön) IMA'ya bildirmek için — IMA boyutu kendisi izlemiyor. */
+    private resizeObserver: ResizeObserver | null = null;
+    private resizeFrame = 0;
+    /** Açık overlay creative'inin yüksekliği — yeniden boyutlandırmada şerit yüksekliği için. */
+    private nonLinearCreativeHeight = 0;
 
     constructor(
         private readonly ctx: AdsPlayerContext,
@@ -164,6 +169,10 @@ export class AdsController {
         initConsentAware(this.options, this.ima);
 
         this.adDisplayContainer = new ima.AdDisplayContainer(this.ctx.adLayerEl, this.ctx.videoEl);
+        if (typeof ResizeObserver !== 'undefined') {
+            this.resizeObserver = new ResizeObserver(this.scheduleResize);
+            this.resizeObserver.observe(this.ctx.videoEl);
+        }
         this.adsLoader = new ima.AdsLoader(this.adDisplayContainer);
         this.adsLoader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED, this.onAdsManagerLoaded);
         this.adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, this.onAdsLoaderError);
@@ -285,6 +294,9 @@ export class AdsController {
         this.ctx.videoEl.removeEventListener('ended', this.onContentEnded);
         this.ctx.videoEl.removeEventListener('timeupdate', this.onTimeUpdateForMidroll);
         this.surfaceGuard?.destroy();
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = null;
+        cancelAnimationFrame(this.resizeFrame);
         this.retry.cancelPending();
         this.adsManager?.destroy();
         this.adsLoader?.destroy();
@@ -511,7 +523,7 @@ export class AdsController {
     private startAdsManager(): void {
         if (!this.adsManager || !this.ima) return;
         try {
-            this.adsManager.init(this.ctx.videoEl.clientWidth || 640, this.ctx.videoEl.clientHeight || 360, this.ima.ViewMode.NORMAL);
+            this.adsManager.init(this.ctx.videoEl.clientWidth || 640, this.ctx.videoEl.clientHeight || 360, this.viewMode());
             this.adsManager.start();
         } catch (err) {
             this.giveUpOrRetry(this.currentBreakType, String(err));
@@ -667,24 +679,52 @@ export class AdsController {
         if (!ad || typeof ad.isLinear !== 'function' || ad.isLinear()) return;
         this.nonLinearActive = true;
         const layer = this.ctx.adLayerEl;
-        // IMA overlay'i tam boyutlu bir iframe'de çiziyor — katman tüm videoyu kaplarsa tıklamaları yutar. Katman, overlay
-        // yüksekliğinde (+ kapatma butonu payı) alttaki bir şeride indirilir; videonun geri kalanı tıklanabilir kalır.
-        const slotHeight = Math.round((this.ctx.videoEl.clientHeight || 360) / 3);
-        const creativeHeight = ad.getHeight?.() || slotHeight;
-        layer.style.setProperty('--hp-nonlinear-ad-height', `${Math.min(slotHeight + 40, creativeHeight + 24)}px`);
+        this.nonLinearCreativeHeight = ad.getHeight?.() || 0;
         layer.setAttribute('data-nonlinear', '');
         layer.classList.remove('hp:hidden');
         layer.classList.add('hp:block');
-        if (this.adsManager && this.ima) {
-            try {
-                this.adsManager.resize(layer.clientWidth || 640, layer.clientHeight || 240, this.ima.ViewMode.NORMAL);
-            } catch {
-                /* boyut güncellenemedi — overlay varsayılan yerinde kalır */
-            }
-        }
+        this.resizeAd();
         if (this.currentBreakType === 'Preroll') this.ctx.prerollGate?.release(true);
         this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:adstart', { detail: { type: this.breakTypeOf(event), linear: false } }));
     };
+
+    private viewMode(): string {
+        const doc = document as Document & { webkitFullscreenElement?: Element | null };
+        const host = this.ctx.hostEl;
+        const full = document.fullscreenElement === host || doc.webkitFullscreenElement === host;
+        return full ? this.ima!.ViewMode.FULLSCREEN : this.ima!.ViewMode.NORMAL;
+    }
+
+    /** Boyut değişimleri (ResizeObserver) kare başına bire indirilir — pencere sürüklenirken IMA'yı boğmasın. */
+    private readonly scheduleResize = (): void => {
+        cancelAnimationFrame(this.resizeFrame);
+        this.resizeFrame = requestAnimationFrame(() => this.resizeAd());
+    };
+
+    /**
+     * Reklamı player'ın şimdiki boyutuna getirir: tam ekrana giriş/çıkış, pencere küçültme, cihaz döndürme.
+     * IMA boyutu yalnızca init()'te alır; resize() çağrılmazsa reklam eski boyutunda kalıyordu.
+     */
+    private resizeAd(): void {
+        if (!this.adsManager || !this.ima) return;
+        const video = this.ctx.videoEl;
+        if (!video.clientWidth || !video.clientHeight) return; // gizli / henüz yerleşmemiş
+        try {
+            if (this.nonLinearActive) {
+                // IMA overlay'i tam boyutlu bir iframe'de çiziyor — katman tüm videoyu kaplarsa tıklamaları yutar. Katman,
+                // overlay yüksekliğinde (+ kapatma butonu payı) alttaki bir şeride indirilir; videonun geri kalanı tıklanabilir.
+                const layer = this.ctx.adLayerEl;
+                const slotHeight = Math.round(video.clientHeight / 3);
+                const creativeHeight = this.nonLinearCreativeHeight || slotHeight;
+                layer.style.setProperty('--hp-nonlinear-ad-height', `${Math.min(slotHeight + 40, creativeHeight + 24)}px`);
+                this.adsManager.resize(layer.clientWidth || video.clientWidth, layer.clientHeight || slotHeight, this.viewMode());
+            } else {
+                this.adsManager.resize(video.clientWidth, video.clientHeight, this.viewMode());
+            }
+        } catch {
+            /* boyut güncellenemedi — reklam önceki boyutunda kalır */
+        }
+    }
 
     /** Overlay kapandı (kullanıcı kapattı / süresi doldu): katman gizlenir. */
     private readonly endNonLinear = (): void => {

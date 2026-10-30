@@ -1322,6 +1322,55 @@ async function testIosFullscreenDefer(browser) {
     });
 }
 
+async function testAdResize(browser) {
+    console.log('\n[17] Reklam boyutu: player küçülünce / tam ekrana girip çıkınca adsManager.resize doğru boyut ve modla çağrılıyor');
+    await withPage(browser, 'preroll', async (page) => {
+        await page.evaluate(() => document.getElementById('player').play());
+        await loadAdManager(page);
+        await lastManager(page, 'contentPauseRequested');
+        const lastResize = () => page.evaluate(() => {
+            const r = window.__adsLog.filter((e) => e.ev === 'adsManager.resize').at(-1);
+            const v = document.getElementById('player').shadowRoot.querySelector('video');
+            return r ? { ...r, vw: v.clientWidth, vh: v.clientHeight } : null;
+        });
+        const frames = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 50)))));
+
+        await page.evaluate(() => { document.getElementById('player').style.width = '320px'; });
+        await frames();
+        let r = await lastResize();
+        ok(r && r.w === r.vw && r.h === r.vh && r.w <= 320 && r.viewMode === 'normal', `pencere küçülünce: ${r?.w}x${r?.h} (${r?.viewMode})`);
+
+        // Tam ekran: host fullscreenElement olur ve player büyür.
+        await page.evaluate(() => {
+            const el = document.getElementById('player');
+            Object.defineProperty(document, 'fullscreenElement', { get: () => window.__fs ? el : null, configurable: true });
+            window.__fs = true;
+            el.style.width = '900px';
+        });
+        await frames();
+        r = await lastResize();
+        ok(r && r.w === r.vw && r.w > 320 && r.viewMode === 'fullscreen', `tam ekrana girince: ${r?.w}x${r?.h} (${r?.viewMode})`);
+
+        await page.evaluate(() => {
+            window.__fs = false;
+            document.getElementById('player').style.width = '480px';
+        });
+        await frames();
+        r = await lastResize();
+        ok(r && r.w === r.vw && r.w <= 480 && r.viewMode === 'normal', `ESC ile çıkınca küçüldü: ${r?.w}x${r?.h} (${r?.viewMode})`);
+
+        // Bir pencere sürüklemesi boyunca kare başına en fazla bir resize.
+        const before = await page.evaluate(() => window.__adsLog.filter((e) => e.ev === 'adsManager.resize').length);
+        await page.evaluate(() => {
+            const el = document.getElementById('player');
+            for (let w = 400; w < 460; w += 5) el.style.width = w + 'px';
+        });
+        await frames();
+        const after = await page.evaluate(() => window.__adsLog.filter((e) => e.ev === 'adsManager.resize').length);
+        ok(after - before <= 2, `art arda boyut değişimi tek çağrıya indirildi (${after - before})`);
+    });
+}
+
 async function testContinuousPlaybackSignal(browser) {
     console.log('\n[14] Sürekli oynatma bildirimi: tekil videoda false, otomatik ilerleyen playlist\'te true');
     await withPage(browser, 'preroll', async (page) => {
@@ -1385,6 +1434,7 @@ async function testContinuousPlaybackSignal(browser) {
         await testOmidAccess(browser);
         await testIosNativeFullscreen(browser);
         await testIosFullscreenDefer(browser);
+        await testAdResize(browser);
     } finally {
         await browser.close();
     }

@@ -61,7 +61,7 @@ class AdsManager {
   dispatch(type, event) { (this._listeners[type] || []).forEach((l) => l(event)); }
   init(w, h, viewMode) { window.__adsLog.push({ ev: 'adsManager.init', w, h, viewMode }); }
   start() { window.__adsLog.push({ ev: 'adsManager.start' }); }
-  resize() {}
+  resize(w, h, viewMode) { window.__adsLog.push({ ev: 'adsManager.resize', w, h, viewMode }); }
   destroy() { window.__adsLog.push({ ev: 'adsManager.destroy' }); }
   pause() { window.__adsLog.push({ ev: 'adsManager.pause' }); }
   resume() { window.__adsLog.push({ ev: 'adsManager.resume' }); }
