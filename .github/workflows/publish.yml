@@ -44,6 +44,9 @@ jobs:
       - name: Build @hopeplayer/vue
         run: npm run build:vue
 
+      - name: Build @hopeplayer/react-native
+        run: npm run build:react-native
+
       - name: Publish @hopeplayer/core
         working-directory: packages/core
         run: npm publish --provenance --access public
@@ -54,4 +57,8 @@ jobs:
 
       - name: Publish @hopeplayer/vue
         working-directory: packages/vue
+        run: npm publish --provenance --access public
+
+      - name: Publish @hopeplayer/react-native
+        working-directory: packages/react-native
         run: npm publish --provenance --access public

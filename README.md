@@ -29,6 +29,7 @@ Or with a framework wrapper:
 ```bash
 npm install @hopeplayer/core @hopeplayer/react   # React / Next.js
 npm install @hopeplayer/core @hopeplayer/vue     # Vue 3
+npx expo install @hopeplayer/react-native react-native-webview   # React Native
 ```
 
 See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for full React/Vue examples, props, and events.
@@ -49,6 +50,7 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for full 
 | [`@hopeplayer/core`](./packages/core) | The `<hope-player>` custom element. |
 | [`@hopeplayer/react`](./packages/react) | Thin React wrapper (prop/event bridge, SSR-safe for Next.js App Router). |
 | [`@hopeplayer/vue`](./packages/vue) | Thin Vue 3 wrapper (same architecture as the React wrapper). |
+| [`@hopeplayer/react-native`](./packages/react-native) | React Native wrapper — runs the player in a WebView with the same options and callbacks as the React wrapper. |
 
 ## Monorepo layout
 
@@ -56,10 +58,12 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for full 
 packages/core     — <hope-player> custom element (zero runtime dependencies)
 packages/react    — thin React wrapper
 packages/vue      — thin Vue 3 wrapper
+packages/react-native — React Native wrapper (WebView bridge)
 apps/playground   — plain HTML/TS dev environment
 apps/demo-next    — Next.js demo app
 apps/demo-vue     — Vite + Vue 3 demo app
 docs/             — architecture / plugin / theming reference docs
+examples/react-native-expo — Expo app (separate install, not a workspace)
 ```
 
 (The marketing/docs website itself, built with Next.js static export and deployed separately to [umutyaldiz.com/hopecoreplayer](https://umutyaldiz.com/hopecoreplayer), is developed locally but is intentionally not part of this repository.)

@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "HopePlayer RN",
+    "slug": "hopeplayer-react-native-example",
+    "version": "1.0.7",
+    "orientation": "default",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {}
+  }
+}

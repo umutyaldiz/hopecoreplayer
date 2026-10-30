@@ -30,5 +30,8 @@ jobs:
       - name: Build @hopeplayer/vue
         run: npm run build:vue
 
+      - name: Build @hopeplayer/react-native
+        run: npm run build:react-native
+
       - name: Typecheck all workspaces
         run: npm run typecheck
