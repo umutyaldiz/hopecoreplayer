@@ -159,6 +159,18 @@ export class HopePlayerElement extends HTMLElement {
      */
     private bootResolved = false;
     private bootGraceTimer: ReturnType<typeof setTimeout> | null = null;
+    /**
+     * Son uygulanan `.options` nesnesi + attribute'lar. `.options` element sayfaya eklenmeden önce verilince
+     * connectedCallback AYNI seçenekleri yeniden uyguluyordu; değişen bir şey yoksa bu ikinci geçiş atlanır.
+     */
+    private lastSynced: { options: HopePlayerOptions; attrs: string } | null = null;
+    /**
+     * applyOptions'ın asenkron kısmı (plugin kurulumu + kaynak yükleme) aynı anda tek kez çalışır. İki geçiş
+     * üst üste binince `!this.adsController` gibi kontroller ikisinde de geçiyor, plugin (ör. IMA) iki kez kuruluyordu.
+     * Çalışırken gelen seçenekler bekletilir; bitince yalnızca en sonuncusu uygulanır.
+     */
+    private pluginApplyRun: Promise<void> | null = null;
+    private pendingPluginOptions: HopePlayerOptions | null = null;
     private _options: HopePlayerOptions = {};
     private hideTimer: ReturnType<typeof setTimeout> | null = null;
     private cursorTimer: ReturnType<typeof setTimeout> | null = null;
@@ -417,6 +429,8 @@ export class HopePlayerElement extends HTMLElement {
         this.daiController?.destroy();
         if (this.hideTimer) clearTimeout(this.hideTimer);
         if (this.bootGraceTimer) clearTimeout(this.bootGraceTimer);
+        // Tekrar sayfaya eklenirse seçenekler baştan uygulansın.
+        this.lastSynced = null;
     }
 
     /** Reklam/consent-farkında plugin'lerin (gesture/sticky/in-view-autoplay) ortak sorgusu. */
@@ -440,6 +454,8 @@ export class HopePlayerElement extends HTMLElement {
             this.bootGraceTimer = null;
         }
         this.bootResolved = true;
+        // Açık atama her zaman uygulanır (aynı nesne değiştirilip yeniden atanmış olabilir).
+        this.lastSynced = null;
         this.syncFromAttributes();
     }
 
@@ -523,7 +539,32 @@ export class HopePlayerElement extends HTMLElement {
             theme: this.getAttribute('theme') ?? undefined,
             locale: this.getAttribute('locale') ?? undefined,
         };
+        const attrs = JSON.stringify(attrOptions);
+        if (this.bootResolved) {
+            if (this.lastSynced?.options === this._options && this.lastSynced.attrs === attrs) return;
+            this.lastSynced = { options: this._options, attrs };
+        }
         void this.applyOptions({ ...attrOptions, ...this._options });
+    }
+
+    private queuePluginApply(options: HopePlayerOptions): Promise<void> {
+        this.pendingPluginOptions = options;
+        if (!this.pluginApplyRun) {
+            this.pluginApplyRun = (async () => {
+                while (this.pendingPluginOptions) {
+                    const next = this.pendingPluginOptions;
+                    this.pendingPluginOptions = null;
+                    try {
+                        await this.applyPluginsAndPlayback(next);
+                    } catch (err) {
+                        console.error('[hope-player] options could not be applied:', err);
+                    }
+                }
+            })().finally(() => {
+                this.pluginApplyRun = null;
+            });
+        }
+        return this.pluginApplyRun;
     }
 
     private async applyOptions(options: HopePlayerOptions): Promise<void> {
@@ -591,7 +632,11 @@ export class HopePlayerElement extends HTMLElement {
         if (!this.bootResolved) {
             return;
         }
+        await this.queuePluginApply(options);
+    }
 
+    /** applyOptions'ın asenkron kısmı — yalnızca queuePluginApply üzerinden, sırayla çalışır. */
+    private async applyPluginsAndPlayback(options: HopePlayerOptions): Promise<void> {
         // Gate plugin'leri (countdown/geo) KAYNAK YÜKLENMEDEN/autoplay denenmeden
         // ÖNCE kuruluyor ki blockChrome() + 'play' dinleyicisi zaten takılı olsun
         // — aksi halde autoplay bir an için gerçekten oynamaya başlayabilirdi.

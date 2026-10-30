@@ -353,6 +353,26 @@ async function testNoAdsNoChunk(browser) {
     ok(missingFromWithAds.length === 0, 'reklamlı yükleme, taban chunk kümesinin tamamını da içeriyor (üst küme)');
 }
 
+async function testOptionsBeforeConnect(browser) {
+    console.log('\n[6b] GERÇEK BUG: .options element sayfaya eklenmeden önce verilince reklam İKİ KEZ isteniyordu');
+    // createElement → .options → appendChild: hem setter hem connectedCallback applyOptions'ı başlatıyor, ikisi de
+    // `!this.adsController` kontrolünü geçip AdsController'ı iki kez kuruyordu (iki IMA köprüsü, iki preroll).
+    await withPage(browser, 'none', async (page) => {
+        await page.evaluate(() => {
+            window.__adsLog.length = 0;
+            const el = document.createElement('hope-player');
+            el.id = 'pre-connect-player';
+            el.options = { src: '/sample.mp4', muted: true, ads: { adTagPreroll: 'https://example.com/vast/preroll' } };
+            document.body.appendChild(el);
+        });
+        await page.waitForFunction(() => window.__adsLog.some((e) => e.ev === 'requestAds'), null, { timeout: 5000 }).catch(() => {});
+        await page.waitForTimeout(1000);
+        const reqEvents = await page.evaluate(() => window.__adsLog.filter((e) => e.ev === 'requestAds'));
+        ok(reqEvents.length === 1, `tam 1 requestAds çağrısı (${reqEvents.length})`);
+        await page.evaluate(() => document.getElementById('pre-connect-player')?.remove());
+    });
+}
+
 async function testAdModeToolbar(browser) {
     console.log('\n[7] İstek üzerine: reklam sırasında kontrol çubuğu TAMAMEN gizlenmiyor — yalnızca oynat/duraklat + ses kalıyor, seek bar/süre/ayarlar/PIP/tam ekran gizleniyor');
     await withPage(browser, 'preroll', async (page) => {
@@ -702,6 +722,7 @@ async function testPauseAd(browser) {
         await testMidroll(browser);
         await testRetry(browser);
         await testNoAdsNoChunk(browser);
+        await testOptionsBeforeConnect(browser);
         await testAdModeToolbar(browser);
         await testPauseAd(browser);
     } finally {
