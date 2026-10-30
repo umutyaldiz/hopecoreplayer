@@ -12,9 +12,9 @@ npm'deki paketleri kullanan, tarayıcıda StackBlitz üzerinde çalışan düzen
 
 | | |
 |---|---|
-| Web Component | [StackBlitz'te aç](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/vanilla?file=src/main.ts) · [`examples/vanilla`](./examples/vanilla) |
-| React | [StackBlitz'te aç](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/react?file=src/App.tsx) · [`examples/react`](./examples/react) |
-| Vue | [StackBlitz'te aç](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/vue?file=src/App.vue) · [`examples/vue`](./examples/vue) |
+| Web Component | [StackBlitz'te aç](https://stackblitz.com/edit/hopecoreplayer-vanilla?file=src/main.ts) · [`examples/vanilla`](./examples/vanilla) |
+| React | [StackBlitz'te aç](https://stackblitz.com/edit/hopecoreplayer-react?file=src/App.tsx) · [`examples/react`](./examples/react) |
+| Vue | [StackBlitz'te aç](https://stackblitz.com/edit/hopecoreplayer-vue?file=src/App.vue) · [`examples/vue`](./examples/vue) |
 | React Native | [Expo Snack'te aç](https://snack.expo.dev/@umutyaldiz/hopecoreplayer) · [`examples/react-native-expo`](./examples/react-native-expo) |
 
 ## Kurulum

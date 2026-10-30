@@ -29,6 +29,8 @@ export interface PlayerHtmlConfig {
     coreUrl?: string;
     /** Sayfa arka planı (player yüklenene kadar görünen). Varsayılan #000. */
     backgroundColor?: string;
+    /** WebView sayfasına eklenen CSS — `--hp-*` token'ları ve `hope-player::part(...)` kuralları için. */
+    css?: string;
     /** `timeupdate` köprü olayının en sık gönderilme aralığı (ms). Varsayılan 250. */
     timeUpdateIntervalMs?: number;
 }
@@ -65,6 +67,8 @@ export function buildPlayerHtml(config: PlayerHtmlConfig): string {
     const coreUrl = config.coreUrl ?? DEFAULT_CORE_URL;
     const background = config.backgroundColor ?? '#000';
     const interval = config.timeUpdateIntervalMs ?? 250;
+    // `</style` CSS'in içinden <style> etiketini kapatamasın.
+    const css = (config.css ?? '').split('</').join('<\\/');
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -73,6 +77,7 @@ export function buildPlayerHtml(config: PlayerHtmlConfig): string {
 <style>
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: ${background}; }
 hope-player { display: block; width: 100%; }
+${css}
 </style>
 </head>
 <body>

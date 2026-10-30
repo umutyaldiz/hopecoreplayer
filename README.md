@@ -40,9 +40,9 @@ Editable examples that run in the browser on StackBlitz (best in Chrome / Edge),
 
 | | |
 |---|---|
-| Web Component | [Open in StackBlitz](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/vanilla?file=src/main.ts) · [`examples/vanilla`](./examples/vanilla) |
-| React | [Open in StackBlitz](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/react?file=src/App.tsx) · [`examples/react`](./examples/react) |
-| Vue | [Open in StackBlitz](https://stackblitz.com/github/umutyaldiz/hopecoreplayer/tree/main/examples/vue?file=src/App.vue) · [`examples/vue`](./examples/vue) |
+| Web Component | [Open in StackBlitz](https://stackblitz.com/edit/hopecoreplayer-vanilla?file=src/main.ts) · [`examples/vanilla`](./examples/vanilla) |
+| React | [Open in StackBlitz](https://stackblitz.com/edit/hopecoreplayer-react?file=src/App.tsx) · [`examples/react`](./examples/react) |
+| Vue | [Open in StackBlitz](https://stackblitz.com/edit/hopecoreplayer-vue?file=src/App.vue) · [`examples/vue`](./examples/vue) |
 | React Native | [Open in Expo Snack](https://snack.expo.dev/@umutyaldiz/hopecoreplayer) · [`examples/react-native-expo`](./examples/react-native-expo) |
 
 ## Why

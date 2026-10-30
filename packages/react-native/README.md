@@ -49,6 +49,7 @@ All [`HopePlayerOptions`](https://umutyaldiz.com/hopecoreplayer/install) are acc
 | `coreUrl` | `string` | jsDelivr, same version | `@hopeplayer/core` ESM entry the WebView loads. Set it to host the core yourself (offline / own CDN). |
 | `baseUrl` | `string` | — | Page URL inside the WebView: relative media/subtitle paths resolve against it and `localStorage` uses its origin. |
 | `backgroundColor` | `string` | `#000` | Shown until the player loads. |
+| `css` | `string` | — | CSS added to the WebView page: `--hp-*` theme tokens and `hope-player::part(...)` rules that go in a global stylesheet on the web. Changing it reloads the WebView. |
 | `webViewProps` | `WebViewProps` | — | Extra props for the underlying WebView. |
 
 Callbacks: `onReady`, `onPlay`, `onPause`, `onEnded`, `onError(message)`, `onTimeUpdate({ currentTime, duration, paused })` (about every 250 ms), `onQualityChange(label)`, `onRateChange(rate)`, `onAdStart(type)`, `onAdEnd(type)`, `onAdError(message)`, `onItemChange(index, source)`, and `onEvent(type, data)` for every bridge event.

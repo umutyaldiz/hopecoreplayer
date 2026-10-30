@@ -25,6 +25,11 @@ export interface HopePlayerProps extends HopePlayerOptions {
     baseUrl?: string;
     /** Player yüklenene kadar görünen arka plan. Varsayılan #000. */
     backgroundColor?: string;
+    /**
+     * WebView sayfasına eklenen CSS: webde global stylesheet'e yazılan `--hp-*` token'ları ve
+     * `hope-player::part(...)` kuralları buraya. Değişince sayfa yeniden yüklenir.
+     */
+    css?: string;
     /** WebView'a ek prop'lar (ör. `onShouldStartLoadWithRequest`). */
     webViewProps?: Omit<WebViewProps, 'source' | 'onMessage' | 'style' | 'containerStyle'>;
     onReady?: () => void;
@@ -58,6 +63,7 @@ const NATIVE_PROP_KEYS = [
     'coreUrl',
     'baseUrl',
     'backgroundColor',
+    'css',
     'webViewProps',
     'onReady',
     'onPlay',
@@ -85,7 +91,7 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
     // ref verilince hata); açık `object` generic'i bunu önler.
     const webViewRef = useRef<WebView<object>>(null);
     const optionsJson = JSON.stringify(splitProps(props));
-    // En güncel seçenekler / sayfaya son giden seçenekler. Sayfa yalnızca coreUrl/arka plan değişince yeniden
+    // En güncel seçenekler / sayfaya son giden seçenekler. Sayfa yalnızca coreUrl/arka plan/css değişince yeniden
     // kurulur; seçenek değişiklikleri yeniden yüklemeden komutla gider.
     const latestOptions = useRef(optionsJson);
     latestOptions.current = optionsJson;
@@ -101,8 +107,9 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
             options: JSON.parse(latestOptions.current) as HopePlayerOptions,
             coreUrl: props.coreUrl,
             backgroundColor: props.backgroundColor,
+            css: props.css,
         });
-    }, [props.coreUrl, props.backgroundColor]);
+    }, [props.coreUrl, props.backgroundColor, props.css]);
 
     const send = useCallback((cmd: HopeBridgeCommand) => {
         webViewRef.current?.injectJavaScript(commandScript(cmd));

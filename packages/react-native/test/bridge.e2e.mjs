@@ -131,6 +131,21 @@ try {
     const pwned = await inj.evaluate(() => window.__pwned === 1);
     ok(injReady && !pwned, `JSON güvenle gömüldü (ready: ${injReady}, enjeksiyon: ${pwned})`);
     await inj.close();
+
+    console.log('\n[6] css: token\'lar player\'a uygulanıyor, "</style>" sayfayı bozmuyor');
+    pages.set('/css.html', buildPlayerHtml({
+        coreUrl: `${BASE}/core/hope-player.js`,
+        options: { src: '/media/sample.mp4' },
+        css: 'hope-player { --hp-color-accent: rgb(1, 2, 3); } /* </style><script>window.__pwned=1</script> */',
+    }));
+    const styled = await browser.newPage();
+    await styled.addInitScript(MOCK_RN);
+    await styled.goto(`${BASE}/css.html`);
+    const styledReady = await waitFor(styled, 'ready');
+    const accent = await styled.evaluate(() => getComputedStyle(document.getElementById('hope-player')).getPropertyValue('--hp-color-accent').trim());
+    const cssPwned = await styled.evaluate(() => window.__pwned === 1);
+    ok(styledReady && accent === 'rgb(1, 2, 3)' && !cssPwned, `css uygulandı (accent: ${accent}, enjeksiyon: ${cssPwned})`);
+    await styled.close();
 } finally {
     await browser.close();
     server.close();

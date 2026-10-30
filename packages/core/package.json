@@ -1,6 +1,6 @@
 {
   "name": "@hopeplayer/core",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "HopePlayer core — dependency-free <hope-player> custom element (Shadow DOM + Tailwind)",
   "repository": {
     "type": "git",
