@@ -193,7 +193,7 @@ async function testIosNativeFullscreenCaptions(browser) {
         }, lang);
 
     let st = await state();
-    ok(JSON.stringify(st.modes) === '["tr:hidden","en:disabled"]' && /volkanik/.test(st.caption ?? ''), `başlangıç: tr bizim katmanda (${JSON.stringify(st)})`);
+    ok(JSON.stringify(st.modes) === '["tr:hidden","en:disabled"]' && /kedisi/.test(st.caption ?? ''), `başlangıç: tr bizim katmanda (${JSON.stringify(st)})`);
 
     await fire('webkitbeginfullscreen');
     st = await state();
@@ -205,7 +205,7 @@ async function testIosNativeFullscreenCaptions(browser) {
     await page.waitForTimeout(300);
     st = await state();
     ok(JSON.stringify(st.modes) === '["tr:disabled","en:hidden"]', `dönüşte hiçbir iz showing değil — çift altyazı yok ${JSON.stringify(st.modes)}`);
-    ok(st.menu === 'English' && /glide/.test(st.caption ?? ''), `iOS'ta seçilen İngilizce bize aktarıldı (menü: ${st.menu}, altyazı: ${st.caption})`);
+    ok(st.menu === 'English' && /cat/.test(st.caption ?? ''), `iOS'ta seçilen İngilizce bize aktarıldı (menü: ${st.menu}, altyazı: ${st.caption})`);
 
     // Tam ekranda altyazıyı kapatıp çıktı.
     await fire('webkitbeginfullscreen');
@@ -248,7 +248,8 @@ async function testTapGestures(browser) {
     console.log('\n[7] İstek üzerine: tapGestures — sağa/sola çift dokunma sarma (zincirleme), tek dokunuş oynat/duraklat');
     const { context, page } = await openPlayer(browser, { width: 390, touch: true });
     try {
-        await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4', muted: true, tapGestures: true, tapToPlay: true }; });
+        // 10 sn'lik sarmaları ölçmek için 30 sn'lik sürüm (örnek video 10 sn).
+        await page.evaluate(() => { document.getElementById('player').options = { src: '/sample-30s.mp4', muted: true, tapGestures: true, tapToPlay: true }; });
         await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 1);
         await page.waitForTimeout(400);
         const area = await page.evaluate(() => {

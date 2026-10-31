@@ -134,6 +134,11 @@ export class SourceManager {
         this.hlsOptions = options ?? {};
     }
 
+    /** Bu kaynak zaten yüklü ve hatasız mı — aynı kaynak için yeniden yükleme (başa sarma) gerekmez. */
+    isLoaded(src: string, type?: string): boolean {
+        return !!this.last && this.last.src === src && this.last.type === type && !this.video.error && this.video.readyState > 0;
+    }
+
     async load(src: string, type?: string): Promise<void> {
         this.last = { src, type };
         // Önce önceki HLS instance'ını kapat (hls.js kendi blob kaynağını media'dan ayırır).

@@ -103,6 +103,7 @@ const settings = {
   setVpaidMode(v) { window.__adsLog.push({ ev: 'setVpaidMode', v }); },
   setNumRedirects(v) { window.__adsLog.push({ ev: 'setNumRedirects', v }); },
   setPrivacySettings(value) { window.__adsLog.push({ ev: 'setPrivacySettings', value }); },
+  setFeatureFlags(flags) { window.__adsLog.push({ ev: 'setFeatureFlags', flags }); },
 };
 const ImaSdkSettings = { VpaidMode: { DISABLED: 0, ENABLED: 1, INSECURE: 2 } };
 const OmidAccessMode = { LIMITED: 'limited', DOMAIN: 'domain', FULL: 'full' };

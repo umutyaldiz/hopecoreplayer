@@ -52,7 +52,16 @@ export interface SettingsToggleRow {
     onToggle: () => void;
 }
 
-type PanelId = 'main' | 'speed' | 'quality' | 'captions' | 'captions-size' | 'captions-bg' | 'captions-text' | `custom:${string}`;
+type PanelId =
+    | 'main'
+    | 'speed'
+    | 'quality'
+    | 'captions'
+    | 'captions-settings'
+    | 'captions-size'
+    | 'captions-bg'
+    | 'captions-text'
+    | `custom:${string}`;
 
 /** Ayarlar butonu + popup: ana liste (Hız/Kalite/Altyazı) → alt liste. */
 /** Menü ile buton arası boşluk ve player kenarına bırakılan pay (px). */
@@ -143,6 +152,7 @@ export class SettingsMenu {
         this.captionAppearance = appearance;
         if (
             this.currentPanel === 'captions' ||
+            this.currentPanel === 'captions-settings' ||
             this.currentPanel === 'captions-size' ||
             this.currentPanel === 'captions-bg' ||
             this.currentPanel === 'captions-text'
@@ -263,6 +273,7 @@ export class SettingsMenu {
         else if (this.currentPanel === 'speed') this.renderSpeed();
         else if (this.currentPanel === 'quality') this.renderQuality();
         else if (this.currentPanel === 'captions') this.renderCaptions();
+        else if (this.currentPanel === 'captions-settings') this.renderCaptionSettings();
         else if (this.currentPanel === 'captions-size') this.renderCaptionsSize();
         else if (this.currentPanel === 'captions-bg') this.renderCaptionColorPanel('bg');
         else if (this.currentPanel === 'captions-text') this.renderCaptionColorPanel('text');
@@ -371,40 +382,71 @@ export class SettingsMenu {
                 })
             );
         }
-        // Boyut/Renk/Konum satırları altyazı KAPALIYKEN anlamsız — yalnızca bir dil seçiliyken gösteriliyor.
+        // Görünüm ayarları ayrı bir (3.) panelde — dil listesi sade kalsın. Altyazı KAPALIYKEN anlamsız, gizli.
         if (this.captionAppearance && this.activeCaptionLabel !== this.labels.captionsOff) {
-            const appearance = this.captionAppearance;
+            const divider = document.createElement('div');
+            divider.className = 'hp:my-1 hp:border-t hp:border-on-surface/10';
+            divider.setAttribute('role', 'separator');
+            this.panel.appendChild(divider);
             this.panel.appendChild(
-                this.row(appearance.sizeLabel, '', () => {
-                    this.currentPanel = 'captions-size';
-                    this.renderCaptionsSize();
-                })
-            );
-            this.panel.appendChild(
-                this.row(appearance.bgColorLabel, '', () => {
-                    this.currentPanel = 'captions-bg';
-                    this.renderCaptionColorPanel('bg');
-                })
-            );
-            this.panel.appendChild(
-                this.row(appearance.textColorLabel, '', () => {
-                    this.currentPanel = 'captions-text';
-                    this.renderCaptionColorPanel('text');
-                })
-            );
-            this.panel.appendChild(
-                this.row(appearance.resetPositionLabel, '', () => {
-                    appearance.onResetPosition();
-                    this.close();
+                this.row(this.labels.captionSettings, '', () => {
+                    this.currentPanel = 'captions-settings';
+                    this.renderCaptionSettings();
                 })
             );
         }
     }
 
+    /** Altyazı → Altyazı ayarları: boyut, arka plan / yazı rengi, konumu sıfırla — her satırda o anki değer. */
+    private renderCaptionSettings(): void {
+        this.panel.innerHTML = '';
+        this.panel.appendChild(
+            this.backRow(this.labels.captionSettings, () => {
+                this.currentPanel = 'captions';
+                this.renderCaptions();
+            })
+        );
+        const appearance = this.captionAppearance;
+        if (!appearance) return;
+        const dot = (color: string | undefined): string =>
+            color
+                ? `<span class="hp:inline-block hp:w-3 hp:h-3 hp:rounded-full hp:border hp:border-on-surface/30" style="background:${color}"></span>`
+                : '';
+        this.panel.appendChild(
+            this.row(appearance.sizeLabel, appearance.getSizeOptions().find((o) => o.active)?.label ?? '', () => {
+                this.currentPanel = 'captions-size';
+                this.renderCaptionsSize();
+            })
+        );
+        this.panel.appendChild(
+            this.row(appearance.bgColorLabel, dot(appearance.getBgColorOptions().find((o) => o.active)?.value), () => {
+                this.currentPanel = 'captions-bg';
+                this.renderCaptionColorPanel('bg');
+            })
+        );
+        this.panel.appendChild(
+            this.row(appearance.textColorLabel, dot(appearance.getTextColorOptions().find((o) => o.active)?.value), () => {
+                this.currentPanel = 'captions-text';
+                this.renderCaptionColorPanel('text');
+            })
+        );
+        this.panel.appendChild(
+            this.row(appearance.resetPositionLabel, '', () => {
+                appearance.onResetPosition();
+                this.close();
+            })
+        );
+    }
+
+    private backToCaptionSettings = (): void => {
+        this.currentPanel = 'captions-settings';
+        this.renderCaptionSettings();
+    };
+
     private renderCaptionsSize(): void {
         this.panel.innerHTML = '';
         const appearance = this.captionAppearance;
-        this.panel.appendChild(this.backRow(appearance?.sizeLabel ?? this.labels.captionSize, () => this.renderCaptions()));
+        this.panel.appendChild(this.backRow(appearance?.sizeLabel ?? this.labels.captionSize, this.backToCaptionSettings));
         if (!appearance) return;
         for (const item of appearance.getSizeOptions()) {
             this.panel.appendChild(
@@ -421,7 +463,7 @@ export class SettingsMenu {
         this.panel.innerHTML = '';
         const appearance = this.captionAppearance;
         const title = kind === 'bg' ? (appearance?.bgColorLabel ?? this.labels.captionBgColor) : (appearance?.textColorLabel ?? this.labels.captionTextColor);
-        this.panel.appendChild(this.backRow(title, () => this.renderCaptions()));
+        this.panel.appendChild(this.backRow(title, this.backToCaptionSettings));
         if (!appearance) return;
 
         const grid = document.createElement('div');

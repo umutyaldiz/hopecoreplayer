@@ -109,6 +109,8 @@ export class ControlBar {
     private readonly liveBadge: HTMLButtonElement;
     private readonly liveText: HTMLSpanElement;
     private adMode = false;
+    /** Ses modu: tam ekran / PiP yok — dar düzende tam ekran kutusu da boş kalmasın. */
+    private audioMode = false;
     private readonly callbacks: ControlBarCallbacks;
     private row!: HTMLDivElement;
     private extraButtonAnchor!: HTMLElement;
@@ -270,13 +272,21 @@ export class ControlBar {
         this.el.closest('.video-area')?.toggleAttribute('data-compact', compact);
         if (compact) {
             this.fullscreenSlot.appendChild(this.fullscreenButton);
-            this.fullscreenSlot.style.display = this.adMode ? 'none' : 'flex';
+            this.fullscreenSlot.style.display = this.adMode || this.audioMode ? 'none' : 'flex';
             this.topEl.appendChild(this.rightGroup);
         } else {
             this.rightGroup.appendChild(this.fullscreenButton);
             this.bottomRow.insertBefore(this.rightGroup, this.fullscreenSlot);
             this.fullscreenSlot.style.display = 'none';
         }
+    }
+
+    /** Ses modu: görüntü olmadığı için tam ekran ve PiP butonları gizlenir. */
+    setAudioMode(on: boolean): void {
+        this.audioMode = on;
+        this.fullscreenButton.style.display = on ? 'none' : '';
+        if (this.compact) this.fullscreenSlot.style.display = on || this.adMode ? 'none' : 'flex';
+        this.pipButton.style.display = on || !document.pictureInPictureEnabled ? 'none' : '';
     }
 
     setFullscreenState(isFullscreen: boolean): void {
@@ -335,7 +345,7 @@ export class ControlBar {
         this.renderSkipButtons();
         this.seekBar.el.style.display = display;
         this.row.style.display = display;
-        if (this.compact) this.fullscreenSlot.style.display = active ? 'none' : 'flex';
+        if (this.compact) this.fullscreenSlot.style.display = active || this.audioMode ? 'none' : 'flex';
         // Süre etiketi / canlı rozeti hangisinin görüneceğine renderTime karar veriyor (ad modunda ikisi de gizli).
         this.renderTime();
         if (!active) this.setAdInfo(null);

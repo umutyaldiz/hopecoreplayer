@@ -73,7 +73,7 @@ try {
     ok(ready?.data?.version === VERSION, `ready içinde player sürümü (${ready?.data?.version})`);
     ok(await waitFor(page, 'loadedmetadata'), '"loadedmetadata" geldi');
     const meta = (await messages(page, 'loadedmetadata')).at(-1);
-    ok(meta?.data?.width === 640 && meta?.data?.duration > 15, `video bilgisi ${JSON.stringify(meta?.data)}`);
+    ok(meta?.data?.width === 1280 && meta?.data?.duration > 9.9, `video bilgisi ${JSON.stringify(meta?.data)}`);
     await page.waitForTimeout(400);
     const t0 = await page.evaluate(() => document.getElementById('hope-player').shadowRoot.querySelector('video').currentTime);
     ok(Math.abs(t0 - 4) < 0.5, `hazır olmadan gönderilen seek kuyruktan uygulandı (${t0.toFixed(2)} sn)`);

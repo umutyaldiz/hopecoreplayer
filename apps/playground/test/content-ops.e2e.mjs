@@ -140,11 +140,11 @@ async function testSegments(browser) {
     const defaultTime = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="seek-time"]').hasAttribute('data-visible'));
     ok(!defaultTime, 'segments açıkken varsayılan hover zamanı GÖSTERİLMİYOR (popup zaten zamanı yazıyor)');
     ok(hover.title === 'Bölüm 2', `popup başlığı doğru ("${hover.title}")`);
-    ok(/^0:0[6-9]$/.test(hover.time), `popup imlecin altındaki zamanı gösteriyor (${hover.time})`);
+    ok(/^0:0[4-5]$/.test(hover.time), `popup imlecin altındaki zamanı gösteriyor (${hover.time})`);
     ok(hover.hovered[1] && !hover.hovered[0] && !hover.hovered[2], 'yalnızca üzerine gelinen parça data-hover taşıyor');
     ok(hover.heights[1] > hover.heights[0], `üzerine gelinen parça diğerlerinden kalın (${hover.heights[1]}px > ${hover.heights[0]}px)`);
 
-    // Seek: 2. parçanın ortasına tıklama, boşluklara rağmen ~7.5 sn'ye gitmeli.
+    // Seek: 2. parçanın (3,3–6,6 sn) ortasına tıklama, boşluklara rağmen ~4,95 sn'ye gitmeli.
     await page.mouse.click(midX, midY);
     await page.waitForTimeout(250);
     const after = await page.evaluate(() => {
@@ -152,7 +152,7 @@ async function testSegments(browser) {
         const fills = Array.from(root.querySelectorAll('[part="segment-band"] .hp-chapter-played')).map((f) => f.style.transform);
         return { t: root.querySelector('video').currentTime, fills };
     });
-    ok(Math.abs(after.t - 7.5) < 0.4, `2. parçanın ortasına tıklama ~7.5 sn'ye sardı (${after.t.toFixed(2)})`);
+    ok(Math.abs(after.t - 4.95) < 0.4, `2. parçanın ortasına tıklama ~4.95 sn'ye sardı (${after.t.toFixed(2)})`);
     ok(after.fills[0] === 'scaleX(1)' && after.fills[2] === 'scaleX(0)', `önceki parça dolu, sonraki boş (${after.fills.join(' | ')})`);
 
     // Fare ayrılınca popup gizleniyor.
@@ -218,11 +218,11 @@ async function testSpriteThumbnails(browser) {
         ok(s.time === '0:07', `önizlemenin altında zaman yazıyor (${s.time})`);
         const dup = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="seek-time"]').hasAttribute('data-visible'));
         ok(!dup, 'sprite açıkken varsayılan hover zamanı GÖSTERİLMİYOR (iki kez yazılmıyor)');
-        await spriteHoverAt(page, 15.3);
+        await spriteHoverAt(page, 9.9);
         await page.waitForTimeout(150);
         const edge = await readSprite(page);
         ok(edge.inside, 'seek bar sağ kenarında önizleme taşmıyor');
-        ok(edge.pos === '-480px -270px', `videonun sonu → son kare (${edge.pos})`);
+        ok(edge.pos === '-160px -180px', `videonun sonu → son (10.) kare (${edge.pos})`);
         await page.close();
     }
 
@@ -473,6 +473,71 @@ async function testDubbing(browser) {
     await page.close();
 }
 
+async function testCaptionSettingsSubmenu(browser) {
+    console.log('\n[SUBMENU] Altyazı menüsü: dil listesi + "Altyazı ayarları" (3. seviye: boyut, renkler, konum); geri dönüşler doğru panele');
+    const page = await browser.newPage({ viewport: { width: 900, height: 650 } });
+    try {
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+        await page.evaluate(() => {
+            const el = document.getElementById('player');
+            el.options = { ...el.options, subtitles: [{ src: '/sample.vtt', label: 'Türkçe', srclang: 'tr', default: true }] };
+        });
+        await page.waitForTimeout(500);
+        const rows = () =>
+            page.evaluate(() => [...document.getElementById('player').shadowRoot.querySelector('.hp-chip-panel').querySelectorAll('button')].map((b) => b.textContent.trim()));
+        const click = (re) =>
+            page.evaluate((src) => {
+                const panel = document.getElementById('player').shadowRoot.querySelector('.hp-chip-panel');
+                const btn = [...panel.querySelectorAll('button')].find((b) => new RegExp(src).test(b.textContent));
+                btn?.click();
+                return !!btn;
+            }, re.source);
+        const openSettings = () => page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('button[aria-label="Ayarlar"]').click());
+
+        await openSettings();
+        await page.waitForTimeout(150);
+        await click(/^Altyazı/);
+        await page.waitForTimeout(150);
+        let r = await rows();
+        ok(r.some((t) => t.startsWith('Türkçe')) && r.some((t) => t === 'Altyazı ayarları'), `altyazı paneli: ${r.join(' | ')}`);
+        ok(!r.some((t) => /Yazı Boyutu|Arka Plan|Yazı Rengi|Konumu/.test(t)), 'görünüm ayarları dil listesine karışmıyor');
+
+        await click(/^Altyazı ayarları$/);
+        await page.waitForTimeout(150);
+        r = await rows();
+        ok(r[0] === 'Altyazı ayarları' && r.length === 5, `3. seviye: ${r.join(' | ')}`);
+        ok(r.some((t) => t.startsWith('Yazı Boyutu') && t.endsWith('Normal')), 'boyut satırı o anki değeri gösteriyor (Normal)');
+        const dots = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-chip-panel').querySelectorAll('span.hp\\:rounded-full').length);
+        ok(dots === 2, `renk satırlarında o anki renk noktası (${dots})`);
+
+        await click(/^Yazı Boyutu/);
+        await page.waitForTimeout(150);
+        r = await rows();
+        ok(r[0] === 'Yazı Boyutu' && r.includes('Büyük'), `boyut paneli: ${r.join(' | ')}`);
+        await click(/^Yazı Boyutu$/); // geri
+        await page.waitForTimeout(150);
+        r = await rows();
+        ok(r[0] === 'Altyazı ayarları', `boyuttan geri → Altyazı ayarları (${r[0]})`);
+        await click(/^Altyazı ayarları$/); // geri
+        await page.waitForTimeout(150);
+        r = await rows();
+        ok(r[0] === 'Altyazı' && r.includes('Altyazı ayarları'), `ayarlardan geri → Altyazı (${r[0]})`);
+
+        // Altyazı kapalıyken "Altyazı ayarları" yok.
+        await click(/^Kapalı/);
+        await page.waitForTimeout(150);
+        await openSettings();
+        await page.waitForTimeout(150);
+        await click(/^Altyazı/);
+        await page.waitForTimeout(150);
+        r = await rows();
+        ok(!r.includes('Altyazı ayarları'), `altyazı kapalıyken ayarlar satırı gizli (${r.join(' | ')})`);
+    } finally {
+        await page.close();
+    }
+}
+
 async function testSubtitlesWithoutTrackElements(browser) {
     console.log('\n[SUB] Altyazılar <track> elementi olmadan yükleniyor (iOS out-of-band iz kod 4 hatası), kaynak değişince havuz yeniden kullanılıyor');
     const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
@@ -503,21 +568,21 @@ async function testSubtitlesWithoutTrackElements(browser) {
         await page.waitForTimeout(800);
         let st = await state();
         ok(st.trackEls === 0, `video'da <track> elementi yok (${st.trackEls})`);
-        ok(JSON.stringify(st.tracks) === JSON.stringify(['tr:hidden:5', 'en:disabled:5']), `cue'lar fetch ile yüklendi ${JSON.stringify(st.tracks)}`);
+        ok(JSON.stringify(st.tracks) === JSON.stringify(['tr:hidden:9', 'en:disabled:9']), `cue'lar fetch ile yüklendi ${JSON.stringify(st.tracks)}`);
 
         await page.evaluate(async () => {
             const v = document.getElementById('player').shadowRoot.querySelector('video');
-            v.currentTime = 4; // ilk cue 3. saniyede başlıyor
+            v.currentTime = 4; // 3,42–4,58 sn: kedi sahnesi
             await new Promise((r) => setTimeout(r, 400));
         });
         const caption = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-caption-bubble')?.textContent?.trim());
-        ok(/volkanik/.test(caption ?? ''), `altyazı ekranda (${caption})`);
+        ok(/kedisi/.test(caption ?? ''), `altyazı ekranda (${caption})`);
 
         // Aynı izlerle tekrar kur → havuz yeniden kullanılır, iz sayısı artmaz.
         await page.evaluate((subtitles) => { document.getElementById('player').options = { src: '/sample.mp4', muted: true, subtitles }; }, subs);
         await page.waitForTimeout(800);
         st = await state();
-        ok(st.tracks.length === 2 && JSON.stringify(st.tracks) === JSON.stringify(['tr:hidden:5', 'en:disabled:5']), `yeniden kurulumda iz çoğalmadı, cue'lar çiftlenmedi ${JSON.stringify(st.tracks)}`);
+        ok(st.tracks.length === 2 && JSON.stringify(st.tracks) === JSON.stringify(['tr:hidden:9', 'en:disabled:9']), `yeniden kurulumda iz çoğalmadı, cue'lar çiftlenmedi ${JSON.stringify(st.tracks)}`);
 
         // Altyazısız kaynağa geçiş → izler kapalı ve boş.
         await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4', muted: true }; });
@@ -736,6 +801,7 @@ async function testCaptionFlickNoBounce(browser) {
         await testQrResume(browser);
         await testSubtitlesWithoutTrackElements(browser);
         await testCaptionFlickNoBounce(browser);
+        await testCaptionSettingsSubmenu(browser);
     } finally {
         await browser.close();
     }

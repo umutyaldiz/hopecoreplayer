@@ -468,7 +468,7 @@ async function testStory(browser) {
 }
 
 async function testTimeDisplayToggle(browser) {
-    console.log('\n[12] Zaman göstergesi toggle: tıklandığında geçen süre (0:05 / 0:15) ile kalan süre (-0:10 / 0:15) arasında geçiş yapıyor mu?');
+    console.log('\n[12] Zaman göstergesi toggle: tıklandığında geçen süre (0:05 / 0:10) ile kalan süre (-0:05 / 0:10) arasında geçiş yapıyor mu?');
     const page = await openFeature(browser, 'none');
     await page.evaluate(() => {
         const video = document.getElementById('player').shadowRoot.querySelector('video');
@@ -484,9 +484,9 @@ async function testTimeDisplayToggle(browser) {
         });
 
     const initialText = await getTimeText();
-    ok(initialText === '0:05 / 0:15', `başlangıçta geçen süre gösteriliyor: "${initialText}"`);
+    ok(initialText === '0:05 / 0:10', `başlangıçta geçen süre gösteriliyor: "${initialText}"`);
 
-    // Tıkla -> kalan süreye (-0:10 / 0:15) geçmeli
+    // Tıkla -> kalan süreye (-0:05 / 0:10) geçmeli
     await page.evaluate(() => {
         const root = document.getElementById('player').shadowRoot;
         const timeEl = root.querySelector('[part="time-display"]');
@@ -494,9 +494,9 @@ async function testTimeDisplayToggle(browser) {
     });
     await page.waitForTimeout(50);
     const remainingText = await getTimeText();
-    ok(remainingText === '-0:10 / 0:15', `tıklanınca kalan süreye geçti: "${remainingText}"`);
+    ok(remainingText === '-0:05 / 0:10', `tıklanınca kalan süreye geçti: "${remainingText}"`);
 
-    // Tekrar tıkla -> geçen süreye (0:05 / 0:15) dönmeli
+    // Tekrar tıkla -> geçen süreye (0:05 / 0:10) dönmeli
     await page.evaluate(() => {
         const root = document.getElementById('player').shadowRoot;
         const timeEl = root.querySelector('[part="time-display"]');
@@ -504,7 +504,7 @@ async function testTimeDisplayToggle(browser) {
     });
     await page.waitForTimeout(50);
     const backText = await getTimeText();
-    ok(backText === '0:05 / 0:15', `tekrar tıklanınca geçen süreye döndü: "${backText}"`);
+    ok(backText === '0:05 / 0:10', `tekrar tıklanınca geçen süreye döndü: "${backText}"`);
 
     // options / showRemainingTime API testi
     await page.evaluate(() => {
@@ -513,13 +513,13 @@ async function testTimeDisplayToggle(browser) {
     });
     await page.waitForTimeout(50);
     const apiText = await getTimeText();
-    ok(apiText === '-0:10 / 0:15', `player.showRemainingTime = true ile kalan süre gösteriliyor: "${apiText}"`);
+    ok(apiText === '-0:05 / 0:10', `player.showRemainingTime = true ile kalan süre gösteriliyor: "${apiText}"`);
 
-    // Tutarlılık: 5.9 sn'de de geçen (0:05) + kalan toplamı görünen süreyi (0:15) tutmalı.
+    // Tutarlılık: 5.9 sn'de de geçen (0:05) + kalan toplamı görünen süreyi (0:10) tutmalı.
     await page.evaluate(() => { document.getElementById('player').shadowRoot.querySelector('video').currentTime = 5.9; });
     await page.waitForTimeout(150);
     const at59 = await getTimeText();
-    ok(at59 === '-0:10 / 0:15', `5.9 sn'de kalan "-0:10" (0:05 + 0:10 = 0:15 tutarlı): "${at59}"`);
+    ok(at59 === '-0:05 / 0:10', `5.9 sn'de kalan "-0:05" (0:05 + 0:05 = 0:10 tutarlı): "${at59}"`);
 
     // Klavye: süre butonu odaktayken Space butonu çalıştırmalı (oynat/durdur DEĞİL).
     await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="time-display"]').focus());
@@ -527,7 +527,7 @@ async function testTimeDisplayToggle(browser) {
     await page.keyboard.press('Space');
     await page.waitForTimeout(150);
     const afterSpace = await page.evaluate(() => ({ text: document.getElementById('player').shadowRoot.querySelector('[part="time-display"]').textContent.trim(), paused: document.getElementById('player').shadowRoot.querySelector('video').paused }));
-    ok(afterSpace.text === '0:05 / 0:15' && afterSpace.paused === pausedBefore, `odakta Space süre modunu değiştirdi, videoyu oynatmadı ("${afterSpace.text}", paused=${afterSpace.paused})`);
+    ok(afterSpace.text === '0:05 / 0:10' && afterSpace.paused === pausedBefore, `odakta Space süre modunu değiştirdi, videoyu oynatmadı ("${afterSpace.text}", paused=${afterSpace.paused})`);
 
     // Kullanıcının seçimi başka bir option güncellemesiyle sıfırlanmamalı.
     await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4', showRemainingTime: false }; });
@@ -575,14 +575,16 @@ async function testSkipButtons(browser) {
         await setOptions({ skipButtons: true });
         b = await buttons();
         ok(b.back?.num === '10' && b.forward?.num === '10' && b.back.label === '10 saniye geri' && b.forward.label === '10 saniye ileri', `skipButtons: true → 10 sn geri/ileri ${JSON.stringify(b)}`);
+        // Örnek video 10 sn — sarma miktarını 3 sn'ye indirip davranışı ölç.
+        await setOptions({ skipButtons: { back: 3, forward: 3 } });
         await seekTo(2);
         await click('skip-forward-button');
-        ok((await time()) === 12, `ileri: 2 → ${await time()}`);
+        ok((await time()) === 5, `ileri: 2 → ${await time()}`);
         await click('skip-back-button');
-        ok((await time()) === 2, `geri: 12 → ${await time()}`);
+        ok((await time()) === 2, `geri: 5 → ${await time()}`);
         await click('skip-back-button');
         ok((await time()) === 0, `başta geri sarma 0'ın altına inmiyor (${await time()})`);
-        await seekTo(10);
+        await seekTo(9);
         await click('skip-forward-button');
         const dur = await page.evaluate(() => Math.round(document.getElementById('player').shadowRoot.querySelector('video').duration * 10) / 10);
         ok((await time()) === dur, `sonda ileri sarma süreyi aşmıyor (${await time()} / ${dur})`);
@@ -709,7 +711,7 @@ async function testContextMenu(browser) {
             const p = document.getElementById('player').shadowRoot.querySelector('[part="stats-panel"]');
             return Array.from(p.querySelectorAll('dt')).map((dt) => `${dt.textContent}=${dt.nextElementSibling.textContent}`);
         });
-        ok((await menu()).open === false && stats.some((s) => s === 'Motor=native') && stats.some((s) => s === `Sürüm=HopeCorePlayer ${version}`) && stats.some((s) => s.startsWith('Video / ekran=640×360')), `istatistik paneli açıldı, menü kapandı ${JSON.stringify(stats.slice(0, 3))}`);
+        ok((await menu()).open === false && stats.some((s) => s === 'Motor=native') && stats.some((s) => s === `Sürüm=HopeCorePlayer ${version}`) && stats.some((s) => s.startsWith('Video / ekran=1280×720')), `istatistik paneli açıldı, menü kapandı ${JSON.stringify(stats.slice(0, 3))}`);
         await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-stats-close').click());
         ok(!(await page.evaluate(() => !!document.getElementById('player').shadowRoot.querySelector('[part="stats-panel"]'))), 'kapat butonu paneli kaldırdı');
 
@@ -724,6 +726,51 @@ async function testContextMenu(browser) {
     } finally {
         await page.close();
     }
+}
+
+async function testThumbAfterScaledMount(browser) {
+    console.log('\n[THUMB] Player ölçekli (transform) iken boyutlanınca seek bar noktası dolu kısmın gerisinde kalmıyor; ölçekliyken hover zamanı doğru');
+    const page = await openFeature(browser, 'default');
+    const geom = () =>
+        page.evaluate(() => {
+            const root = document.getElementById('player').shadowRoot;
+            const thumb = root.querySelector('[part="seek-thumb"]').getBoundingClientRect();
+            const played = root.querySelector('[part="seek-bar"] .hp\\:bg-accent').getBoundingClientRect();
+            return { thumbCenter: thumb.left + thumb.width / 2, playedRight: played.right };
+        });
+    await page.evaluate(() => new Promise((r) => {
+        const v = document.getElementById('player').shadowRoot.querySelector('video');
+        v.addEventListener('seeked', r, { once: true });
+        v.currentTime = 8;
+    }));
+    // Giriş animasyonu benzetimi: ölçekliyken genişlik değişsin (ResizeObserver ölçsün), sonra ölçek kalksın.
+    await page.evaluate(() => {
+        const el = document.getElementById('player');
+        el.style.transformOrigin = 'top left';
+        el.style.transform = 'scale(0.9)';
+        el.style.width = '700px';
+    });
+    await page.waitForTimeout(200);
+    const scaled = await geom();
+    ok(Math.abs(scaled.thumbCenter - scaled.playedRight) < 1.5, `ölçekliyken nokta dolu kısmın ucunda (fark ${(scaled.thumbCenter - scaled.playedRight).toFixed(1)} px)`);
+
+    // Ölçekliyken hover: dolu kısmın ucundaki zaman ≈ 8 sn
+    await page.mouse.move(scaled.playedRight, await page.evaluate(() => {
+        const r = document.getElementById('player').shadowRoot.querySelector('[part="seek-bar"]').getBoundingClientRect();
+        return r.top + r.height / 2;
+    }));
+    await page.waitForTimeout(150);
+    const hover = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="seek-time"]').textContent);
+    ok(hover === '0:08' || hover === '0:07', `ölçekliyken hover zamanı doğru (${hover})`);
+    await page.mouse.move(5, 5);
+
+    await page.evaluate(() => {
+        document.getElementById('player').style.transform = '';
+    });
+    await page.waitForTimeout(200);
+    const after = await geom();
+    ok(Math.abs(after.thumbCenter - after.playedRight) < 1.5, `ölçek kalkınca da nokta dolu kısmın ucunda (fark ${(after.thumbCenter - after.playedRight).toFixed(1)} px)`);
+    await page.close();
 }
 
 (async () => {
@@ -744,6 +791,7 @@ async function testContextMenu(browser) {
         await testSkipButtons(browser);
         await testSeekFeedback(browser);
         await testContextMenu(browser);
+        await testThumbAfterScaledMount(browser);
     } finally {
         await browser.close();
     }

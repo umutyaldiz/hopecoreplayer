@@ -104,6 +104,19 @@ const PLAYLIST_ITEMS: import('@hopeplayer/core').PlayableItem[] = [
 if (player) {
     if (feature === 'playlist') {
         player.options = { muted: true, playlist: { items: PLAYLIST_ITEMS, startMode: 'immediate', loop: true } };
+    } else if (feature === 'audio') {
+        // Ses modu: ?vinyl=center|left|right|off
+        const vinyl = new URLSearchParams(location.search).get('vinyl');
+        player.options = {
+            src: '/sample-audio.mp3',
+            audio: {
+                cover: '/sample-cover.jpg',
+                title: 'Vinyl Sessions',
+                artist: 'HopeCore',
+                album: 'Side A',
+                vinyl: vinyl === 'off' ? false : { position: (vinyl as 'center' | 'left' | 'right' | null) ?? 'right' },
+            },
+        };
     } else if (feature === 'story') {
         player.options = {
             muted: true,
@@ -153,9 +166,9 @@ if (player) {
             segments:
                 feature === 'segments'
                     ? [
-                          { start: 0, end: 5, text: 'Bölüm 1' },
-                          { start: 5, end: 10, text: 'Bölüm 2' },
-                          { start: 10, end: 15, text: 'Bölüm 3' },
+                          { start: 0, end: 3.3, text: 'Bölüm 1' },
+                          { start: 3.3, end: 6.6, text: 'Bölüm 2' },
+                          { start: 6.6, end: 9.9, text: 'Bölüm 3' },
                       ]
                     : undefined,
             spriteThumbnails:

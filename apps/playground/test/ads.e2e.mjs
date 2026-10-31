@@ -1371,6 +1371,62 @@ async function testAdResize(browser) {
     });
 }
 
+async function testAudioAdPoster(browser) {
+    console.log('\n[18] Ses reklamı: IMA yüzeyi şeffaf (altta kapak + plak); adPoster verilirse IMA görseli AdDisplayContainer\'dan önce ayarlanıyor');
+    await withPage(browser, 'preroll', async (page) => {
+        const make = (id, audio) =>
+            page.evaluate(([id, audio]) => {
+                window.__mockIma.adsLoaderInstances.length = 0;
+                window.__adsLog.length = 0;
+                const el = document.createElement('hope-player');
+                el.id = id;
+                document.body.appendChild(el);
+                el.options = {
+                    src: '/sample-audio.mp3',
+                    audio,
+                    ads: { adTagPreroll: 'https://example.com/vast/preroll?ad_type=audio_video', requestWhen: 'load' },
+                };
+            }, [id, audio]);
+        const flags = () => page.evaluate(() => window.__adsLog.find((e) => e.ev === 'setFeatureFlags')?.flags ?? null);
+
+        await make('audio-a', { cover: '/sample-cover.jpg' });
+        await page.waitForFunction(() => window.__mockIma.adsLoaderInstances.length > 0, null, { timeout: 5000 }).catch(() => {});
+        ok((await flags()) === null, 'adPoster yokken IMA görseli istenmedi (player sahnesi görünecek)');
+
+        // Ses reklamı başlayınca katman işaretlenir, bitince kalkar.
+        const layerFlag = () => page.evaluate(() => document.getElementById('audio-a').shadowRoot.querySelector('[part="ad-layer"]').hasAttribute('data-audio-ad'));
+        await page.evaluate(() => {
+            const loader = window.__mockIma.adsLoaderInstances[0];
+            const mgr = new window.google.ima.AdsManager();
+            window.__mockIma.adsManagerInstances.push(mgr);
+            loader.dispatch('adsManagerLoaded', new window.google.ima.AdsManagerLoadedEvent(mgr));
+            document.getElementById('audio-a').play();
+            mgr.dispatch('contentPauseRequested', new window.google.ima.AdEvent('contentPauseRequested'));
+            const e = new window.google.ima.AdEvent('started');
+            e.getAd = () => ({ isLinear: () => true, getContentType: () => 'audio/mpeg', getAdPodInfo: () => ({ getAdPosition: () => 1, getTotalAds: () => 1, getPodIndex: () => 0 }) });
+            mgr.dispatch('started', e);
+        });
+        const during = await layerFlag();
+        const transparent = await page.evaluate(() => getComputedStyle(document.getElementById('audio-a').shadowRoot.querySelector('[part="ad-layer"]')).backgroundColor);
+        ok(during && /rgba\(0, 0, 0, 0\)|transparent/.test(transparent), `ses reklamında katman şeffaf (${during}, ${transparent})`);
+        await page.evaluate(() => {
+            const mgr = window.__mockIma.adsManagerInstances.at(-1);
+            mgr.dispatch('contentResumeRequested', new window.google.ima.AdEvent('contentResumeRequested'));
+        });
+        ok(!(await layerFlag()), 'reklam bitince işaret kalktı');
+
+        await make('audio-b', { cover: '/sample-cover.jpg', adPoster: '/ad-poster.png' });
+        await page.waitForFunction(() => window.__mockIma.adsLoaderInstances.length > 0, null, { timeout: 5000 }).catch(() => {});
+        const f = await flags();
+        ok(f?.audioPosterImageEnabled === true && /^https?:\/\/.+\/ad-poster\.png$/.test(f.audioPosterImageDefaultUrl ?? ''), `adPoster → IMA görseli ${JSON.stringify(f)}`);
+        const order = await page.evaluate(() => {
+            const log = window.__adsLog.map((e) => e.ev);
+            return log.indexOf('setFeatureFlags') > -1 && log.indexOf('setFeatureFlags') < log.indexOf('requestAds');
+        });
+        ok(order, 'bayrak reklam isteğinden önce ayarlandı');
+    });
+}
+
 async function testContinuousPlaybackSignal(browser) {
     console.log('\n[14] Sürekli oynatma bildirimi: tekil videoda false, otomatik ilerleyen playlist\'te true');
     await withPage(browser, 'preroll', async (page) => {
@@ -1435,6 +1491,7 @@ async function testContinuousPlaybackSignal(browser) {
         await testIosNativeFullscreen(browser);
         await testIosFullscreenDefer(browser);
         await testAdResize(browser);
+        await testAudioAdPoster(browser);
     } finally {
         await browser.close();
     }

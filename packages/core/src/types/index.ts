@@ -173,6 +173,55 @@ export interface GestureOptions {
     holdDelayMs?: number;
 }
 
+/** Ses modundaki plak. */
+export interface VinylOptions {
+    /**
+     * Plağın yeri. 'right' (varsayılan): kapaktan sağa doğru yarısı çıkmış plak. 'left': sola doğru.
+     * 'center': kapak gösterilmez, plak ortada; kapak plağın etiketinde.
+     */
+    position?: 'center' | 'left' | 'right';
+    /** Plak (ve kapak) yüksekliği, player yüksekliğine oranla — 0.3 ile 1 arası. Varsayılan 0.78. */
+    size?: number;
+    /**
+     * Dakikadaki devir: 33.3 (varsayılan), 45, 78. Plak çalarken bu hızda döner; elle çevrilen her tur
+     * (60 / rpm) saniye ileri/geri sarar — 33⅓'te bir tur ≈ 1,8 sn, gerçek bir plak gibi.
+     */
+    rpm?: number;
+    /** Plağı tutup çevirerek ileri/geri sarma (fare ve dokunma). Varsayılan true. */
+    scratch?: boolean;
+    /**
+     * Scratch sırasında gerçek plak sesi (ileri / geri, hıza göre) — Web Audio ile. Varsayılan false.
+     * Ses dosyası bir kez indirilip çözülür; 15 dakikadan uzun dosyalarda, HLS'te, CORS izni olmayan başka sunucudaki
+     * dosyalarda ya da AudioWorklet olmayan tarayıcıda scratch sessiz çalışır. iPhone sessiz modda bu sesi kısar.
+     */
+    scratchSound?: boolean;
+    /** Çalarken plağın üzerine inen pikap kolu. Varsayılan true. */
+    tonearm?: boolean;
+}
+
+/** Ses modu: kapaklı, yalnızca ses oynatan player. */
+export interface AudioOptions {
+    /** Kapak görseli. Verilmezse `poster` kullanılır; o da yoksa temanın renkleriyle düz bir zemin. */
+    cover?: string;
+    title?: string;
+    artist?: string;
+    album?: string;
+    /** Plak. `false`: yalnızca kapak. Varsayılan açık. */
+    vinyl?: boolean | VinylOptions;
+    /**
+     * İşletim sisteminin medya kontrolleri (kilit ekranı, bildirim, klavye medya tuşları): başlık, sanatçı, kapak ve
+     * oynat / duraklat / ileri-geri sar. Varsayılan true.
+     */
+    mediaSession?: boolean;
+    /**
+     * Ses reklamı sırasında gösterilecek görsel. Verilmezse reklam boyunca player'ın kendi kapak / plak sahnesi görünür.
+     * Verilirse IMA bunu (reklamın kendi görseli yoksa) çizer — IMA görseli ölçeklemez: genişliği player'dan,
+     * yüksekliği player'dan 75 px az olmalı. Ses reklamı için reklam tag'inde `ad_type=audio` ya da
+     * `ad_type=audio_video` (ve `vpmute=0`) olmalıdır.
+     */
+    adPoster?: string;
+}
+
 export interface LoopSectionOptions {
     /** "Son N saniye" döngüsü için varsayılan uzunluk. */
     seconds?: number;
@@ -499,6 +548,11 @@ export interface HopePlayerOptions {
     /** Birden fazla kalite/kaynak — doluysa kalite menüsü gösterilir. */
     sources?: HopeSourceOption[];
     poster?: string;
+    /**
+     * Ses modu: video alanında kapak, plak ve başlık; tam ekran / PiP butonları gizlenir, kontroller hep görünür kalır.
+     * `src` bir ses dosyası (mp3, m4a, aac, ogg, wav, flac) ya da yalnızca ses içeren bir HLS olabilir.
+     */
+    audio?: boolean | AudioOptions;
     autoplay?: boolean;
     muted?: boolean;
     loop?: boolean;
@@ -529,6 +583,12 @@ export interface HopePlayerOptions {
     preload?: 'none' | 'metadata' | 'auto';
     /** Kontroller gizliyken videonun en altında kenardan kenara 1px ilerleme çizgisi. Varsayılan false. */
     miniProgress?: boolean;
+    /**
+     * Player'ın en-boy oranı: '16 / 9' (varsayılan), '4 / 3', '21 / 9', '9 / 16', '1 / 1' — '21:9' yazımı ya da sayı
+     * (2.35) da olur. Video farklı orandaysa siyah bantlarla sığdırılır. Tam ekran ve story kendi oranını kullanır.
+     * CSS'ten de verilebilir: `hope-player { --hp-aspect-ratio: 21 / 9; }`.
+     */
+    aspectRatio?: string | number;
     /** Süre göstergesinde kalan süreyi (-0:10 / 0:15) gösterme. Varsayılan false (geçen süre). */
     showRemainingTime?: boolean;
     /** Oynat butonunun yanında geri/ileri sarma butonları. `true` = 10 sn geri + 10 sn ileri. Varsayılan kapalı. */

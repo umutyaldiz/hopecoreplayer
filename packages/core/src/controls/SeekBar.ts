@@ -113,12 +113,12 @@ export class SeekBar {
         if (!video.paused) this.startLoop();
 
         this.resizeObserver = new ResizeObserver(() => {
-            this.trackWidth = this.el.getBoundingClientRect().width;
+            this.trackWidth = this.layoutWidth();
             this.measureChapters();
             this.render();
         });
         this.resizeObserver.observe(this.el);
-        this.trackWidth = this.el.getBoundingClientRect().width;
+        this.trackWidth = this.layoutWidth();
     }
 
     /** Canlıda hover zamanını başka bir bileşen gösteriyor mu (live-wall-clock tooltip'i) — üst üste binmesin. */
@@ -167,9 +167,8 @@ export class SeekBar {
         this.hoverTimeEl.textContent = tl.live ? `-${formatTime(tl.end - time)}` : formatTime(time);
         this.hoverTimeEl.setAttribute('data-visible', '');
         // İmleci ortala, seek bar kenarlarından taşma.
-        const rect = this.el.getBoundingClientRect();
         const w = this.hoverTimeEl.offsetWidth;
-        const x = Math.min(Math.max(e.clientX - rect.left - w / 2, 0), Math.max(rect.width - w, 0));
+        const x = Math.min(Math.max(this.layoutXAtClientX(e.clientX) - w / 2, 0), Math.max(this.trackWidth - w, 0));
         this.hoverTimeEl.style.transform = `translateX(${x}px)`;
     };
 
@@ -184,9 +183,8 @@ export class SeekBar {
 
     /** Ekran x koordinatını 0–1 zaman oranına çevirir — chapter modunda parça boşluklarını hesaba katar (segments plugin'inin hover popup'ı da bunu kullanıyor). */
     ratioAtClientX(clientX: number): number {
-        const rect = this.el.getBoundingClientRect();
-        const x = clientX - rect.left;
-        if (!this.chapters.length) return Math.min(1, Math.max(0, x / rect.width));
+        const x = this.layoutXAtClientX(clientX);
+        if (!this.chapters.length) return this.trackWidth > 0 ? Math.min(1, Math.max(0, x / this.trackWidth)) : 0;
 
         for (let i = 0; i < this.chapters.length; i++) {
             const c = this.chapters[i]!;
@@ -250,13 +248,30 @@ export class SeekBar {
         this.render();
     }
 
+    /**
+     * Seek bar'ın DÜZEN genişliği (px). getBoundingClientRect() ata elementlerin CSS transform'undan etkilenir: player
+     * ölçekli bir giriş animasyonuyla (ör. scale(0.985)) gösterilirken ölçülürse genişlik küçük kalıyor, animasyon
+     * bitince düzen boyutu değişmediği için ResizeObserver tekrar tetiklenmiyor ve thumb dolu kısmın gerisinde kalıyordu.
+     */
+    /** Ekran x koordinatının seek bar içindeki DÜZEN px'i (ata transform'u ölçekliyorsa ona göre düzeltilmiş). */
+    private layoutXAtClientX(clientX: number): number {
+        const rect = this.el.getBoundingClientRect();
+        return rect.width > 0 ? ((clientX - rect.left) * this.trackWidth) / rect.width : 0;
+    }
+
+    private layoutWidth(): number {
+        return parseFloat(getComputedStyle(this.el).width) || this.el.offsetWidth;
+    }
+
     private measureChapters(): void {
         if (!this.chapters.length) return;
-        const base = this.el.getBoundingClientRect().left;
+        const bar = this.el.getBoundingClientRect();
+        // Ekran px'ini düzen px'ine çevir (ata transform'u varsa) — thumb `translate` düzen px'inde konumlanıyor.
+        const k = bar.width > 0 ? this.trackWidth / bar.width : 1;
         for (const c of this.chapters) {
             const r = c.el.getBoundingClientRect();
-            c.left = r.left - base;
-            c.width = r.width;
+            c.left = (r.left - bar.left) * k;
+            c.width = r.width * k;
         }
     }
 

@@ -71,6 +71,8 @@ declare namespace google.ima {
         isLinear?(): boolean;
         /** Seçilen overlay (non-linear) creative'in yüksekliği (px). */
         getHeight?(): number;
+        /** Seçilen creative'in MIME tipi (ör. 'video/mp4', 'audio/mpeg'). */
+        getContentType?(): string;
     }
 
     class AdEvent {
@@ -110,5 +112,7 @@ declare namespace google.ima {
         setPrivacySettings(settings: { nonPersonalizedAds?: boolean }): void;
         /** VAST'ın takip edeceği maksimum WRAPPER (redirect) sayısı — SDK varsayılanı 4. */
         setNumRedirects(numRedirects: number): void;
+        /** Deneysel IMA özellikleri — ör. ses reklamı görseli (audioPosterImageEnabled / audioPosterImageDefaultUrl). */
+        setFeatureFlags?(flags: Record<string, unknown>): void;
     };
 }

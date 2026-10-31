@@ -29,6 +29,8 @@ export interface AdsPlayerContext {
     isContinuousPlayback?(): boolean;
     /** iPhone native tam ekranı / PiP'te reklam görünmez — reklam arasında bu yüzeylerden çıkılır (bkz. AdSurfaceGuard). */
     surface?: AdSurfaceGuardContext;
+    /** Ses reklamında IMA'nın göstereceği görsel (options.audio.adPoster) — mutlak URL. Yoksa player'ın kendi sahnesi görünür. */
+    audioPoster?: string;
 }
 
 /** Bir IMA hatasının ayrıntıları — hp:aderror olayı ve hata ayıklama kaydı için. */
@@ -168,6 +170,14 @@ export class AdsController {
         // consentAware (TCF/USP) — options.consentAware===true gerektirir, non-blocking.
         initConsentAware(this.options, this.ima);
 
+        // Ses reklamı görseli — IMA bunu AdDisplayContainer oluşturulmadan ÖNCE istiyor.
+        if (this.ctx.audioPoster) {
+            try {
+                ima.settings.setFeatureFlags?.({ audioPosterImageEnabled: true, audioPosterImageDefaultUrl: this.ctx.audioPoster });
+            } catch {
+                /* eski SDK sürümünde olmayabilir */
+            }
+        }
         this.adDisplayContainer = new ima.AdDisplayContainer(this.ctx.adLayerEl, this.ctx.videoEl);
         if (typeof ResizeObserver !== 'undefined') {
             this.resizeObserver = new ResizeObserver(this.scheduleResize);
@@ -792,6 +802,15 @@ export class AdsController {
         this.stopAdProgress();
         this.reportAdProgress();
         this.progressTimer = setInterval(this.reportAdProgress, AD_PROGRESS_INTERVAL_MS);
+        // Ses reklamı: IMA'nın (görüntüsüz, siyah) video yüzeyi şeffaf olur, altındaki player görünür
+        // (ses modunda kapak + plak). IMA'nın kendi görseli (audioPoster) verildiyse o zaten üstte çizilir.
+        let contentType = '';
+        try {
+            contentType = ad.getContentType?.() ?? '';
+        } catch {
+            /* eski SDK */
+        }
+        this.ctx.adLayerEl.toggleAttribute('data-audio-ad', contentType.startsWith('audio/'));
     };
 
     private readonly reportAdProgress = (): void => {
@@ -862,6 +881,7 @@ export class AdsController {
     }
 
     private hideAdLayer(): void {
+        this.ctx.adLayerEl.removeAttribute('data-audio-ad');
         // Overlay reklam hâlâ ekrandaysa (ör. genişleyen VPAID overlay'i kapandı) katman açık kalır.
         if (!this.nonLinearActive) {
             this.ctx.adLayerEl.classList.add('hp:hidden');

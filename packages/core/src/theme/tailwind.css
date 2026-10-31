@@ -376,7 +376,8 @@ button.hp-chip:active {
 .video-area {
     position: relative;
     width: 100%;
-    aspect-ratio: 16 / 9;
+    /* options.aspectRatio ya da sayfa CSS'i: hope-player { --hp-aspect-ratio: 21 / 9; } */
+    aspect-ratio: var(--hp-aspect-ratio, 16 / 9);
     overflow: hidden;
     border-radius: var(--hp-radius);
     background: var(--hp-color-surface, #0a0a0a);
@@ -1262,7 +1263,7 @@ button.hp-context-menu-item:focus-visible {
 :host([data-sticky]) {
     position: fixed !important;
     width: min(360px, 92vw) !important;
-    aspect-ratio: 16 / 9 !important;
+    aspect-ratio: var(--hp-aspect-ratio, 16 / 9) !important;
     z-index: 2147483000;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
     border-radius: var(--hp-radius);
@@ -1511,4 +1512,240 @@ button.hp-context-menu-item:focus-visible {
         opacity: 0;
         transform: translateY(6px);
     }
+}
+
+/* ── Ses modu (options.audio): kapak, plak, pikap kolu ─────────────────────── */
+:host([data-audio]) .hp-center-play {
+    display: none;
+}
+.hp-audio {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    container-type: size;
+    /* Sayfanın metin hizalaması (ör. ortalı bir hero) shadow DOM'a miras geçmesin. */
+    text-align: left;
+    overflow: hidden;
+    pointer-events: none;
+    color: #fff;
+    background:
+        radial-gradient(80% 90% at 20% 10%, color-mix(in srgb, var(--hp-color-accent, #e5484d) 38%, transparent), transparent 70%),
+        linear-gradient(160deg, #1d1d24, #0c0c10);
+}
+.hp-audio-backdrop {
+    position: absolute;
+    inset: -8%;
+}
+.hp-audio-backdrop img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: blur(28px) saturate(1.3) brightness(0.55);
+    transform: scale(1.08);
+}
+.hp-audio:not([data-cover]) .hp-audio-backdrop,
+.hp-audio:not([data-cover]) .hp-audio-sleeve img {
+    display: none;
+}
+.hp-audio-meta {
+    position: absolute;
+    top: 12px;
+    left: 14px;
+    right: 64px;
+    z-index: 3;
+    display: none;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+    line-height: 1.25;
+}
+.hp-audio[data-meta] .hp-audio-meta {
+    display: block;
+}
+.hp-audio-title {
+    font-weight: 700;
+    font-size: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.hp-audio-artist {
+    margin-top: 2px;
+    font-size: 12.5px;
+    opacity: 0.8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Kontrol çubuğunun üstünde kalan alan — plak bu alanda ortalanır ve onunla orantılı büyür. */
+.hp-audio-area {
+    position: absolute;
+    inset: 0 0 var(--hp-audio-bottom-space, 66px) 0;
+    container-type: size;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.hp-audio[data-meta] .hp-audio-area {
+    top: 44px;
+}
+.hp-audio-deck {
+    --hp-deck-h: min(calc(var(--hp-vinyl-size, 0.78) * 100cqh), 62cqw);
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: var(--hp-deck-h);
+}
+.hp-audio[data-position='center'] .hp-audio-deck {
+    --hp-deck-h: min(calc(var(--hp-vinyl-size, 0.78) * 100cqh), 90cqw);
+}
+.hp-audio[data-position='none'] .hp-audio-deck {
+    --hp-deck-h: min(calc(var(--hp-vinyl-size, 0.78) * 100cqh), 90cqw);
+}
+.hp-audio[data-position='left'] .hp-audio-deck {
+    flex-direction: row-reverse;
+}
+.hp-audio-sleeve {
+    position: relative;
+    z-index: 2;
+    flex: none;
+    height: 100%;
+    aspect-ratio: 1;
+    border-radius: 6px;
+    overflow: hidden;
+    background:
+        radial-gradient(70% 70% at 30% 25%, color-mix(in srgb, var(--hp-color-accent, #e5484d) 70%, #fff 0%), transparent 75%),
+        #26262d;
+    box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.hp-audio-sleeve img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.hp-audio-sleeve[hidden],
+.hp-vinyl[hidden],
+.hp-tonearm-holder[hidden] {
+    display: none;
+}
+.hp-vinyl {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    height: 96%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    pointer-events: auto;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+    filter: drop-shadow(0 14px 26px rgba(0, 0, 0, 0.6));
+    transition: margin 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* Kılıftan yarısı çıkmış plak; çalarken biraz daha dışarı kayar. */
+.hp-audio[data-position='right'] .hp-vinyl {
+    margin-left: calc(var(--hp-deck-h) * -0.56);
+}
+.hp-audio[data-position='left'] .hp-vinyl {
+    margin-right: calc(var(--hp-deck-h) * -0.56);
+}
+.hp-audio[data-position='right'][data-playing] .hp-vinyl {
+    margin-left: calc(var(--hp-deck-h) * -0.46);
+}
+.hp-audio[data-position='left'][data-playing] .hp-vinyl {
+    margin-right: calc(var(--hp-deck-h) * -0.46);
+}
+.hp-vinyl[data-scratch]:not([data-live]) {
+    cursor: grab;
+}
+.hp-audio[data-scratching] .hp-vinyl {
+    cursor: grabbing;
+}
+.hp-vinyl:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hp-color-accent, #e5484d) 80%, transparent);
+}
+.hp-vinyl-disc {
+    position: absolute;
+    inset: 0;
+    will-change: transform;
+}
+.hp-vinyl-disc svg,
+.hp-tonearm svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+/* Işık yansıması sabit kalır — dönüş böylece okunur. */
+.hp-vinyl-sheen {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    background: conic-gradient(
+        from 200deg,
+        transparent 0deg,
+        rgba(255, 255, 255, 0.13) 22deg,
+        transparent 48deg,
+        transparent 180deg,
+        rgba(255, 255, 255, 0.09) 205deg,
+        transparent 232deg
+    );
+    -webkit-mask: radial-gradient(circle, transparent 0 35%, #000 36% 99%, transparent 100%);
+    mask: radial-gradient(circle, transparent 0 35%, #000 36% 99%, transparent 100%);
+}
+.hp-tonearm-holder {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.hp-audio[data-position='left'] .hp-tonearm-holder {
+    transform: scaleX(-1);
+}
+.hp-tonearm {
+    position: absolute;
+    top: -6%;
+    right: -14%;
+    width: 46%;
+    height: 92%;
+    transform-origin: 70% 11%;
+    transform: rotate(-26deg);
+    transition: transform 0.6s cubic-bezier(0.3, 0.7, 0.2, 1);
+    filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.5));
+}
+.hp-audio[data-playing] .hp-tonearm {
+    transform: rotate(0deg);
+}
+@media (prefers-reduced-motion: reduce) {
+    .hp-vinyl,
+    .hp-tonearm {
+        transition: none;
+    }
+}
+/* Kısa player (ör. mobilde 16:9): başlık gizlenir, plak alanı büyür. */
+@container (max-height: 230px) {
+    .hp-audio[data-meta] .hp-audio-meta {
+        display: none;
+    }
+    .hp-audio[data-meta] .hp-audio-area {
+        top: 6px;
+    }
+}
+/* Ses reklamı: IMA'nın görüntüsüz video yüzeyi şeffaf — altında player'ın sahnesi (ses modunda kapak + plak) görünür. */
+[part='ad-layer'][data-audio-ad] {
+    background: transparent;
+}
+[part='ad-layer'][data-audio-ad] video {
+    opacity: 0;
+}
+/* Ses modu: renkli zeminde seek bar'ın arka izi (%25 beyaz) kayboluyor, yalnızca buffer parçası görünüyordu —
+   kontrollerin arkasına koyu bir geçiş, video modundaki kadar kontrast. */
+.hp-audio::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: min(140px, 45%);
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.28) 55%, transparent);
+    pointer-events: none;
+    z-index: 2;
 }

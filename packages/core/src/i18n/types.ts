@@ -44,6 +44,8 @@ export interface HopeLocaleStrings {
     adLabel: string;
     adReturnFullscreen: string;
     adReturnPip: string;
+    audioVinyl: string;
+    captionSettings: string;
     fullscreenEnter: string;
     fullscreenExit: string;
     playbackSpeed: string;

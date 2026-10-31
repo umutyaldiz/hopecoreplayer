@@ -31,6 +31,7 @@ import { injectIconFont } from './icons/injectIconFont';
 import type { AdsController, AdsPlayerContext } from './plugins/ads';
 import type { GestureControls } from './plugins/gesture';
 import type { LoopSection } from './plugins/loop-section';
+import type { AudioStage } from './plugins/audio';
 import type { InViewAutoplay } from './plugins/in-view-autoplay';
 import type { StickyUnregister } from './plugins/sticky';
 import type { PlaylistRunner } from './plugins/playlist';
@@ -77,6 +78,15 @@ const TEMPLATE = /* html */ `
     </div>
   </div>
 `;
+
+/** options.aspectRatio → CSS değeri: '21:9' / '21 / 9' → '21 / 9', 2.35 → '2.35'; geçersizse null. */
+function normalizeAspectRatio(value: string | number | undefined): string | null {
+    if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? String(value) : null;
+    if (typeof value !== 'string') return null;
+    const m = value.trim().match(/^(\d+(?:\.\d+)?)\s*(?:[:/]\s*(\d+(?:\.\d+)?))?$/);
+    if (!m || Number(m[1]) <= 0 || (m[2] !== undefined && Number(m[2]) <= 0)) return null;
+    return m[2] !== undefined ? `${m[1]} / ${m[2]}` : m[1]!;
+}
 
 /** <hope-player> — çekirdek oynatma ve kontroller; plugin'ler ilgili option verilince dinamik import edilir. */
 export class HopePlayerElement extends HTMLElement {
@@ -134,6 +144,9 @@ export class HopePlayerElement extends HTMLElement {
     private adsController: AdsController | null = null;
     private gestureControls: GestureControls | null = null;
     private loopSection: LoopSection | null = null;
+    private audioStage: AudioStage | null = null;
+    /** options.audio — kapak + plak sahnesi, kontroller hep görünür, tam ekran yok. */
+    private audioMode = false;
     private inViewAutoplay: InViewAutoplay | null = null;
     private unregisterSticky: StickyUnregister | null = null;
     private playlistRunner: PlaylistRunner | null = null;
@@ -447,6 +460,8 @@ export class HopePlayerElement extends HTMLElement {
         this.adsController?.destroy();
         this.gestureControls?.destroy();
         this.loopSection?.destroy();
+        this.audioStage?.destroy();
+        this.audioStage = null;
         this.inViewAutoplay?.destroy();
         this.unregisterSticky?.();
         this.playlistRunner?.destroy();
@@ -681,6 +696,9 @@ export class HopePlayerElement extends HTMLElement {
             this.appliedShowRemaining = options.showRemainingTime;
             this.controlBar.setShowRemaining(options.showRemainingTime);
         }
+        const ratio = normalizeAspectRatio(options.aspectRatio);
+        if (ratio) this.style.setProperty('--hp-aspect-ratio', ratio);
+        else this.style.removeProperty('--hp-aspect-ratio');
         if (options.theme) this.setAttribute('data-theme', options.theme);
         else this.removeAttribute('data-theme');
 
@@ -704,6 +722,7 @@ export class HopePlayerElement extends HTMLElement {
         this.debugPanel?.refreshLabels();
         this.liveWallClock?.refreshLabels();
         this.loopSection?.refreshLabels();
+        this.audioStage?.refreshLabels();
         this.markProgress?.refreshLabels();
         this.unregisterSticky?.refreshLabels?.();
 
@@ -725,6 +744,8 @@ export class HopePlayerElement extends HTMLElement {
             // IMA SDK + reklam isteği kaynak yüklemesiyle PARALEL başlasın (countdown varken reklam sonra istenir).
             if (!options.countdownScreen) void this.installAdsOnce(options);
         }
+
+        await this.applyAudioMode(options);
 
         // Gate plugin'leri (countdown/geo) KAYNAK YÜKLENMEDEN/autoplay denenmeden
         // ÖNCE kuruluyor ki blockChrome() + 'play' dinleyicisi zaten takılı olsun
@@ -768,14 +789,15 @@ export class HopePlayerElement extends HTMLElement {
         this.sourceManager.configure(options.hls);
         this.errorScreen.dismiss();
         const sources = options.sources?.length ? options.sources : options.src ? [{ src: options.src, label: this.i18n.autoQuality }] : [];
-        // Tek kaynakta önceki kaynağın (MP4 sources) kalite listesi kalmasın — yüklemeden ÖNCE temizle,
-        // ki hls.js'in birazdan bildireceği seviyeler silinmesin.
-        if (sources.length <= 1) {
-            this.controlBar.setQualities([], '');
-            this.hlsQualitiesShown = false;
-        }
-        if (sources.length > 0) {
-            const initial = sources.find((s) => s.selected) ?? sources[0]!;
+        const initial = sources.find((s) => s.selected) ?? sources[0];
+        // Kaynak değişmediyse yeniden yükleme: başka bir seçenek değişince (ör. React'te prop) çalan medya başa sarılmasın.
+        if (initial && !this.sourceManager.isLoaded(initial.src, initial.type)) {
+            // Tek kaynakta önceki kaynağın (MP4 sources) kalite listesi kalmasın — yüklemeden ÖNCE temizle,
+            // ki hls.js'in birazdan bildireceği seviyeler silinmesin.
+            if (sources.length <= 1) {
+                this.controlBar.setQualities([], '');
+                this.hlsQualitiesShown = false;
+            }
             await this.sourceManager.load(initial.src, initial.type);
             if (options.autoplay) this.videoEl.play().catch(() => {});
         }
@@ -1255,6 +1277,7 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     private requestFullscreenCompat(): void {
+        if (this.audioMode) return; // ses modunda görüntü yok
         const el = this as unknown as {
             requestFullscreen?: () => Promise<void>;
             webkitRequestFullscreen?: () => void;
@@ -1562,6 +1585,40 @@ export class HopePlayerElement extends HTMLElement {
         this.removeAttribute('data-cursor-hidden');
     }
 
+    /** options.audio: sahneyi kurar, günceller (konum / boyut / devir canlı değişebilir) ya da kaldırır. */
+    private async applyAudioMode(options: HopePlayerOptions): Promise<void> {
+        const audio = options.audio ? (options.audio === true ? {} : options.audio) : null;
+        this.audioMode = !!audio;
+        this.toggleAttribute('data-audio', !!audio);
+        this.controlBar.setAudioMode(!!audio);
+        if (!audio) {
+            this.audioStage?.destroy();
+            this.audioStage = null;
+            return;
+        }
+        // Ses modunda kontroller hiç gizlenmez.
+        if (this.hideTimer) clearTimeout(this.hideTimer);
+        this.hideTimer = null;
+        if (!this.isChromeBlocked) this.showChrome();
+        if (!this.audioStage) {
+            const { installAudioStage } = await import('./plugins/audio');
+            if (!this.audioMode) return; // import sırasında ses modu kapatıldı
+            this.audioStage ??= installAudioStage(
+                {
+                    videoEl: this.videoEl,
+                    layerEl: this.root.querySelector<HTMLDivElement>('.media-layer')!,
+                    poster: () => this._options.poster ?? this.getAttribute('poster') ?? undefined,
+                    togglePlay: () => (this.videoEl.paused ? void this.play().catch(() => {}) : this.videoEl.pause()),
+                    play: () => void this.play().catch(() => {}),
+                    i18n: this.i18n,
+                },
+                audio
+            );
+        } else {
+            this.audioStage.update(audio);
+        }
+    }
+
     /** Ads plugin'ini bir kez kurar; erken (paralel) başlatılan kurulum varsa onu bekler. */
     private installAdsOnce(options: HopePlayerOptions): Promise<void> {
         if (!options.ads || this.adsController) return Promise.resolve();
@@ -1592,6 +1649,11 @@ export class HopePlayerElement extends HTMLElement {
                             const auto = (v: unknown) => !!v && (v as { autoplayNext?: boolean }).autoplayNext !== false;
                             return auto(o.playlist) || auto(o.story);
                         },
+                        audioPoster: (() => {
+                            if (!options.audio) return undefined;
+                            const a = options.audio === true ? {} : options.audio;
+                            return a.adPoster ? new URL(a.adPoster, document.baseURI).href : undefined;
+                        })(),
                         surface: {
                             videoEl: this.videoEl,
                             containerEl: this.videoArea,
@@ -1645,9 +1707,11 @@ export class HopePlayerElement extends HTMLElement {
         this.showChrome();
         if (this.hideTimer) clearTimeout(this.hideTimer);
         if (this.videoEl.paused || this.loadingActive) return;
+        // Ses modunda kontroller hep görünür.
+        if (this.audioMode) return;
         this.hideTimer = setTimeout(() => {
             // Duraklatılmışken, yüklenirken, fare kontrollerin üzerindeyken ya da ayarlar menüsü açıkken gizleme.
-            if (this.videoEl.paused || this.loadingActive || this.pointerOverControls || this.controlBar.settingsMenu.isOpen) return;
+            if (this.audioMode || this.videoEl.paused || this.loadingActive || this.pointerOverControls || this.controlBar.settingsMenu.isOpen) return;
             this.setChromeOpacity('0');
         }, this.lastPointerType === 'mouse' ? this.autoHideDelayMs : Math.max(this.autoHideDelayMs, TOUCH_AUTO_HIDE_DELAY_MS));
     };
