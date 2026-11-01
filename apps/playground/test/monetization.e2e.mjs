@@ -94,14 +94,25 @@ async function testRewardedMp4(browser) {
     const playing = await root(page, () => !document.getElementById('player').shadowRoot.querySelector('video').paused);
     ok(!s.dialog && s.src === 'sample-240p.mp4' && s.button && playing, `kapandı: kilit duruyor, oynatma devam (${playing})`);
 
-    await root(page, () => (window.__rewardedResult = 'nofill'));
+    await root(page, () => {
+        window.__rewardedResult = 'nofill';
+        const el = document.getElementById('player');
+        el.options = { ...el.options, rewardedUnlock: { ...el.options.rewardedUnlock, grantOnNoFill: false } };
+    });
+    await page.waitForTimeout(200);
     await root(page, () => document.getElementById('player').shadowRoot.querySelector('[part="rewarded-button"]').click());
     await page.waitForTimeout(100);
     await clickDialog(page, 'Reklamı izle');
     await page.waitForTimeout(500);
     s = await state(page);
-    ok(s.dialog?.phase === 'nofill' && /gösterilecek reklam yok/.test(s.dialog.text), `reklam yok: bilgi verildi`);
+    ok(s.dialog?.phase === 'nofill' && /gösterilecek reklam yok/.test(s.dialog.text) && s.src === 'sample-240p.mp4', `grantOnNoFill: false → "reklam yok" bilgisi, kilit kapalı`);
     await clickDialog(page, 'Tamam');
+    await root(page, () => {
+        const el = document.getElementById('player');
+        const { grantOnNoFill, ...rest } = el.options.rewardedUnlock;
+        el.options = { ...el.options, rewardedUnlock: rest };
+    });
+    await page.waitForTimeout(200);
 
     console.log('\n[4] Ödül → yüksek kalite açılır, aynı yerden devam; seçenek yeniden uygulanınca geri düşmez');
     await root(page, () => (window.__rewardedResult = 'granted'));
@@ -141,6 +152,27 @@ async function testRewardedMp4(browser) {
     await page.close();
 }
 
+async function testRewardedNoFillGrants(browser) {
+    console.log('\n[3b] Varsayılan: reklam yok / hata → kilit yine de açılır ("şu an reklam yoktu" bildirimi)');
+    for (const [name, result] of [['reklam yok', 'nofill'], ['sağlayıcı hata attı', 'throw']]) {
+        const page = await openRewarded(browser);
+        await root(page, (result) => {
+            const el = document.getElementById('player');
+            const show = result === 'throw' ? async () => { throw new Error('ad server 500'); } : async () => 'nofill';
+            el.options = { ...el.options, rewardedUnlock: { ...el.options.rewardedUnlock, provider: { type: 'custom', show } } };
+        }, result);
+        await page.waitForTimeout(200);
+        await root(page, () => document.getElementById('player').shadowRoot.querySelector('[part="rewarded-button"]').click());
+        await page.waitForTimeout(100);
+        await clickDialog(page, 'Reklamı izle');
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').currentSrc.endsWith('/sample.mp4'), null, { timeout: 4000 }).catch(() => {});
+        await page.waitForTimeout(300);
+        const s = await state(page);
+        ok(s.src === 'sample.mp4' && !s.dialog && s.toast === 'Şu an reklam yoktu — 720p yine de açıldı', `${name}: kilit açıldı (${s.src}), bildirim: "${s.toast}"`);
+        await page.close();
+    }
+}
+
 async function testRewardedPersist(browser) {
     console.log('\n[5b] unlockFor: 30 (dakika) — kilit tarayıcıda saklanır, sayfa yenilenince yüksek kaliteyle açılır; süre dolunca kilitlenir');
     const context = await browser.newContext({ viewport: { width: 900, height: 700 } });
@@ -166,6 +198,51 @@ async function testRewardedPersist(browser) {
     const src2 = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').currentSrc.split('/').pop());
     ok(src2 === 'sample-240p.mp4', `süre dolunca yine kilitli (${src2})`);
     await context.close();
+}
+
+async function testRewardedGptFailures(browser) {
+    console.log('\n[5c] GPT yüklenemez / yanıt vermez → zaman aşımında "reklam yok" (takılma yok); hazırlanırken "Vazgeç"');
+    const run = async (handler, timeoutMs, cancelAfter, grantOnNoFill = false) => {
+        const context = await browser.newContext({ viewport: { width: 900, height: 700 } });
+        await context.route(/securepubads\.g\.doubleclick\.net|googlesyndication\.com/, handler);
+        const page = await context.newPage();
+        await page.goto(`${BASE}/?feature=rewarded&kind=mp4`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('[part="rewarded-button"]:not([hidden])'), null, { timeout: 8000 });
+        await page.evaluate(([timeoutMs, grantOnNoFill]) => {
+            window.__ev = [];
+            const el = document.getElementById('player');
+            for (const t of ['hp:rewardedclosed', 'hp:rewardednofill', 'hp:rewardedgranted'])
+                el.addEventListener(t, (e) => window.__ev.push(t.slice(3) + (e.detail?.cancelled ? ':cancelled' : '') + (e.detail?.noAd ? ':noAd' : '')));
+            el.options = { ...el.options, rewardedUnlock: { ...el.options.rewardedUnlock, grantOnNoFill, provider: { type: 'gpt', adUnitPath: '/22639388115/rewarded_web_example', timeoutMs } } };
+        }, [timeoutMs, grantOnNoFill]);
+        await page.waitForTimeout(200);
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="rewarded-button"]').click());
+        await page.waitForTimeout(100);
+        await clickDialog(page, 'Reklamı izle');
+        if (cancelAfter) {
+            await page.waitForTimeout(cancelAfter);
+            await clickDialog(page, 'Vazgeç');
+            await page.waitForTimeout(200);
+        } else {
+            await page.waitForTimeout(timeoutMs + 600);
+        }
+        const st = await page.evaluate(() => ({
+            ev: window.__ev.slice(),
+            phase: document.getElementById('player').shadowRoot.querySelector('[part="rewarded-dialog"]')?.getAttribute('data-phase') ?? null,
+            src: document.getElementById('player').shadowRoot.querySelector('video').currentSrc.split('/').pop(),
+        }));
+        await context.close();
+        return st;
+    };
+    const blocked = await run((r) => r.abort('failed'), 2500);
+    ok(blocked.phase === 'nofill' && blocked.ev.includes('rewardednofill'), `gpt.js yüklenemedi → "reklam yok" (${blocked.phase})`);
+    const hanging = await run(() => {}, 2500);
+    ok(hanging.phase === 'nofill' && hanging.ev.includes('rewardednofill'), `gpt.js yanıt vermiyor → zaman aşımında "reklam yok" (${hanging.phase})`);
+    const blockedGrant = await run((r) => r.abort('failed'), 2500, 0, true);
+    ok(blockedGrant.ev.includes('rewardedgranted:noAd') && blockedGrant.phase === null, `varsayılan: gpt.js engelli → kilit yine de açıldı (${blockedGrant.ev.join(', ')})`);
+    const cancelled = await run(() => {}, 30000, 400, true);
+    ok(cancelled.phase === null && cancelled.ev.includes('rewardedclosed:cancelled') && !cancelled.ev.some((e) => e.startsWith('rewardedgranted')) && cancelled.src === 'sample-240p.mp4',
+        `hazırlanırken "Vazgeç" → kapandı, kilit açılmadı (${cancelled.ev.join(', ')})`);
 }
 
 async function testRewardedHls(browser) {
@@ -440,7 +517,9 @@ async function testSponsorshipValidation(browser) {
     const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
     try {
         await testRewardedMp4(browser);
+        await testRewardedNoFillGrants(browser);
         await testRewardedPersist(browser);
+        await testRewardedGptFailures(browser);
         await testRewardedHls(browser);
         await testSponsorship(browser);
         await testSponsorshipIntroRepeat(browser);

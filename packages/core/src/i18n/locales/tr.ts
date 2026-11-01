@@ -60,6 +60,7 @@ export const tr: HopeLocaleStrings = {
     rewardedNoFill: 'Şu an gösterilecek reklam yok. Biraz sonra tekrar deneyin.',
     rewardedOk: 'Tamam',
     rewardedUnlocked: '{quality} açıldı',
+    rewardedUnlockedNoAd: 'Şu an reklam yoktu — {quality} yine de açıldı',
     rewardedForVideo: 'bu video boyunca',
     rewardedForSession: 'bu oturum boyunca',
     rewardedForMinutes: '{n} dakika boyunca',

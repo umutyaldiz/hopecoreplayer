@@ -213,7 +213,11 @@ export type RewardedProvider =
      */
     | { type: 'gpt'; adUnitPath: string; /** Reklam hazır olmazsa vazgeçme süresi (ms). Varsayılan 8000. */ timeoutMs?: number }
     /** Kendi reklam sisteminiz: reklamı gösterip sonucu döndürün. */
-    | { type: 'custom'; show: () => Promise<RewardedResult | boolean> };
+    | {
+          type: 'custom';
+          /** `signal`: kullanıcı reklam hazırlanırken "Vazgeç" derse iptal edilir — reklamınızı durdurabilirsiniz. */
+          show: (ctx: { signal: AbortSignal }) => Promise<RewardedResult | boolean>;
+      };
 
 /**
  * Ödüllü reklamla kalite kilidi: video düşük kalitede başlar; kullanıcı açıkça kabul edip bir reklam izlerse yüksek
@@ -231,7 +235,11 @@ export interface RewardedUnlockOptions {
     unlockFor?: 'video' | 'session' | number;
     /** Video üzerinde "Yüksek kaliteyi aç" butonu. Varsayılan true. Kapalıysa kilit yalnızca ayarlar menüsünden açılır. */
     button?: boolean;
-    /** Reklam yoksa (no fill) kilidi yine de aç. Varsayılan false. */
+    /**
+     * Reklam gelmezse (boş yanıt, hata, engelleyici, zaman aşımı) kilidi yine de aç — "şu an reklam yoktu" bildirimiyle.
+     * Varsayılan true: reklam sistemindeki bir sorun kullanıcıyı düşük kaliteye mahkûm etmesin. `false`: "reklam yok"
+     * bilgisi gösterilir, kilit kapalı kalır. Kullanıcı kendisi vazgeçerse kilit hiçbir durumda açılmaz.
+     */
     grantOnNoFill?: boolean;
     /** Tarayıcı deposundaki anahtar (birden fazla site / kanal için ayırmak isterseniz). Varsayılan 'hope-rewarded-unlock'. */
     storageKey?: string;

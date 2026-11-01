@@ -59,6 +59,7 @@ export const en: HopeLocaleStrings = {
     rewardedNoFill: 'No ad is available right now. Please try again in a moment.',
     rewardedOk: 'OK',
     rewardedUnlocked: '{quality} unlocked',
+    rewardedUnlockedNoAd: 'No ad right now — {quality} unlocked anyway',
     rewardedForVideo: 'for this video',
     rewardedForSession: 'for this session',
     rewardedForMinutes: 'for {n} minutes',

@@ -151,25 +151,39 @@ export class RewardedUnlock {
         v.pause();
         // GPT reklamı sayfanın kendi katmanında açılır — player tam ekrandaysa görünmez.
         this.ctx.exitFullscreen();
+        this.abort = new AbortController();
+        const signal = this.abort.signal;
         this.showDialog('loading', label);
         let result: RewardedResult;
         try {
-            result = await this.runProvider();
+            result = await this.runProvider(signal);
         } catch (err) {
             this.ctx.log({ message: `Rewarded ad failed: ${String(err)}` });
             result = 'nofill';
         }
-        if (result === 'nofill' && this.options.grantOnNoFill) {
+        this.abort = null;
+        // Kullanıcı hazırlanırken "Vazgeç" dedi — sonuç ne olursa olsun ödül yok, video devam eder.
+        if (signal.aborted) {
+            this.closeDialog();
+            this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:rewardedclosed', { detail: { granted: false, cancelled: true } }));
+            if (wasPlaying) this.ctx.play();
+            return;
+        }
+        // Reklam yok / boş / hata: kusur kullanıcıda değil — varsayılan olarak kilit yine de açılır (grantOnNoFill: false kapatır).
+        let noAd = false;
+        if (result === 'nofill' && this.options.grantOnNoFill !== false) {
+            this.ctx.log({ message: 'Rewarded ad: no ad available (no fill / error / timeout) — unlocked anyway (grantOnNoFill)' });
             this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:rewardednofill', { detail: { granted: true } }));
             result = 'granted';
+            noAd = true;
         }
         if (result === 'granted') {
             this.grant();
             this.closeDialog();
-            this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:rewardedgranted', { detail: { quality: label } }));
+            this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:rewardedgranted', { detail: { quality: label, noAd } }));
             this.ctx.onLockChange(true);
             this.onQualitiesChanged();
-            this.showToast(this.fill(this.ctx.i18n.rewardedUnlocked, label));
+            this.showToast(this.fill(noAd ? this.ctx.i18n.rewardedUnlockedNoAd : this.ctx.i18n.rewardedUnlocked, label));
             if (wasPlaying) this.ctx.play();
             return;
         }
@@ -187,12 +201,16 @@ export class RewardedUnlock {
     }
 
     private resumeAfterDialog = false;
+    /** Reklam hazırlanırken "Vazgeç" — sağlayıcıya iletilir (GPT slotu temizlenir). */
+    private abort: AbortController | null = null;
 
-    private async runProvider(): Promise<RewardedResult> {
+    private async runProvider(signal: AbortSignal): Promise<RewardedResult> {
         const p = this.options.provider;
-        if (p?.type === 'gpt') return showGptRewarded(p.adUnitPath, p.timeoutMs ?? DEFAULT_GPT_TIMEOUT_MS);
+        if (p?.type === 'gpt') return showGptRewarded(p.adUnitPath, p.timeoutMs ?? DEFAULT_GPT_TIMEOUT_MS, signal);
         if (p?.type === 'custom') {
-            const r = await p.show();
+            // İptal edilirse kendi reklam sisteminizin sonucu beklenmez (sinyali kendi tarafınızda da dinleyebilirsiniz).
+            const aborted = new Promise<RewardedResult>((resolve) => signal.addEventListener('abort', () => resolve('closed'), { once: true }));
+            const r = await Promise.race([p.show({ signal }), aborted]);
             return r === true ? 'granted' : r === false ? 'closed' : r;
         }
         throw new Error('rewardedUnlock.provider is missing');
@@ -220,7 +238,9 @@ export class RewardedUnlock {
             for (const t of ['click', 'pointerdown', 'dblclick'] as const) d.addEventListener(t, (e) => e.stopPropagation());
             d.addEventListener('keydown', (e) => {
                 e.stopPropagation();
-                if (e.key === 'Escape' && this.phase !== 'loading') this.dismiss();
+                if (e.key !== 'Escape') return;
+                if (this.phase === 'loading') this.abort?.abort();
+                else this.dismiss();
             });
             this.ctx.overlayEl.appendChild(d);
             this.dialog = d;
@@ -263,6 +283,8 @@ export class RewardedUnlock {
             const spin = document.createElement('div');
             spin.className = 'hp-rw-spinner';
             text.appendChild(spin);
+            // Hazırlanma ne kadar sürerse sürsün kullanıcı takılı kalmaz.
+            button(i.rewardedDecline, false, () => this.abort?.abort());
         } else {
             title.textContent = this.fill(i.rewardedTitle, label);
             text.textContent = i.rewardedNoFill;
@@ -306,6 +328,7 @@ export class RewardedUnlock {
     }
 
     destroy(): void {
+        this.abort?.abort();
         this.ctx.videoEl.removeEventListener('loadstart', this.onSourceChange);
         if (this.toastTimer) clearTimeout(this.toastTimer);
         this.toast?.remove();

@@ -55,6 +55,7 @@ export interface HopeLocaleStrings {
     rewardedNoFill: string;
     rewardedOk: string;
     rewardedUnlocked: string;
+    rewardedUnlockedNoAd: string;
     rewardedForVideo: string;
     rewardedForSession: string;
     rewardedForMinutes: string;
