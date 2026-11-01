@@ -104,6 +104,36 @@ const PLAYLIST_ITEMS: import('@hopeplayer/core').PlayableItem[] = [
 if (player) {
     if (feature === 'playlist') {
         player.options = { muted: true, playlist: { items: PLAYLIST_ITEMS, startMode: 'immediate', loop: true } };
+    } else if (feature === 'rewarded') {
+        // Ödüllü reklamla kalite kilidi: ?kind=mp4|hls — sağlayıcı test için sahte (window.__rewardedResult).
+        const kind = new URLSearchParams(location.search).get('kind') ?? 'mp4';
+        const w = window as unknown as { __rewardedResult?: string; __rewardedCalls?: number };
+        w.__rewardedCalls = 0;
+        player.options = {
+            muted: true,
+            ...(kind === 'hls'
+                ? { src: '/hls/master.m3u8' }
+                : {
+                      sources: [
+                          { src: '/sample.mp4', label: '720p', selected: true },
+                          { src: '/sample-240p.mp4', label: '240p' },
+                      ],
+                  }),
+            rewardedUnlock: {
+                maxFreeHeight: 240,
+                unlockFor: new URLSearchParams(location.search).get('unlock') === '30' ? 30 : 'video',
+                provider: {
+                    type: 'custom',
+                    show: async () => {
+                        w.__rewardedCalls = (w.__rewardedCalls ?? 0) + 1;
+                        await new Promise((r) => setTimeout(r, 150));
+                        return (w.__rewardedResult as 'granted' | 'closed' | 'nofill' | undefined) ?? 'granted';
+                    },
+                },
+            },
+        };
+    } else if (feature === 'sponsorship') {
+        player.options = { src: '/sample.mp4', muted: true, sponsorship: { endpoint: '/sponsorship.json', params: { channel: 'demo' } } };
     } else if (feature === 'audio') {
         // Ses modu: ?vinyl=center|left|right|off
         const vinyl = new URLSearchParams(location.search).get('vinyl');

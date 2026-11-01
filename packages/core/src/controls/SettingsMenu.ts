@@ -4,7 +4,13 @@ import type { HopeLocaleStrings } from '../i18n/types';
 export interface SettingsQualityOption {
     label: string;
     onSelect: () => void;
+    /** Kilitli kalite (ödüllü reklamla açılır) — satırda kilit işareti; seçilince kilit açma akışı başlar. */
+    locked?: boolean;
 }
+
+/** Kilit işareti (ikon fontunda yok). */
+export const LOCK_SVG =
+    '<svg class="hp-lock" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 8V7a3 3 0 1 1 6 0v3H9Z"/></svg>';
 
 export interface SettingsCaptionOption {
     label: string;
@@ -377,12 +383,12 @@ export class SettingsMenu {
         this.panel.appendChild(this.backRow(this.labels.quality, () => this.renderMain()));
         for (const q of this.qualities) {
             const active = q.label === this.activeQualityLabel;
-            this.panel.appendChild(
-                this.row(q.label, active ? '<i class="hp-icon hp-icon-check"></i>' : '', () => {
-                    q.onSelect();
-                    this.close();
-                })
-            );
+            const row = this.row(q.label, q.locked ? LOCK_SVG : active ? '<i class="hp-icon hp-icon-check"></i>' : '', () => {
+                q.onSelect();
+                this.close();
+            });
+            if (q.locked) row.setAttribute('data-locked', '');
+            this.panel.appendChild(row);
         }
     }
 

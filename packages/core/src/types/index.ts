@@ -16,6 +16,8 @@ export interface HopeSourceOption {
     label: string;
     /** Varsayılan seçili kalite. Birden fazlası true ise ilki kullanılır. */
     selected?: boolean;
+    /** Görüntü yüksekliği (px). Verilmezse etiketten okunur ("1080p" → 1080) — kalite kilidi (rewardedUnlock) bunu kullanır. */
+    height?: number;
 }
 
 export interface HopeSubtitleOption {
@@ -200,6 +202,108 @@ export interface VinylOptions {
 }
 
 /** Ses modu: kapaklı, yalnızca ses oynatan player. */
+/** Ödüllü reklamın sonucu: ödül verildi, kullanıcı kapattı ya da gösterilecek reklam yok. */
+export type RewardedResult = 'granted' | 'closed' | 'nofill';
+
+/** Ödüllü reklam kaynağı. */
+export type RewardedProvider =
+    /**
+     * Google Publisher Tag (GPT) web rewarded — Ad Manager'da ödüllü reklam birimi gerekir. Yalnızca mobil uyumlu
+     * sayfalarda (`<meta name="viewport" content="width=device-width, initial-scale=1">`) istenir.
+     */
+    | { type: 'gpt'; adUnitPath: string; /** Reklam hazır olmazsa vazgeçme süresi (ms). Varsayılan 8000. */ timeoutMs?: number }
+    /** Kendi reklam sisteminiz: reklamı gösterip sonucu döndürün. */
+    | { type: 'custom'; show: () => Promise<RewardedResult | boolean> };
+
+/**
+ * Ödüllü reklamla kalite kilidi: video düşük kalitede başlar; kullanıcı açıkça kabul edip bir reklam izlerse yüksek
+ * kaliteler açılır. Google politikası: reklam yalnızca kullanıcının onayından sonra gösterilir, ödül önceden açıkça
+ * yazılır, kullanıcı reklamı kapatabilir ve vazgeçmek videoyu izlemeyi engellemez.
+ */
+export interface RewardedUnlockOptions {
+    provider: RewardedProvider;
+    /** Bu yüksekliğe (px) kadar kaliteler serbest; üstü kilitli. Varsayılan 480. */
+    maxFreeHeight?: number;
+    /**
+     * Kilit ne kadar açık kalır: 'video' (kaynak değişene kadar), 'session' (sekme kapanana kadar, varsayılan) ya da
+     * dakika (ör. 30 — tarayıcıda saklanır).
+     */
+    unlockFor?: 'video' | 'session' | number;
+    /** Video üzerinde "Yüksek kaliteyi aç" butonu. Varsayılan true. Kapalıysa kilit yalnızca ayarlar menüsünden açılır. */
+    button?: boolean;
+    /** Reklam yoksa (no fill) kilidi yine de aç. Varsayılan false. */
+    grantOnNoFill?: boolean;
+    /** Tarayıcı deposundaki anahtar (birden fazla site / kanal için ayırmak isterseniz). Varsayılan 'hope-rewarded-unlock'. */
+    storageKey?: string;
+}
+
+/** Sponsorluk API'sinin döndürdüğü yapı. */
+export interface SponsorshipConfig {
+    /** false ya da yoksa katman kapalı. */
+    active: boolean;
+    /** Kampanya kimliği — giriş animasyonunun bir kampanya için bir kez gösterilmesi gibi durumlarda kullanılır. */
+    id?: string;
+    sponsor: {
+        name: string;
+        /** Logo görseli (PNG / SVG / WebP). */
+        logo?: string;
+        /** Logoya tıklanınca açılacak adres (yeni sekmede). */
+        url?: string;
+    };
+    /** Player renkleri — CSS renk değerleri. */
+    theme?: { accent?: string; onAccent?: string; surface?: string; onSurface?: string };
+    /** Köşedeki logo. */
+    logo?: {
+        position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+        /** Genişlik (px). Varsayılan 96. */
+        width?: number;
+        /** 0–1. Varsayılan 0.9. */
+        opacity?: number;
+        /** Logonun yanındaki küçük yazı, ör. "Sunar". */
+        label?: string;
+    };
+    /** Oynatma başlarken bir kez gösterilen "X sunar" kartı. */
+    intro?: {
+        text?: string;
+        durationMs?: number;
+        /**
+         * Girişi her N dakikada bir tekrar göster (1–240). Gerçek izleme süresi sayılır: duraklatılmışken, sekme arka
+         * plandayken ve reklam sırasında sayaç işlemez. Verilmezse yalnızca oynatma başında bir kez.
+         */
+        repeatMinutes?: number;
+        /** Kampanya başına en fazla kaç kez gösterilsin (ilk gösterim dahil). Verilmezse sınır yok. */
+        maxShows?: number;
+    };
+    /** Geçerlilik aralığı (ISO 8601). Dışındaysa katman uygulanmaz. */
+    validFrom?: string;
+    validUntil?: string;
+    /** Takip pikselleri: gösterimde ve tıklamada GET ile çağrılır. */
+    tracking?: {
+        /** Kampanya başına bir kez (ilk oynatmada). */
+        impression?: string[];
+        click?: string[];
+        /** Giriş kartı her gösterildiğinde (tekrarlar dahil). */
+        intro?: string[];
+    };
+}
+
+/**
+ * Sponsorluk katmanı: player açılışta (ve istenirse periyodik) sizin API'nize istek atar; dönen ayarlarla renkler,
+ * köşe logosu ve "X sunar" girişi uygulanır. API'yi kendi sisteminizde siz sağlarsınız (bkz. SponsorshipConfig).
+ */
+export interface SponsorshipOptions {
+    /** JSON döndüren adres (GET). */
+    endpoint: string;
+    /** Adrese eklenecek sorgu parametreleri (ör. kanal, kategori). */
+    params?: Record<string, string>;
+    /** fetch ayarları (ör. credentials, headers). */
+    fetchInit?: RequestInit;
+    /** Canlı yayında kampanya değişimi için yenileme aralığı (sn). Verilmezse bir kez istenir. */
+    refreshSeconds?: number;
+    /** İstek zaman aşımı (ms). Varsayılan 5000. */
+    timeoutMs?: number;
+}
+
 export interface AudioOptions {
     /** Kapak görseli. Verilmezse `poster` kullanılır; o da yoksa temanın renkleriyle düz bir zemin. */
     cover?: string;
@@ -594,6 +698,10 @@ export interface HopePlayerOptions {
      * CSS'ten de verilebilir: `hope-player { --hp-aspect-ratio: 21 / 9; }`.
      */
     aspectRatio?: string | number;
+    /** Ödüllü reklamla yüksek kalite kilidi — bkz. RewardedUnlockOptions. */
+    rewardedUnlock?: RewardedUnlockOptions;
+    /** Sponsorluk katmanı (renkler, logo, giriş) — ayarları sizin API'nizden alır. */
+    sponsorship?: SponsorshipOptions;
     /** Süre göstergesinde kalan süreyi (-0:10 / 0:15) gösterme. Varsayılan false (geçen süre). */
     showRemainingTime?: boolean;
     /** Oynat butonunun yanında geri/ileri sarma butonları. `true` = 10 sn geri + 10 sn ileri. Varsayılan kapalı. */

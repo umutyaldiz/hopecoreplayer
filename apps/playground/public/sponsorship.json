@@ -1,0 +1,31 @@
+{
+  "active": true,
+  "id": "kavrul-autumn-2026",
+  "sponsor": {
+    "name": "Kavrul Coffee",
+    "logo": "/kavrul-logo.svg",
+    "url": "https://example.com/kavrul?utm_source=hopeplayer&utm_campaign=autumn"
+  },
+  "theme": {
+    "accent": "#c8873a",
+    "onAccent": "#1a0f08",
+    "surface": "#1a120d"
+  },
+  "logo": {
+    "position": "top-right",
+    "width": 76,
+    "opacity": 0.95,
+    "label": "Sunar"
+  },
+  "intro": {
+    "durationMs": 3000
+  },
+  "tracking": {
+    "impression": [
+      "/pixel.gif?e=impression"
+    ],
+    "click": [
+      "/pixel.gif?e=click"
+    ]
+  }
+}

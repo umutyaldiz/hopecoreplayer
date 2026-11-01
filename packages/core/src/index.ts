@@ -56,6 +56,13 @@ export type {
     LiveAdsOptions,
     OmidAccessMode,
     OmidVendor,
+    AudioOptions,
+    VinylOptions,
+    RewardedUnlockOptions,
+    RewardedProvider,
+    RewardedResult,
+    SponsorshipOptions,
+    SponsorshipConfig,
 } from './types';
 export type { SettingsSubmenuDef, SettingsSubmenuItem } from './controls/SettingsMenu';
 export type { ErrorLog, PlayerLogEntry, PlayerLogSource } from './debug/ErrorLog';

@@ -356,6 +356,11 @@ export class SourceManager {
         return this.last ? this.load(this.last.src, this.last.type) : Promise.resolve();
     }
 
+    /** ABR'nin çıkabileceği en yüksek seviye (kalite kilidi); -1 = sınır yok. */
+    setMaxLevel(index: number): void {
+        if (this.hls && this.hls.autoLevelCapping !== index) this.hls.autoLevelCapping = index;
+    }
+
     /** -1 = otomatik kalite (ABR). */
     setLevel(index: number): void {
         if (this.hls) {
