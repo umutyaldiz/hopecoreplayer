@@ -105,6 +105,11 @@ export class ControlBar {
     private readonly rightGroup: HTMLDivElement;
     private readonly fullscreenSlot: HTMLDivElement;
     private compact = false;
+    /** İnce ses çubuğu (audio.layout: 'compact'): dar ekranda da tek satır — üst bar yok. */
+    private forceInline = false;
+    /** İnce ses çubuğunda başlık / sanatçı (+ çalarken ekolayzır) — boşluk elemanının içinde. */
+    private barMetaEl: HTMLDivElement | null = null;
+    private spacerEl!: HTMLDivElement;
     private readonly resizeObserver: ResizeObserver;
     private readonly liveBadge: HTMLButtonElement;
     private readonly liveText: HTMLSpanElement;
@@ -206,8 +211,9 @@ export class ControlBar {
         leftGroup.appendChild(this.adInfoEl);
 
         const spacer = document.createElement('div');
-        spacer.className = 'hp:flex-1';
+        spacer.className = 'hp:flex-1 hp:min-w-0';
         row.appendChild(spacer);
+        this.spacerEl = spacer;
 
         // Sağ küme: ayarlar + plugin'lerin addButton/addElement ile eklediği
         // kendi butonları (ayarlardan ÖNCE eklenir) + PIP + tam ekran — aynı
@@ -263,7 +269,7 @@ export class ControlBar {
     private updateLayout(): void {
         const width = this.el.getBoundingClientRect().width;
         if (width === 0) return;
-        const compact = width < COMPACT_MAX_WIDTH;
+        const compact = !this.forceInline && width < COMPACT_MAX_WIDTH;
         if (compact === this.compact) return;
         this.compact = compact;
         this.settingsMenu.closeMenu();
@@ -279,6 +285,34 @@ export class ControlBar {
             this.bottomRow.insertBefore(this.rightGroup, this.fullscreenSlot);
             this.fullscreenSlot.style.display = 'none';
         }
+    }
+
+    /**
+     * İnce ses çubuğu: başlık / sanatçı kontrol satırının ortasında; dar ekranda da kompakt (üst bar) düzene geçilmez.
+     * `null` kaldırır.
+     */
+    setAudioBar(meta: { title: string; subtitle: string } | null): void {
+        this.forceInline = !!meta;
+        if (meta) {
+            if (!this.barMetaEl) {
+                const el = document.createElement('div');
+                el.className = 'hp-bar-meta';
+                el.setAttribute('part', 'audio-bar-meta');
+                el.innerHTML =
+                    '<span class="hp-bar-eq" aria-hidden="true"><i></i><i></i><i></i></span>' +
+                    '<span class="hp-bar-text"><span class="hp-bar-title"></span><span class="hp-bar-sub"></span></span>';
+                this.spacerEl.appendChild(el);
+                this.barMetaEl = el;
+            }
+            this.barMetaEl.querySelector('.hp-bar-title')!.textContent = meta.title;
+            this.barMetaEl.querySelector('.hp-bar-sub')!.textContent = meta.subtitle;
+            this.barMetaEl.toggleAttribute('data-empty', !meta.title && !meta.subtitle);
+        } else {
+            this.barMetaEl?.remove();
+            this.barMetaEl = null;
+        }
+        this.renderPlayState();
+        this.updateLayout();
     }
 
     /** Ses modu: görüntü olmadığı için tam ekran ve PiP butonları gizlenir. */
@@ -477,6 +511,7 @@ export class ControlBar {
         const paused = this.callbacks.isAdActive() ? this.callbacks.adIsPaused() : this.video.paused && !this.pendingPlay;
         setIconName(this.playIcon, paused ? 'play' : 'pause');
         setButtonLabel(this.playButton, paused ? this.labels.play : this.labels.pause);
+        this.barMetaEl?.toggleAttribute('data-playing', !paused && !this.callbacks.isAdActive());
     };
 
     /** Canlı uç (media-time) — seekable sonu; native HLS'te DVR'sız canlıda seekable boş kalabildiği için buffered sonu (bkz. LiveWallClock.isLive notu). */

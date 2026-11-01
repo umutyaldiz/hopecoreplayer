@@ -543,6 +543,109 @@ async function testHoldStopsImmediately(browser) {
     await page.close();
 }
 
+async function testDeckLayoutJs(browser) {
+    console.log('\n[15] Plak / kapak boyutu JS ile (eski Safari\'de konteyner sorgu birimi yok): ortalı, player boyutuyla yeniden boyutlanıyor');
+    const page = await openAudio(browser);
+    const g = () =>
+        page.evaluate(() => {
+            const root = document.getElementById('player').shadowRoot;
+            const area = root.querySelector('.hp-audio-area').getBoundingClientRect();
+            const deck = root.querySelector('.hp-audio-deck').getBoundingClientRect();
+            const sleeve = root.querySelector('.hp-audio-sleeve').getBoundingClientRect();
+            return {
+                offset: Math.round(deck.left + deck.width / 2 - (area.left + area.width / 2)),
+                deckH: deck.height,
+                areaH: area.height,
+                sleeveSquare: Math.abs(sleeve.width - sleeve.height) < 1,
+                varPx: root.querySelector('.hp-audio').style.getPropertyValue('--hp-deck-h'),
+            };
+        });
+    let s = await g();
+    ok(Math.abs(s.offset) <= 1 && s.sleeveSquare && /px$/.test(s.varPx), `ortalı (sapma ${s.offset}px), kapak kare, boyut px (${s.varPx})`);
+    ok(Math.abs(s.deckH / s.areaH - 0.78) < 0.03, `varsayılan boyut 0.78 (${(s.deckH / s.areaH).toFixed(2)})`);
+    const before = s.deckH;
+    await page.evaluate(() => (document.getElementById('player').style.width = '420px'));
+    await page.waitForTimeout(250);
+    s = await g();
+    ok(s.deckH < before && Math.abs(s.offset) <= 1, `player daralınca plak küçüldü (${before.toFixed(0)} → ${s.deckH.toFixed(0)}px), hâlâ ortalı`);
+    await page.close();
+}
+
+async function testCompactLayout(browser) {
+    console.log('\n[16] audio.layout: "compact" — ince çubuk: kapak / plak yok, başlık çubukta, mobilde tek satır, menü dışarı açılıyor');
+    for (const vp of [{ width: 900, height: 700 }, { width: 390, height: 800 }]) {
+        const page = await browser.newPage({ viewport: vp });
+        await page.goto(`${BASE}/?feature=audio&layout=compact`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('.hp-bar-meta'), null, { timeout: 5000 });
+        await page.waitForTimeout(300);
+        const s = await page.evaluate(() => {
+            const el = document.getElementById('player');
+            const root = el.shadowRoot;
+            const va = root.querySelector('.video-area').getBoundingClientRect();
+            const shown = (sel) => {
+                const n = root.querySelector(sel);
+                return !!n && getComputedStyle(n).display !== 'none' && n.getBoundingClientRect().height > 0;
+            };
+            return {
+                h: Math.round(va.height),
+                deck: shown('.hp-audio-deck'),
+                meta: root.querySelector('.hp-bar-title').textContent + ' / ' + root.querySelector('.hp-bar-sub').textContent,
+                topBar: !!root.querySelector('.hp-top-bar .hp-group'),
+                compactAttr: root.querySelector('.video-area').hasAttribute('data-compact'),
+            };
+        });
+        const tag = vp.width < 500 ? 'mobil' : 'masaüstü';
+        ok(s.h === 84 && !s.deck, `${tag}: 84px çubuk (${s.h}), kapak/plak yok`);
+        ok(s.meta === 'Vinyl Sessions / HopeCore · Side A', `${tag}: başlık çubukta (${s.meta})`);
+        ok(!s.topBar && !s.compactAttr, `${tag}: tek satır (üst bar yok)`);
+
+        await page.evaluate(() => document.getElementById('player').play());
+        await page.waitForTimeout(300);
+        const playing = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-bar-meta').hasAttribute('data-playing'));
+        await page.evaluate(() => document.getElementById('player').pause());
+        await page.waitForTimeout(150);
+        const paused = await page.evaluate(() => !document.getElementById('player').shadowRoot.querySelector('.hp-bar-meta').hasAttribute('data-playing'));
+        ok(playing && paused, `${tag}: ekolayzır çalarken hareketli, duraklayınca durgun`);
+
+        // Ayarlar menüsü 84px'e sıkışmadan, çubuğun dışına açılıyor.
+        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('button[aria-label="Ayarlar"]').click());
+        await page.waitForTimeout(250);
+        const menu = await page.evaluate(() => {
+            const root = document.getElementById('player').shadowRoot;
+            const panel = root.querySelector('.hp-chip-panel').getBoundingClientRect();
+            const va = root.querySelector('.video-area').getBoundingClientRect();
+            const hit = document.elementFromPoint(panel.left + panel.width / 2, panel.top + 12);
+            const el = root.querySelector('.hp-chip-panel');
+            return {
+                h: Math.round(panel.height),
+                full: el.scrollHeight <= el.clientHeight + 1,
+                outside: panel.top < va.top || panel.bottom > va.bottom,
+                visible: hit === document.getElementById('player'),
+            };
+        });
+        ok(menu.full && menu.outside && menu.visible, `${tag}: menü çubuğun dışına tam boyunda açıldı (${menu.h}px)`);
+        await page.close();
+    }
+
+    // Tam moda dönüş.
+    const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
+    await page.goto(`${BASE}/?feature=audio&layout=compact`);
+    await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('.hp-bar-meta'), null, { timeout: 5000 });
+    await page.evaluate(() => {
+        const el = document.getElementById('player');
+        el.options = { ...el.options, audio: { ...el.options.audio, layout: 'full' } };
+    });
+    await page.waitForTimeout(300);
+    const back = await page.evaluate(() => {
+        const el = document.getElementById('player');
+        const root = el.shadowRoot;
+        const va = root.querySelector('.video-area').getBoundingClientRect();
+        return { meta: !!root.querySelector('.hp-bar-meta'), attr: el.hasAttribute('data-audio-compact'), ratio: va.width / va.height, deck: root.querySelector('.hp-audio-deck').getBoundingClientRect().height };
+    });
+    ok(!back.meta && !back.attr && Math.abs(back.ratio - 16 / 9) < 0.02 && back.deck > 100, `tam moda dönüş: 16:9, plak görünür (${back.deck.toFixed(0)}px)`);
+    await page.close();
+}
+
 (async () => {
     const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
     try {
@@ -560,6 +663,8 @@ async function testHoldStopsImmediately(browser) {
         await testScratchSound(browser);
         await testScratchSoundFallback(browser);
         await testHoldStopsImmediately(browser);
+        await testDeckLayoutJs(browser);
+        await testCompactLayout(browser);
     } finally {
         await browser.close();
     }

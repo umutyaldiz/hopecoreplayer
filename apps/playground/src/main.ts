@@ -115,6 +115,7 @@ if (player) {
                 artist: 'HopeCore',
                 album: 'Side A',
                 vinyl: vinyl === 'off' ? false : { position: (vinyl as 'center' | 'left' | 'right' | null) ?? 'right' },
+                layout: new URLSearchParams(location.search).get('layout') === 'compact' ? 'compact' : 'full',
             },
         };
     } else if (feature === 'story') {

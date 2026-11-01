@@ -210,6 +210,11 @@ export class SettingsMenu {
         if (!this.open) return;
         const area = this.el.closest('.video-area');
         if (!area) return;
+        // İnce ses çubuğu (~80 px): menü player'ın içine sığmaz — sayfaya taşarak açılır (yukarı, yer yoksa aşağı).
+        if ((this.el.getRootNode() as ShadowRoot).host?.hasAttribute('data-audio-compact')) {
+            this.fitToViewport();
+            return;
+        }
         const a = area.getBoundingClientRect();
         const b = this.button.getBoundingClientRect();
         const anchor = this.el.getBoundingClientRect();
@@ -228,6 +233,17 @@ export class SettingsMenu {
         if (drop) Object.assign(this.panel.style, { top: `${a.top + MENU_EDGE_PX - anchor.top}px`, marginTop: '0' });
         else Object.assign(this.panel.style, { bottom: `${anchor.bottom - (a.bottom - MENU_EDGE_PX)}px`, marginBottom: '0' });
     };
+
+    private fitToViewport(): void {
+        const b = this.button.getBoundingClientRect();
+        Object.assign(this.panel.style, { top: '', bottom: '', marginTop: '', marginBottom: '' });
+        const content = this.panel.scrollHeight;
+        const up = b.top - MENU_GAP_PX - MENU_EDGE_PX;
+        const down = window.innerHeight - b.bottom - MENU_GAP_PX - MENU_EDGE_PX;
+        const drop = up < Math.min(content, MENU_MAX_HEIGHT_PX) && down > up;
+        this.panel.toggleAttribute('data-drop', drop);
+        this.panel.style.maxHeight = `${Math.max(MENU_MIN_HEIGHT_PX, Math.min(MENU_MAX_HEIGHT_PX, drop ? down : up))}px`;
+    }
 
     /** Düzen değişince (ör. kompakt ↔ normal) açık menüyü kapat — eski konumunda asılı kalmasın. */
     closeMenu(): void {

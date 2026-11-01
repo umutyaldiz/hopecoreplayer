@@ -1522,12 +1522,13 @@ button.hp-context-menu-item:focus-visible {
     position: absolute;
     inset: 0;
     z-index: 1;
-    container-type: size;
     /* Sayfanın metin hizalaması (ör. ortalı bir hero) shadow DOM'a miras geçmesin. */
     text-align: left;
     overflow: hidden;
     pointer-events: none;
     color: #fff;
+    /* color-mix() iOS 16.2 öncesi Safari'de yok — önce düz bir zemin, destekleyen tarayıcıda üzerine yazılır. */
+    background: linear-gradient(160deg, #2a1f2b, #0c0c10);
     background:
         radial-gradient(80% 90% at 20% 10%, color-mix(in srgb, var(--hp-color-accent, #e5484d) 38%, transparent), transparent 70%),
         linear-gradient(160deg, #1d1d24, #0c0c10);
@@ -1579,7 +1580,6 @@ button.hp-context-menu-item:focus-visible {
 .hp-audio-area {
     position: absolute;
     inset: 0 0 var(--hp-audio-bottom-space, 66px) 0;
-    container-type: size;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1587,18 +1587,13 @@ button.hp-context-menu-item:focus-visible {
 .hp-audio[data-meta] .hp-audio-area {
     top: 44px;
 }
+/* --hp-deck-h AudioStage.layout()'tan (px) — konteyner sorgu birimleri eski Safari'de yok. */
 .hp-audio-deck {
-    --hp-deck-h: min(calc(var(--hp-vinyl-size, 0.78) * 100cqh), 62cqw);
     position: relative;
     display: flex;
     align-items: center;
-    height: var(--hp-deck-h);
-}
-.hp-audio[data-position='center'] .hp-audio-deck {
-    --hp-deck-h: min(calc(var(--hp-vinyl-size, 0.78) * 100cqh), 90cqw);
-}
-.hp-audio[data-position='none'] .hp-audio-deck {
-    --hp-deck-h: min(calc(var(--hp-vinyl-size, 0.78) * 100cqh), 90cqw);
+    flex: none;
+    height: var(--hp-deck-h, 0px);
 }
 .hp-audio[data-position='left'] .hp-audio-deck {
     flex-direction: row-reverse;
@@ -1607,10 +1602,12 @@ button.hp-context-menu-item:focus-visible {
     position: relative;
     z-index: 2;
     flex: none;
-    height: 100%;
-    aspect-ratio: 1;
+    /* Açık genişlik + yükseklik: Safari esnek kutuda yüzde yükseklik + aspect-ratio'dan genişliği hesaplayamıyordu. */
+    width: var(--hp-deck-h, 0px);
+    height: var(--hp-deck-h, 0px);
     border-radius: 6px;
     overflow: hidden;
+    background: radial-gradient(70% 70% at 30% 25%, #e5484d, transparent 75%), #26262d;
     background:
         radial-gradient(70% 70% at 30% 25%, color-mix(in srgb, var(--hp-color-accent, #e5484d) 70%, #fff 0%), transparent 75%),
         #26262d;
@@ -1631,8 +1628,8 @@ button.hp-context-menu-item:focus-visible {
     position: relative;
     z-index: 1;
     flex: none;
-    height: 96%;
-    aspect-ratio: 1;
+    width: calc(var(--hp-deck-h, 0px) * 0.96);
+    height: calc(var(--hp-deck-h, 0px) * 0.96);
     border-radius: 50%;
     pointer-events: auto;
     touch-action: none;
@@ -1654,6 +1651,9 @@ button.hp-context-menu-item:focus-visible {
 .hp-audio[data-position='left'][data-playing] .hp-vinyl {
     margin-right: calc(var(--hp-deck-h) * -0.46);
 }
+.hp-audio:not([data-laid-out]) .hp-vinyl {
+    transition: none;
+}
 .hp-vinyl[data-scratch]:not([data-live]) {
     cursor: grab;
 }
@@ -1661,6 +1661,7 @@ button.hp-context-menu-item:focus-visible {
     cursor: grabbing;
 }
 .hp-vinyl:focus-visible {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.7);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--hp-color-accent, #e5484d) 80%, transparent);
 }
 .hp-vinyl-disc {
@@ -1720,14 +1721,12 @@ button.hp-context-menu-item:focus-visible {
         transition: none;
     }
 }
-/* Kısa player (ör. mobilde 16:9): başlık gizlenir, plak alanı büyür. */
-@container (max-height: 230px) {
-    .hp-audio[data-meta] .hp-audio-meta {
-        display: none;
-    }
-    .hp-audio[data-meta] .hp-audio-area {
-        top: 6px;
-    }
+/* Kısa player (ör. mobilde 16:9): başlık gizlenir, plak alanı büyür — data-short AudioStage.layout()'tan. */
+.hp-audio[data-short][data-meta] .hp-audio-meta {
+    display: none;
+}
+.hp-audio[data-short][data-meta] .hp-audio-area {
+    top: 6px;
 }
 /* Ses reklamı: IMA'nın görüntüsüz video yüzeyi şeffaf — altında player'ın sahnesi (ses modunda kapak + plak) görünür. */
 [part='ad-layer'][data-audio-ad] {
@@ -1748,4 +1747,103 @@ button.hp-context-menu-item:focus-visible {
     background: linear-gradient(to top, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.28) 55%, transparent);
     pointer-events: none;
     z-index: 2;
+}
+
+/* ── İnce ses çubuğu (audio.layout: 'compact') ─────────────────────────────── */
+:host([data-audio-compact]) .video-area {
+    aspect-ratio: auto;
+    height: var(--hp-audio-bar-height, 84px);
+    /* Ayarlar menüsü çubuğun dışına (sayfaya) taşarak açılır. */
+    overflow: visible;
+}
+:host([data-audio-compact]) .hp-audio {
+    border-radius: var(--hp-radius);
+    background: linear-gradient(120deg, #24242c, #141418);
+    background:
+        linear-gradient(120deg, color-mix(in srgb, var(--hp-color-accent, #e5484d) 16%, transparent), transparent 60%),
+        var(--hp-color-surface, #141418);
+}
+:host([data-audio-compact]) .hp-audio > *,
+:host([data-audio-compact]) .hp-audio::after,
+:host([data-audio-compact]) .hp-caption-layer,
+:host([data-audio-compact]) .hp-loading-spinner,
+:host([data-audio-compact]) .hp-chrome::before,
+:host([data-audio-compact]) .hp-chrome::after {
+    display: none;
+}
+.hp-bar-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 0 6px;
+    color: var(--hp-color-on-surface, #fff);
+    pointer-events: none;
+}
+.hp-bar-meta[data-empty] .hp-bar-text {
+    display: none;
+}
+.hp-bar-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+}
+.hp-bar-title {
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.hp-bar-sub {
+    font-size: 11.5px;
+    opacity: 0.72;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.hp-bar-sub:empty {
+    display: none;
+}
+/* Çalarken küçük ekolayzır; duraklayınca alçak ve durgun. */
+.hp-bar-eq {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 2px;
+    flex: none;
+    width: 14px;
+    height: 14px;
+}
+.hp-bar-eq i {
+    flex: 1;
+    height: 30%;
+    border-radius: 1px;
+    background: var(--hp-color-accent, #fff);
+    transition: height 0.2s;
+}
+.hp-bar-meta[data-playing] .hp-bar-eq i {
+    animation: hp-bar-eq 0.9s ease-in-out infinite alternate;
+}
+.hp-bar-meta[data-playing] .hp-bar-eq i:nth-child(2) {
+    animation-duration: 0.7s;
+    animation-delay: -0.3s;
+}
+.hp-bar-meta[data-playing] .hp-bar-eq i:nth-child(3) {
+    animation-duration: 1.1s;
+    animation-delay: -0.6s;
+}
+@keyframes hp-bar-eq {
+    from {
+        height: 25%;
+    }
+    to {
+        height: 100%;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .hp-bar-meta[data-playing] .hp-bar-eq i {
+        animation: none;
+        height: 70%;
+    }
 }

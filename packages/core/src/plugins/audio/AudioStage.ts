@@ -13,10 +13,15 @@ export interface AudioStageContext {
     togglePlay(): void;
     play(): void;
     i18n: HopeLocaleStrings;
+    /** İnce çubuk (layout: 'compact'): başlık / sanatçıyı kontrol çubuğuna yazar; `null` kaldırır. */
+    setBarMeta(meta: { title: string; subtitle: string } | null): void;
 }
 
 const DEFAULT_SIZE = 0.78;
 const DEFAULT_RPM = 100 / 3;
+/** Kontrol çubuğunun üstündeki alan bundan kısaysa başlık gizlenir, plağa yer kalır (ör. mobilde 16:9). */
+const SHORT_STAGE_PX = 230;
+
 /** Bu kadar dereceden az çevirme "dokunuş" sayılır: oynat / duraklat. */
 const TAP_DEGREES = 4;
 /** Bundan kısa, çevirmesiz basış "dokunuş"tur (oynat / duraklat); daha uzunu "tutuş" (bırakınca çalmaya devam). */
@@ -60,6 +65,8 @@ export class AudioStage {
     private readonly armHolder: HTMLDivElement;
     private readonly titleEl: HTMLDivElement;
     private readonly artistEl: HTMLDivElement;
+    private readonly areaEl: HTMLDivElement;
+    private readonly resizeObserver: ResizeObserver | null;
     private readonly disc: ReturnType<typeof createDisc>;
 
     private options: AudioOptions = {};
@@ -142,12 +149,24 @@ export class AudioStage {
 
         // Videonun hemen üstü: yükleme halkası ve reklam katmanı sahnenin üstünde kalır.
         ctx.layerEl.insertBefore(el, ctx.videoEl.nextSibling);
+        this.areaEl = el.querySelector('.hp-audio-area')!;
+        // Plak / kapak boyutu JS ile (px): CSS konteyner sorgu birimleri (cqh/cqw) iOS 16 öncesi Safari'de yok, orada
+        // boyut kuralı düşüp kapak dev boyutta sola taşıyordu.
+        this.resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => this.layout()) : null;
+        this.resizeObserver?.observe(el);
+        this.resizeObserver?.observe(this.areaEl);
         this.refreshLabels();
     }
 
     update(options: AudioOptions): void {
         this.options = options;
-        this.vinyl = resolveVinyl(options.vinyl);
+        const compact = options.layout === 'compact';
+        this.el.setAttribute('data-layout', compact ? 'compact' : 'full');
+        // İnce çubukta kapak / plak yok — başlık ve sanatçı kontrol çubuğunda.
+        this.ctx.setBarMeta(
+            compact ? { title: options.title ?? '', subtitle: [options.artist, options.album].filter(Boolean).join(' · ') } : null
+        );
+        this.vinyl = compact ? null : resolveVinyl(options.vinyl);
         const cover = options.cover || this.ctx.poster() || '';
         for (const img of [this.backdropImg, this.sleeveImg]) {
             if (cover) img.src = cover;
@@ -174,8 +193,25 @@ export class AudioStage {
 
         this.applyMediaSession();
         this.onDurationChange();
+        this.layout();
         this.render();
         if (!this.ctx.videoEl.paused) this.onPlay();
+    }
+
+    /** Kapak / plak yüksekliği: alan yüksekliğinin `size` katı, genişliğe sığacak kadar (kılıf + yarım plak ≈ 1,46 H). */
+    private layout(): void {
+        if (!this.el.isConnected) return;
+        const w = this.areaEl.clientWidth;
+        const h = this.areaEl.clientHeight;
+        const size = this.vinyl?.size ?? resolveVinyl(this.options.vinyl)?.size ?? DEFAULT_SIZE;
+        const withSleeveAndVinyl = !!this.vinyl && this.vinyl.position !== 'center';
+        const deck = Math.max(0, Math.min(size * h, (withSleeveAndVinyl ? 0.62 : 0.9) * w));
+        this.el.style.setProperty('--hp-deck-h', `${Math.round(deck * 10) / 10}px`);
+        // İlk yerleşim animasyonsuz: plak 0'dan yerine kayarak gelmesin (kayma yalnızca çal / duraklat geçişinde).
+        if (deck > 0 && !this.el.hasAttribute('data-laid-out')) {
+            requestAnimationFrame(() => requestAnimationFrame(() => this.el.setAttribute('data-laid-out', '')));
+        }
+        this.el.toggleAttribute('data-short', this.el.clientHeight > 0 && this.el.clientHeight < SHORT_STAGE_PX);
     }
 
     // ── Scratch sesi ────────────────────────────────────────────────────
@@ -477,6 +513,8 @@ export class AudioStage {
         v.removeEventListener('emptied', this.render);
         this.releaseMediaSession();
         this.disableSound();
+        this.resizeObserver?.disconnect();
+        this.ctx.setBarMeta(null);
         this.el.remove();
     }
 }

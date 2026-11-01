@@ -206,6 +206,11 @@ export interface AudioOptions {
     title?: string;
     artist?: string;
     album?: string;
+    /**
+     * 'full' (varsayılan): kapak, plak, başlık. 'compact': yalnızca kontrol çubuğu kadar ince bir player — başlık ve
+     * sanatçı çubuğun içinde; kapak / plak gösterilmez. Yükseklik CSS'ten: `--hp-audio-bar-height` (varsayılan 84px).
+     */
+    layout?: 'full' | 'compact';
     /** Plak. `false`: yalnızca kapak. Varsayılan açık. */
     vinyl?: boolean | VinylOptions;
     /**

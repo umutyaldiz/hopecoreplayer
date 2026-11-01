@@ -1591,7 +1591,9 @@ export class HopePlayerElement extends HTMLElement {
         this.audioMode = !!audio;
         this.toggleAttribute('data-audio', !!audio);
         this.controlBar.setAudioMode(!!audio);
+        this.toggleAttribute('data-audio-compact', audio?.layout === 'compact');
         if (!audio) {
+            this.controlBar.setAudioBar(null);
             this.audioStage?.destroy();
             this.audioStage = null;
             return;
@@ -1611,6 +1613,7 @@ export class HopePlayerElement extends HTMLElement {
                     togglePlay: () => (this.videoEl.paused ? void this.play().catch(() => {}) : this.videoEl.pause()),
                     play: () => void this.play().catch(() => {}),
                     i18n: this.i18n,
+                    setBarMeta: (meta) => this.controlBar.setAudioBar(meta),
                 },
                 audio
             );

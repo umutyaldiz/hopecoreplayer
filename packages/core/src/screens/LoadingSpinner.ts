@@ -7,7 +7,7 @@ export class LoadingSpinner {
         this.video = video;
 
         this.el = document.createElement('div');
-        this.el.className = 'hp:absolute hp:inset-0 hp:flex hp:items-center hp:justify-center hp:pointer-events-none hp:hidden';
+        this.el.className = 'hp-loading-spinner hp:absolute hp:inset-0 hp:flex hp:items-center hp:justify-center hp:pointer-events-none hp:hidden';
         this.el.innerHTML =
             '<div class="hp:w-10 hp:h-10 hp:border-[3px] hp:border-on-surface/30 hp:border-t-accent hp:rounded-full hp:animate-spin"></div>';
 
