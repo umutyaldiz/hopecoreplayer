@@ -1998,7 +1998,10 @@ button.hp-context-menu-item:focus-visible {
     color: #fff;
     text-decoration: none;
     filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.55));
-    transition: opacity 0.25s;
+    transition:
+        opacity 0.25s,
+        right 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
+        bottom 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
     animation: hp-rw-fade 0.4s ease-out;
 }
 .hp-sponsor-logo[data-position='top-left'] {
@@ -2007,15 +2010,23 @@ button.hp-context-menu-item:focus-visible {
 }
 .hp-sponsor-logo[data-position='top-right'] {
     top: 12px;
-    right: 12px;
+    right: var(--hp-sponsor-avoid-right, 12px);
 }
 .hp-sponsor-logo[data-position='bottom-left'] {
-    bottom: 76px;
+    bottom: var(--hp-sponsor-avoid-bottom, 76px);
     left: 12px;
 }
 .hp-sponsor-logo[data-position='bottom-right'] {
-    bottom: 76px;
+    bottom: var(--hp-sponsor-avoid-bottom, 76px);
     right: 12px;
+}
+/* Kontroller gizliyken (üst çubuk ve seek bar yok) logo köşesine döner. */
+.video-area[data-chrome-hidden] .hp-sponsor-logo[data-position='top-right'] {
+    right: 12px;
+}
+.video-area[data-chrome-hidden] .hp-sponsor-logo[data-position='bottom-left'],
+.video-area[data-chrome-hidden] .hp-sponsor-logo[data-position='bottom-right'] {
+    bottom: 12px;
 }
 .hp-sponsor-logo img {
     display: block;

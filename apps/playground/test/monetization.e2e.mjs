@@ -355,6 +355,59 @@ async function testSponsorshipMobile(browser) {
         return { compact: r.querySelector('.video-area').hasAttribute('data-compact'), width: Math.round(logo.width), overTop: hit(logo, top), overSeek: hit(logo, seek) };
     });
     ok(g.compact && !g.overTop && !g.overSeek && g.width <= 48, `dar düzen: üst çubukla çakışma ${g.overTop}, seek bar ile ${g.overSeek}, genişlik ${g.width}px`);
+
+    // Kontroller gizlenince logo en sağa kayar, kontroller gelince üst çubuğun soluna döner.
+    const rightGap = () =>
+        root(page, () => {
+            const el = document.getElementById('player');
+            const area = el.shadowRoot.querySelector('.video-area').getBoundingClientRect();
+            const logo = el.shadowRoot.querySelector('[part="sponsor-logo"]').getBoundingClientRect();
+            return { gap: Math.round(area.right - logo.right), hidden: el.shadowRoot.querySelector('.video-area').hasAttribute('data-chrome-hidden') };
+        });
+    const visibleGap = (await rightGap()).gap;
+    await root(page, () => document.getElementById('player').play());
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('.video-area').hasAttribute('data-chrome-hidden'), null, { timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(500);
+    const hiddenState = await rightGap();
+    ok(hiddenState.hidden && hiddenState.gap === 12 && visibleGap > 60, `kontroller gizlenince en sağa kaydı (sağ boşluk ${visibleGap}px → ${hiddenState.gap}px)`);
+    const box = await page.locator('#player').boundingBox();
+    await page.touchscreen.tap(box.x + box.width * 0.3, box.y + box.height * 0.5);
+    await page.waitForTimeout(500);
+    const shown = await rightGap();
+    ok(!shown.hidden && shown.gap === visibleGap, `kontroller gelince üst çubuğun soluna döndü (sağ boşluk ${shown.gap}px)`);
+    await context.close();
+}
+
+async function testSponsorshipBottomRight(browser) {
+    console.log('\n[10c] Alt-sağ logo: kontroller görünürken seek bar\'ın üstünde, gizliyken en altta');
+    const { context, page } = await openSponsorship(browser, {
+        body: { active: true, sponsor: { name: 'Kavrul Coffee', logo: '/kavrul-logo.svg' }, logo: { position: 'bottom-right', width: 64, label: 'Sunar' } },
+    });
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('[part="sponsor-logo"] img')?.complete, null, { timeout: 5000 }).catch(() => {});
+    const state = () =>
+        root(page, () => {
+            const r = document.getElementById('player').shadowRoot;
+            const area = r.querySelector('.video-area');
+            const a = area.getBoundingClientRect();
+            const logo = r.querySelector('[part="sponsor-logo"]').getBoundingClientRect();
+            const seek = r.querySelector('[part="seek-bar"]').getBoundingClientRect();
+            return { bottomGap: Math.round(a.bottom - logo.bottom), aboveSeek: logo.bottom <= seek.top, hidden: area.hasAttribute('data-chrome-hidden') };
+        });
+    const box = await page.locator('#player').boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(300);
+    const visible = await state();
+    ok(!visible.hidden && visible.aboveSeek, `kontroller görünürken seek bar'ın üstünde (alttan ${visible.bottomGap}px)`);
+    await root(page, () => document.getElementById('player').play());
+    await page.mouse.move(box.x + box.width + 40, box.y + box.height + 40);
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('.video-area').hasAttribute('data-chrome-hidden'), null, { timeout: 6000 }).catch(() => {});
+    await page.waitForTimeout(500);
+    const hidden = await state();
+    ok(hidden.hidden && hidden.bottomGap === 12, `kontroller gizlenince en alta indi (alttan ${hidden.bottomGap}px)`);
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(500);
+    const back = await state();
+    ok(!back.hidden && back.aboveSeek, `kontroller gelince tekrar seek bar'ın üstünde (alttan ${back.bottomGap}px)`);
     await context.close();
 }
 
@@ -392,6 +445,7 @@ async function testSponsorshipValidation(browser) {
         await testSponsorship(browser);
         await testSponsorshipIntroRepeat(browser);
         await testSponsorshipMobile(browser);
+        await testSponsorshipBottomRight(browser);
         await testSponsorshipValidation(browser);
     } finally {
         await browser.close();

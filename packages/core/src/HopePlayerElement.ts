@@ -1645,6 +1645,10 @@ export class HopePlayerElement extends HTMLElement {
     private setChromeOpacity(value: '0' | '1'): void {
         this.chromeEl.style.opacity = value;
         this.chromeVisible = value === '1';
+        // Kontrollerin üstüne binmemek için yer değiştiren katmanlar (ör. sponsor logosu) kontroller gizliyken köşeye döner.
+        // Host'a değil video alanına: constructor'da da çağrılıyor ve createElement ile oluşturulan custom element
+        // constructor'da kendine attribute ekleyemez (NotSupportedError).
+        this.videoArea?.toggleAttribute('data-chrome-hidden', !this.chromeVisible);
         // captionRenderer constructor'da chrome'dan SONRA kuruluyor — o ana kadarki çağrılar için güvenli.
         this.captionRenderer?.setChromeVisible(this.chromeVisible);
         this.updateMiniProgress();

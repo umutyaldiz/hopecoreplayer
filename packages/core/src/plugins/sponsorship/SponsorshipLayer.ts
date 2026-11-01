@@ -272,16 +272,18 @@ export class SponsorshipLayer {
         const area = this.ctx.overlayEl;
         const compact = area.hasAttribute('data-compact');
         const position = el.getAttribute('data-position');
-        el.style.removeProperty('right');
-        el.style.removeProperty('bottom');
+        // Kontroller görünürken kaçınılacak mesafe CSS değişkenine yazılır; kontroller gizliyken CSS logoyu köşeye
+        // alır (bkz. :host([data-chrome-hidden])) ve geçiş animasyonlu olur.
+        el.style.removeProperty('--hp-sponsor-avoid-right');
+        el.style.removeProperty('--hp-sponsor-avoid-bottom');
         el.toggleAttribute('data-compact', compact);
         const a = area.getBoundingClientRect();
         if (position === 'top-right') {
             const bar = area.querySelector('.hp-top-bar')?.getBoundingClientRect();
-            if (bar && bar.width > 0) el.style.right = `${Math.round(a.right - bar.left + 8)}px`;
+            if (bar && bar.width > 0) el.style.setProperty('--hp-sponsor-avoid-right', `${Math.round(a.right - bar.left + 8)}px`);
         } else if (position === 'bottom-left' || position === 'bottom-right') {
             const seek = area.querySelector('[part="seek-bar"]')?.getBoundingClientRect();
-            if (seek && seek.height > 0) el.style.bottom = `${Math.round(a.bottom - seek.top + 6)}px`;
+            if (seek && seek.height > 0) el.style.setProperty('--hp-sponsor-avoid-bottom', `${Math.round(a.bottom - seek.top + 6)}px`);
         }
     }
 
