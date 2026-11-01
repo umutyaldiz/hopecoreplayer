@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Kavrul Coffee Co.">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="65%">
+      <stop offset="0" stop-color="#5a3622"/>
+      <stop offset="1" stop-color="#2b1810"/>
+    </radialGradient>
+    <path id="arcTop" d="M 38 100 A 62 62 0 0 1 162 100"/>
+    <path id="arcBottom" d="M 30 100 A 70 70 0 0 0 170 100"/>
+  </defs>
+  <circle cx="100" cy="100" r="98" fill="#c8873a"/>
+  <circle cx="100" cy="100" r="91" fill="url(#bg)"/>
+  <circle cx="100" cy="100" r="84" fill="none" stroke="#c8873a" stroke-width="1.5" stroke-dasharray="2 4"/>
+  <text font-family="Georgia, 'Times New Roman', serif" font-size="19" font-weight="700" letter-spacing="5" fill="#f3e3c7">
+    <textPath href="#arcTop" startOffset="50%" text-anchor="middle">KAVRUL</textPath>
+  </text>
+  <text font-family="Georgia, 'Times New Roman', serif" font-size="11" letter-spacing="4" fill="#c8873a">
+    <textPath href="#arcBottom" startOffset="50%" text-anchor="middle">COFFEE · CO · 2026</textPath>
+  </text>
+  <!-- Buhar -->
+  <path d="M86 72c-6-8 6-12 0-21" fill="none" stroke="#f3e3c7" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+  <path d="M100 68c-6-8 6-12 0-21" fill="none" stroke="#f3e3c7" stroke-width="4" stroke-linecap="round"/>
+  <path d="M114 72c-6-8 6-12 0-21" fill="none" stroke="#f3e3c7" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+  <!-- Fincan -->
+  <path d="M68 82h64l-6 40a14 14 0 0 1-14 12H88a14 14 0 0 1-14-12z" fill="#f3e3c7"/>
+  <path d="M131 90h7a12 12 0 0 1 0 24h-9" fill="none" stroke="#f3e3c7" stroke-width="6"/>
+  <path d="M74 92h52" stroke="#c8873a" stroke-width="4" stroke-linecap="round"/>
+  <ellipse cx="100" cy="140" rx="40" ry="5" fill="#f3e3c7" opacity="0.9"/>
+</svg>

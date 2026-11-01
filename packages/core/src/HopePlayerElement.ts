@@ -1,5 +1,5 @@
 import tailwindCss from './theme/tailwind.css?inline';
-import type { AdsOptions, HopePlayerOptions } from './types';
+import type { HopeSourceOption, AdsOptions, HopePlayerOptions } from './types';
 import type Hls from 'hls.js';
 import { SourceManager, type HlsQualityLevel, type PlaybackEngineInfo, type StreamAudioTrack, type StreamTextTrack } from './hls/SourceManager';
 import { ControlBar } from './controls/ControlBar';
@@ -145,6 +145,15 @@ export class HopePlayerElement extends HTMLElement {
     private gestureControls: GestureControls | null = null;
     private loopSection: LoopSection | null = null;
     private audioStage: AudioStage | null = null;
+    /** Kalite kilidi (rewardedUnlock eklentisi) — kilitliyse yüksek kaliteler menüde kilitli, HLS'te üst sınır var. */
+    private qualityGate: { isLocked(height: number | null): boolean; requestUnlock(): void } | null = null;
+    private rewardedUnlock: import('./plugins/rewarded').RewardedUnlock | null = null;
+    private sponsorship: import('./plugins/sponsorship').SponsorshipLayer | null = null;
+    /** Son uygulanan MP4 kaynak listesi ve seçili etiket — kilit açılınca menü yeniden kurulur. */
+    private currentSources: HopeSourceOption[] = [];
+    private activeSourceLabel = '';
+    private lastHlsLevels: HlsQualityLevel[] = [];
+    private lastHlsActive = -1;
     /** options.audio — kapak + plak sahnesi, kontroller hep görünür, tam ekran yok. */
     private audioMode = false;
     private inViewAutoplay: InViewAutoplay | null = null;
@@ -462,6 +471,10 @@ export class HopePlayerElement extends HTMLElement {
         this.loopSection?.destroy();
         this.audioStage?.destroy();
         this.audioStage = null;
+        this.rewardedUnlock?.destroy();
+        this.rewardedUnlock = null;
+        this.sponsorship?.destroy();
+        this.sponsorship = null;
         this.inViewAutoplay?.destroy();
         this.unregisterSticky?.();
         this.playlistRunner?.destroy();
@@ -723,6 +736,7 @@ export class HopePlayerElement extends HTMLElement {
         this.liveWallClock?.refreshLabels();
         this.loopSection?.refreshLabels();
         this.audioStage?.refreshLabels();
+        this.rewardedUnlock?.refreshLabels();
         this.markProgress?.refreshLabels();
         this.unregisterSticky?.refreshLabels?.();
 
@@ -788,8 +802,14 @@ export class HopePlayerElement extends HTMLElement {
     private async initPlayback(options: HopePlayerOptions): Promise<void> {
         this.sourceManager.configure(options.hls);
         this.errorScreen.dismiss();
-        const sources = options.sources?.length ? options.sources : options.src ? [{ src: options.src, label: this.i18n.autoQuality }] : [];
-        const initial = sources.find((s) => s.selected) ?? sources[0];
+        await this.applyRewardedUnlock(options);
+
+        const sources: HopeSourceOption[] = options.sources?.length ? options.sources : options.src ? [{ src: options.src, label: this.i18n.autoQuality }] : [];
+        this.currentSources = sources;
+        // O an yüklü kaynak listede varsa (ve kilitli değilse) korunur: seçenekler yeniden uygulanınca (ör. React prop)
+        // kullanıcının seçtiği kalite `selected` olana geri dönmesin.
+        const loaded = sources.find((s) => this.sourceManager.isLoaded(s.src, s.type) && !this.isSourceLocked(s));
+        const initial = loaded ?? this.pickInitialSource(sources);
         // Kaynak değişmediyse yeniden yükleme: başka bir seçenek değişince (ör. React'te prop) çalan medya başa sarılmasın.
         if (initial && !this.sourceManager.isLoaded(initial.src, initial.type)) {
             // Tek kaynakta önceki kaynağın (MP4 sources) kalite listesi kalmasın — yüklemeden ÖNCE temizle,
@@ -802,17 +822,11 @@ export class HopePlayerElement extends HTMLElement {
             if (options.autoplay) this.videoEl.play().catch(() => {});
         }
 
-        if (sources.length > 1) {
-            this.controlBar.setQualities(
-                sources.map((s) => ({
-                    label: s.label,
-                    onSelect: () => void this.switchQualitySource(s),
-                })),
-                sources.find((s) => s.selected)?.label ?? sources[0]!.label
-            );
-        }
+        if (initial) this.activeSourceLabel = initial.label;
+        this.renderSourceQualities();
 
         await this.installAdsOnce(options);
+        await this.applySponsorship(options);
 
         if (options.gesture && !this.gestureControls) {
             const gestureOptions = options.gesture === true ? {} : options.gesture;
@@ -1233,8 +1247,146 @@ export class HopePlayerElement extends HTMLElement {
         return this.panelContainer;
     }
 
+    // ── Kalite kilidi (ödüllü reklam) ─────────────────────────────────────
+
+    /** Kaynağın yüksekliği: `height` ya da etiketten ("1080p" → 1080); bilinmiyorsa null. */
+    private sourceHeight(s: HopeSourceOption): number | null {
+        if (typeof s.height === 'number' && s.height > 0) return s.height;
+        const m = /(\d{3,4})\s*p\b/i.exec(s.label);
+        return m ? Number(m[1]) : null;
+    }
+
+    private isSourceLocked(s: HopeSourceOption): boolean {
+        return !!this.qualityGate?.isLocked(this.sourceHeight(s));
+    }
+
+    /** Başlangıç kaynağı: `selected` (ya da ilk); kilitliyse serbest kaynakların en yükseği. */
+    private pickInitialSource(sources: HopeSourceOption[]): HopeSourceOption | undefined {
+        const preferred = sources.find((s) => s.selected) ?? sources[0];
+        if (!preferred || !this.isSourceLocked(preferred)) return preferred;
+        const free = sources.filter((s) => !this.isSourceLocked(s));
+        if (!free.length) return preferred;
+        return free.reduce((a, b) => ((this.sourceHeight(b) ?? 0) > (this.sourceHeight(a) ?? 0) ? b : a));
+    }
+
+    private renderSourceQualities(): void {
+        const sources = this.currentSources;
+        if (sources.length <= 1) return;
+        this.controlBar.setQualities(
+            sources.map((s) => {
+                const locked = this.isSourceLocked(s);
+                return {
+                    label: s.label,
+                    locked,
+                    onSelect: locked ? () => this.qualityGate?.requestUnlock() : () => void this.switchQualitySource(s),
+                };
+            }),
+            this.activeSourceLabel || sources[0]!.label
+        );
+    }
+
+    /** Kilitli kalite var mı (ödüllü reklam butonu yalnızca o zaman görünür) ve en yükseğinin etiketi. */
+    lockedQualityLabel(): string | null {
+        if (!this.qualityGate) return null;
+        const heights: number[] = [];
+        if (this.lastHlsLevels.length > 1) {
+            for (const l of this.lastHlsLevels) if (this.qualityGate.isLocked(l.height)) heights.push(l.height);
+        } else {
+            for (const s of this.currentSources) {
+                const h = this.sourceHeight(s);
+                if (this.currentSources.length > 1 && this.qualityGate.isLocked(h)) heights.push(h ?? 0);
+            }
+        }
+        if (!heights.length) return null;
+        return `${Math.max(...heights)}p`;
+    }
+
+    /** Kilit durumu değişti: menüleri yeniden kur, HLS üst sınırını güncelle; `upgrade` ise en iyi kaliteye geç. */
+    private refreshQualityGate(upgrade: boolean): void {
+        if (this.lastHlsLevels.length > 1) {
+            this.onHlsLevelsChanged(this.lastHlsLevels, upgrade ? -1 : this.lastHlsActive);
+            if (upgrade) this.sourceManager.setLevel(-1);
+        } else if (this.currentSources.length > 1) {
+            const best = upgrade
+                ? this.currentSources
+                      .filter((s) => !this.isSourceLocked(s))
+                      .reduce<HopeSourceOption | null>((a, b) => (!a || (this.sourceHeight(b) ?? 0) > (this.sourceHeight(a) ?? 0) ? b : a), null)
+                : null;
+            const active = this.currentSources.find((s) => s.label === this.activeSourceLabel);
+            // Kilit geri geldi ve şu an kilitli bir kalitedeysek serbest olanın en yükseğine in.
+            const target = best ?? (active && this.isSourceLocked(active) ? this.pickInitialSource(this.currentSources) : null);
+            if (target && target.label !== this.activeSourceLabel) void this.switchQualitySource(target);
+            else this.renderSourceQualities();
+        }
+        this.rewardedUnlock?.onQualitiesChanged();
+    }
+
+    private async applyRewardedUnlock(options: HopePlayerOptions): Promise<void> {
+        const opts = options.rewardedUnlock;
+        if (!opts) {
+            if (this.rewardedUnlock) {
+                this.rewardedUnlock.destroy();
+                this.rewardedUnlock = null;
+                this.qualityGate = null;
+                this.refreshQualityGate(false);
+            }
+            return;
+        }
+        if (!this.rewardedUnlock) {
+            const { installRewardedUnlock } = await import('./plugins/rewarded');
+            this.rewardedUnlock ??= installRewardedUnlock(
+                {
+                    hostEl: this,
+                    videoEl: this.videoEl,
+                    overlayEl: this.videoArea,
+                    chromeEl: this.chromeEl,
+                    i18n: this.i18n,
+                    log: (entry) => this.log.add({ source: 'ads', ...entry }),
+                    play: () => void this.play().catch(() => {}),
+                    exitFullscreen: () => {
+                        if (this.isFullscreenActive()) this.exitFullscreenCompat();
+                    },
+                    lockedQualityLabel: () => this.lockedQualityLabel(),
+                    // Kalite dosyası değil içerik: aynı videonun 240p ↔ 720p geçişi kilidi kapatmasın.
+                    contentKey: () => this.currentSources.map((s) => s.src).join('|'),
+                    onLockChange: (upgrade) => this.refreshQualityGate(upgrade),
+                },
+                opts
+            );
+            this.qualityGate = this.rewardedUnlock;
+        } else {
+            this.rewardedUnlock.update(opts);
+        }
+    }
+
+    private async applySponsorship(options: HopePlayerOptions): Promise<void> {
+        const opts = options.sponsorship;
+        if (!opts?.endpoint) {
+            this.sponsorship?.destroy();
+            this.sponsorship = null;
+            return;
+        }
+        if (!this.sponsorship) {
+            const { installSponsorship } = await import('./plugins/sponsorship');
+            this.sponsorship ??= installSponsorship(
+                {
+                    hostEl: this,
+                    videoEl: this.videoEl,
+                    overlayEl: this.videoArea,
+                    i18n: this.i18n,
+                    log: (entry) => this.log.add({ source: 'player', ...entry }),
+                },
+                opts
+            );
+        } else {
+            this.sponsorship.update(opts);
+        }
+    }
+
     /** Kalite değişirken oynatma konumunu ve play/pause durumunu korur. */
     private async switchQualitySource(source: NonNullable<HopePlayerOptions['sources']>[number]): Promise<void> {
+        this.activeSourceLabel = source.label;
+        this.renderSourceQualities();
         const resumeTime = this.videoEl.currentTime;
         const wasPlaying = !this.videoEl.paused;
         await this.sourceManager.load(source.src, source.type);
@@ -1250,19 +1402,36 @@ export class HopePlayerElement extends HTMLElement {
             this.controlBar.setQualities([], '');
             return;
         }
+        this.lastHlsLevels = levels;
+        this.lastHlsActive = activeIndex;
         if (levels.length <= 1) return;
         this.hlsQualitiesShown = true;
         const label = (l: HlsQualityLevel) => `${l.height}p`;
+        const gate = this.qualityGate;
+        const locked = (l: HlsQualityLevel) => !!gate?.isLocked(l.height);
+        // Kilit varsa ABR serbest seviyelerin en yükseğinde durur (hepsi kilitliyse en düşükte).
+        if (gate) {
+            const free = levels.filter((l) => !locked(l));
+            const pool = free.length ? free : [levels.reduce((a, b) => (b.height < a.height ? b : a))];
+            this.sourceManager.setMaxLevel(pool.reduce((a, b) => (b.height > a.height ? b : a)).index);
+        } else {
+            this.sourceManager.setMaxLevel(-1);
+        }
         this.controlBar.setQualities(
             [
                 { label: this.i18n.autoQuality, onSelect: () => this.sourceManager.setLevel(-1) },
                 // Yüksekten düşüğe (hls.js artan sıralıyor) — l.index hls.js'teki gerçek seviye numarası, sıradan bağımsız.
                 ...[...levels]
                     .sort((x, y) => y.height - x.height)
-                    .map((l) => ({ label: label(l), onSelect: () => this.sourceManager.setLevel(l.index) })),
+                    .map((l) => ({
+                        label: label(l),
+                        locked: locked(l),
+                        onSelect: locked(l) ? () => gate?.requestUnlock() : () => this.sourceManager.setLevel(l.index),
+                    })),
             ],
-            activeIndex === -1 ? this.i18n.autoQuality : label(levels[activeIndex]!)
+            activeIndex === -1 || !levels[activeIndex] ? this.i18n.autoQuality : label(levels[activeIndex]!)
         );
+        this.rewardedUnlock?.onQualitiesChanged();
     };
 
     // ── Fullscreen (vendor-prefix uyumlu) ───────────────────────────────
