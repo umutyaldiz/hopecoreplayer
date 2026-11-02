@@ -428,6 +428,44 @@ export interface AdTriggersOptions {
     custParams?: AdTriggerCustParams;
 }
 
+/** TV'ye gönderilecek kaynak: adres ya da adres + MIME türü. */
+export type CastSource = string | { src: string; type?: string };
+
+/**
+ * TV'ye yayın (Google Cast / AirPlay). Hepsi varsayılan olarak kapalı — açtığınız yollar kontrol çubuğuna buton
+ * olarak gelir; buton yalnızca yakında uygun bir cihaz varken görünür.
+ */
+export interface CastOptions {
+    /**
+     * Google Cast: Chromecast, Google TV, Android TV ve Cast destekli TV'ler. Chrome / Edge (masaüstü ve Android),
+     * yalnızca HTTPS. Cast SDK yalnızca bu açıksa ve tarayıcı destekliyorsa yüklenir. Varsayılan false.
+     */
+    chromecast?: boolean;
+    /** AirPlay: Safari (iPhone, iPad, Mac) → Apple TV / AirPlay destekli TV. Varsayılan false. */
+    airplay?: boolean;
+    /**
+     * Tarayıcının kendi "cihaza yayınla" seçicisi (Remote Playback API) — Cast SDK'sız Android Chrome gibi durumlar için.
+     * Yalnızca doğrudan adresli kaynaklarda (MP4 vb., hls.js değil). Varsayılan false.
+     */
+    remotePlayback?: boolean;
+    /** Cast receiver uygulama kimliği. Varsayılan Google'ın Default Media Receiver'ı ('CC1AD845'). */
+    receiverAppId?: string;
+    /**
+     * TV'ye gönderilecek ayrı kaynak (ör. TV'ye özel imzalı adres). Fonksiyon o an çalan kaynağı alır.
+     * Verilmezse çalan kaynak gönderilir (TV adrese erişebilmeli; HLS için CORS gerekir).
+     */
+    source?: CastSource | ((current: { src: string; type?: string }) => CastSource);
+    /** TV ekranında gösterilecek bilgiler. Verilmezse ses modunun başlık / sanatçı / kapağı ya da `poster`. */
+    metadata?: { title?: string; subtitle?: string; image?: string };
+    /**
+     * TV'de reklam (Google Cast). true (varsayılan): `ads` seçeneğindeki VMAP ya da preroll / midroll / postroll
+     * VAST tag'leri receiver'a gönderilir, reklamları TV oynatır. false: reklamsız. Nesne: TV'ye özel tag'ler.
+     */
+    ads?: boolean | { vmap?: string; preroll?: string; midroll?: string; midrollIntervalSeconds?: number; postroll?: string };
+    /** HLS segment biçimi (receiver bunu tahmin edemez): 'ts' (varsayılan) ya da 'fmp4'. */
+    hlsSegmentFormat?: 'ts' | 'fmp4';
+}
+
 export interface AudioOptions {
     /** Kapak görseli. Verilmezse `poster` kullanılır; o da yoksa temanın renkleriyle düz bir zemin. */
     cover?: string;
@@ -837,6 +875,8 @@ export interface HopePlayerOptions {
     sponsorship?: SponsorshipOptions;
     /** Kurallara göre (saniye, tam ekrana giriş, duraklatma…) tetiklenen Ad Manager out-of-page reklamları — bkz. AdTriggersOptions. */
     adTriggers?: AdTriggersOptions;
+    /** TV'ye yayın: Google Cast (Chromecast) ve AirPlay — varsayılan kapalı, bkz. CastOptions. */
+    cast?: CastOptions;
     /** Süre göstergesinde kalan süreyi (-0:10 / 0:15) gösterme. Varsayılan false (geçen süre). */
     showRemainingTime?: boolean;
     /** Oynat butonunun yanında geri/ileri sarma butonları. `true` = 10 sn geri + 10 sn ileri. Varsayılan kapalı. */
@@ -951,6 +991,11 @@ export type HopePlayerEventMap = {
     }>;
     'hp:itemchange': CustomEvent<{ index: number; source: 'playlist' | 'story' }>;
     'hp:sticky': CustomEvent<{ sticky: boolean; corner?: StickyCorner }>;
+    /**
+     * TV yayın durumu değişti. `state`: available (cihaz var), unavailable, connecting, connected, disconnected.
+     * `via`: chromecast | airplay | remote. `device`: cihaz adı (Cast).
+     */
+    'hp:cast': CustomEvent<{ state: 'available' | 'unavailable' | 'connecting' | 'connected' | 'disconnected'; via: 'chromecast' | 'airplay' | 'remote'; device?: string }>;
     /** Reklam tetikleyici kuralları yüklendi (null = kapalı). */
     'hp:adtriggers': CustomEvent<{ config: AdTriggersConfig | null }>;
     /** Tetikleyici reklamı doldu ve gösterildi. */

@@ -93,6 +93,8 @@ export class AdsController {
     private visibilityObserver: IntersectionObserver | null = null;
     /** Bir lineer reklam arası başladı ve henüz bitmedi (CONTENT_PAUSE_REQUESTED → CONTENT_RESUME_REQUESTED). */
     private linearBreakActive = false;
+    /** İçerik Chromecast'te oynuyor — reklamları TV (receiver) oynatır; yerel istek / VMAP takibi yok. */
+    private remote = false;
     /** Ekranda bir overlay (non-linear) reklam var — reklam katmanı içerikle birlikte görünür. */
     private nonLinearActive = false;
     /** Son IMA hatası — vazgeçilince hp:aderror bununla gönderilir. */
@@ -358,7 +360,7 @@ export class AdsController {
 
     private readonly onTimeUpdateForMidroll = (): void => {
         const interval = this.options.midrollIntervalSeconds ?? 0;
-        if (interval <= 0 || !this.options.adTagMidroll) return;
+        if (interval <= 0 || !this.options.adTagMidroll || this.remote) return;
         // iosFullscreen: 'defer' — tam ekran / PiP'ten çıkılana kadar beklet; çıkınca ilk timeupdate'te istenir.
         if (this.options.iosFullscreen === 'defer' && this.surfaceGuard?.current()) return;
         const currentTime = this.ctx.videoEl.currentTime;
@@ -369,7 +371,7 @@ export class AdsController {
     };
 
     private readonly onContentEnded = (): void => {
-        if (this.postrollShown) return;
+        if (this.postrollShown || this.remote) return;
         // IMA'ya içerik bitti: VMAP'teki postroll (-1 noktası) bununla başlar; tek VAST postroll'u ayrıca istenir.
         if (this.options.adTagVmap) {
             this.postrollShown = true;
@@ -407,7 +409,7 @@ export class AdsController {
     }
 
     private async requestAd(type: AdBreakType, rawTag: string | string[], attempt = 0, skipUrlProcessing = false): Promise<void> {
-        if (!this.adsLoader || !this.ima) return;
+        if (!this.adsLoader || !this.ima || this.remote) return;
         this.currentBreakType = type;
         this.lastRequestIsVmap = skipUrlProcessing;
 
@@ -878,6 +880,31 @@ export class AdsController {
         if (this.vmapRequested || !this.options.adTagVmap) return;
         this.vmapRequested = true;
         this.requestAd('Midroll', this.options.adTagVmap, 0, true);
+    }
+
+    /**
+     * Chromecast oturumu başladı / bitti. Başlayınca yerel IMA askıya alınır: süren reklam arası kapanır, VMAP takibi
+     * (adsManager) bırakılır — aralar TV'de oynar. Dönüşte VMAP yeniden istenmez (aralar TV'de oynandı); aralıklı
+     * midroll ve postroll yerelde kaldığı yerden devam eder.
+     */
+    setRemote(on: boolean): void {
+        if (this.remote === on) return;
+        this.remote = on;
+        if (!on) return;
+        this.stopAdProgress();
+        this.endNonLinear();
+        this.adsManager?.destroy();
+        this.adsManager = null;
+        this.ctx.prerollGate?.release(false);
+        this.initialRequestFired = true;
+        this.vmapRequested = true;
+        this.postrollPending = false;
+        this.hideAdLayer();
+        if (this.linearBreakActive) {
+            this.linearBreakActive = false;
+            this.surfaceGuard?.onBreakEnd(false);
+            this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:adend', { detail: { type: this.activeBreak } }));
+        }
     }
 
     private hideAdLayer(): void {

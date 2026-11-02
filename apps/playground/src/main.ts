@@ -144,6 +144,25 @@ if (player) {
             ],
             sourcePriority: priority ? priority.split(',') : undefined,
         };
+    } else if (feature === 'cast') {
+        // TV'ye yayın: testler gerçek SDK yerine sahte cast_sender.js verir (route). ?ads=vast|vmap|off
+        const ads = new URLSearchParams(location.search).get('ads');
+        player.options = {
+            src: '/sample-30s.mp4',
+            poster: '/sample-cover.jpg',
+            muted: true,
+            subtitles: [{ src: '/sample.vtt', label: 'Türkçe', srclang: 'tr', default: true }],
+            cast: {
+                chromecast: true,
+                metadata: { title: 'İstanbul', subtitle: 'HopeCore demo' },
+                ads:
+                    ads === 'off'
+                        ? false
+                        : ads === 'vmap'
+                          ? { vmap: 'https://ads.example.com/vmap?ts=[timestamp]' }
+                          : { preroll: 'https://ads.example.com/pre?ts=[timestamp]', midroll: 'https://ads.example.com/mid', midrollIntervalSeconds: 10, postroll: 'https://ads.example.com/post' },
+            },
+        };
     } else if (feature === 'adtriggers') {
         // Reklam tetikleyici: kurallar /ad-triggers.json'dan (testler route ile değiştirir).
         player.options = {

@@ -104,6 +104,13 @@ export interface HopeLocaleStrings {
     pauseAdLabel: string;
     pauseAdClose: string;
     adTriggerLabel: string;
+    castButton: string;
+    airplayButton: string;
+    /** `{device}` → cihaz adı. */
+    castPlayingOn: string;
+    castDeviceFallback: string;
+    castAdOnTv: string;
+    airplayPlaying: string;
     pauseAdResume: string;
     markerLearnMore: string;
     markerContinue: string;

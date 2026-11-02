@@ -71,6 +71,8 @@ export type {
     AdTrigger,
     AdTriggerLayout,
     AdTriggerCustParams,
+    CastOptions,
+    CastSource,
 } from './types';
 export type { SettingsSubmenuDef, SettingsSubmenuItem } from './controls/SettingsMenu';
 export type { ErrorLog, PlayerLogEntry, PlayerLogSource } from './debug/ErrorLog';

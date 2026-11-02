@@ -2,7 +2,7 @@ import tailwindCss from './theme/tailwind.css?inline';
 import type { HopeSourceOption, AdsOptions, HopePlayerOptions } from './types';
 import type Hls from 'hls.js';
 import { SourceManager, type HlsQualityLevel, type PlaybackEngineInfo, type StreamAudioTrack, type StreamTextTrack } from './hls/SourceManager';
-import { cannotPlay, groupSources, type SourceGroup } from './hls/sourceGroups';
+import { cannotPlay, groupSources, sourceFormat, type SourceGroup } from './hls/sourceGroups';
 import { ControlBar } from './controls/ControlBar';
 import { TooltipController } from './controls/Tooltip';
 import { KeyboardController } from './keyboard/KeyboardController';
@@ -46,6 +46,8 @@ import type { RedirectScreen } from './plugins/redirect-screen';
 import type { QrResume } from './plugins/qr-resume';
 import type { PauseAd } from './plugins/pause-ad';
 import type { AdTriggers } from './plugins/ad-triggers';
+import type { CastController, CastMedia } from './plugins/cast';
+import { generateVastUrl } from './plugins/ads/generateVastUrl';
 import type { Dubbing } from './plugins/dubbing';
 import type { LiveWallClock } from './plugins/live';
 import type { DaiController } from './plugins/dai';
@@ -71,6 +73,19 @@ const DEFAULT_KEYBOARD_SEEK_STEP = 5;
 const STREAM_AUDIO_SUBMENU_KEY = 'stream-audio';
 /** Paket sürümü — build sırasında package.json'dan gömülür. */
 export const HOPE_PLAYER_VERSION = __HOPE_VERSION__;
+
+/** Cast receiver'ın beklediği MIME türleri (biçim → tür). */
+const CAST_MIME: Record<string, string> = {
+    hls: 'application/x-mpegurl',
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    mp3: 'audio/mpeg',
+    m4a: 'audio/mp4',
+    aac: 'audio/aac',
+    ogg: 'audio/ogg',
+    wav: 'audio/wav',
+    flac: 'audio/flac',
+};
 
 const TEMPLATE = /* html */ `
   <div class="video-area">
@@ -179,6 +194,9 @@ export class HopePlayerElement extends HTMLElement {
     private qrResume: QrResume | null = null;
     private pauseAd: PauseAd | null = null;
     private adTriggers: AdTriggers | null = null;
+    private castController: CastController | null = null;
+    /** İçerik Chromecast'te oynuyor (player kumanda) — yerel reklam / otomatik oynatma devre dışı. */
+    private casting = false;
     private dubbing: Dubbing | null = null;
     private liveWallClock: LiveWallClock | null = null;
     private daiController: DaiController | null = null;
@@ -493,6 +511,8 @@ export class HopePlayerElement extends HTMLElement {
         this.sponsorship = null;
         this.adTriggers?.destroy();
         this.adTriggers = null;
+        this.castController?.destroy();
+        this.castController = null;
         this.inViewAutoplay?.destroy();
         this.unregisterSticky?.();
         this.playlistRunner?.destroy();
@@ -698,7 +718,8 @@ export class HopePlayerElement extends HTMLElement {
 
     private async applyOptions(options: HopePlayerOptions): Promise<void> {
         if (options.poster) this.videoEl.poster = options.poster;
-        this.videoEl.autoplay = !!options.autoplay;
+        // Cast sırasında yerel video kendiliğinden çalmasın (kaynak değişse bile) — CastController dönüşte geri yükler.
+        if (!this.casting) this.videoEl.autoplay = !!options.autoplay;
         this.videoEl.muted = !!options.muted;
         this.videoEl.loop = !!options.loop;
         this.videoEl.preload = options.preload ?? 'metadata';
@@ -755,6 +776,7 @@ export class HopePlayerElement extends HTMLElement {
         this.redirectScreen?.refreshLabels();
         this.qrResume?.refreshLabels();
         this.pauseAd?.refreshLabels();
+        this.castController?.refreshLabels();
         this.dubbing?.refreshLabels();
         this.onStreamAudioTracks(this.streamAudio.tracks, this.streamAudio.active);
         this.statsPanel?.refreshLabels();
@@ -860,6 +882,7 @@ export class HopePlayerElement extends HTMLElement {
         await this.installAdsOnce(options);
         await this.applySponsorship(options);
         await this.applyAdTriggers(options);
+        await this.applyCast(options);
 
         if (options.gesture && !this.gestureControls) {
             const gestureOptions = options.gesture === true ? {} : options.gesture;
@@ -889,7 +912,7 @@ export class HopePlayerElement extends HTMLElement {
             const inViewOptions = options.inViewAutoplay === true ? {} : options.inViewAutoplay;
             const { installInViewAutoplay } = await import('./plugins/in-view-autoplay');
             this.inViewAutoplay = installInViewAutoplay(
-                { videoEl: this.videoEl, observeEl: this, isAdActive: () => this.isAdPlaying() },
+                { videoEl: this.videoEl, observeEl: this, isAdActive: () => this.isAdPlaying() || this.casting },
                 inViewOptions
             );
         }
@@ -1402,6 +1425,91 @@ export class HopePlayerElement extends HTMLElement {
         return !current || all.includes(current) ? all.join('|') : current;
     }
 
+    private async applyCast(options: HopePlayerOptions): Promise<void> {
+        const opts = options.cast;
+        if (!opts?.chromecast && !opts?.airplay && !opts?.remotePlayback) {
+            this.castController?.destroy();
+            this.castController = null;
+            return;
+        }
+        if (!this.castController) {
+            const { installCast } = await import('./plugins/cast');
+            this.castController ??= installCast(
+                {
+                    hostEl: this,
+                    videoEl: this.videoEl,
+                    overlayEl: this.videoArea,
+                    i18n: this.i18n,
+                    log: (entry) => this.log.add({ source: 'player', ...entry }),
+                    addButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick),
+                    getMedia: () => this.castMedia(),
+                    isAdPlaying: () => this.isAdPlaying(),
+                    isMse: () => this.sourceManager.engine.engine === 'hls.js',
+                    contentKey: () => this.contentKey(),
+                    onRemoteChange: (remote) => {
+                        this.casting = remote;
+                        this.adsController?.setRemote(remote);
+                        if (remote) this.prerollGate.release(false);
+                    },
+                },
+                opts
+            );
+        } else {
+            this.castController.update(opts);
+        }
+    }
+
+    /** TV'ye gönderilecek içerik: o an çalan kaynak (ya da `cast.source`), başlık / kapak, altyazılar, reklam tag'leri. */
+    private castMedia(): CastMedia | null {
+        const o = this._options;
+        const c = o.cast ?? {};
+        const currentSrc = this.sourceManager.currentSrc;
+        if (!currentSrc) return null;
+        const currentType = this.currentSources.find((s) => s.src === currentSrc)?.type;
+        const picked = typeof c.source === 'function' ? c.source({ src: currentSrc, type: currentType }) : (c.source ?? { src: currentSrc, type: currentType });
+        const source = typeof picked === 'string' ? { src: picked, type: undefined } : picked;
+        const abs = (u: string): string => new URL(u, document.baseURI).href;
+        const format = sourceFormat({ src: source.src, type: source.type, label: '' });
+        const audio = typeof o.audio === 'object' ? o.audio : null;
+        const image = c.metadata?.image ?? audio?.cover ?? o.poster;
+        const adsOpts = typeof o.ads === 'object' ? o.ads : null;
+        const tag = (t: string | string[] | undefined): string | undefined => {
+            const first = Array.isArray(t) ? t[0] : t;
+            return first ? generateVastUrl(first) : undefined;
+        };
+        const ads =
+            c.ads === false
+                ? null
+                : typeof c.ads === 'object'
+                  ? {
+                        vmap: c.ads.vmap ? generateVastUrl(c.ads.vmap) : undefined,
+                        preroll: tag(c.ads.preroll),
+                        midroll: tag(c.ads.midroll),
+                        midrollIntervalSeconds: c.ads.midrollIntervalSeconds,
+                        postroll: tag(c.ads.postroll),
+                    }
+                  : adsOpts
+                    ? {
+                          vmap: adsOpts.adTagVmap ? generateVastUrl(adsOpts.adTagVmap) : undefined,
+                          preroll: tag(adsOpts.adTagPreroll),
+                          midroll: tag(adsOpts.adTagMidroll),
+                          midrollIntervalSeconds: adsOpts.midrollIntervalSeconds,
+                          postroll: tag(adsOpts.adTagPostroll),
+                      }
+                    : null;
+        return {
+            src: abs(source.src),
+            contentType: source.type || CAST_MIME[format] || 'video/mp4',
+            live: this.videoEl.duration === Infinity,
+            title: c.metadata?.title ?? audio?.title,
+            subtitle: c.metadata?.subtitle ?? audio?.artist,
+            image: image ? abs(image) : undefined,
+            music: !!o.audio,
+            subtitles: (o.subtitles ?? []).map((s) => ({ src: abs(s.src), label: s.label, lang: s.srclang, default: s.default })),
+            ads: ads && (ads.vmap || ads.preroll || ads.midroll || ads.postroll) ? ads : null,
+        };
+    }
+
     private async applyAdTriggers(options: HopePlayerOptions): Promise<void> {
         const opts = options.adTriggers;
         if (!opts?.endpoint && !opts?.config) {
@@ -1418,7 +1526,7 @@ export class HopePlayerElement extends HTMLElement {
                     overlayEl: this.videoArea,
                     i18n: this.i18n,
                     log: (entry) => this.log.add({ source: 'ads', ...entry }),
-                    isBlocked: () => this.isChromeBlocked || this.isAdPlaying(),
+                    isBlocked: () => this.isChromeBlocked || this.isAdPlaying() || this.casting,
                     isFullscreen: () => this.isFullscreenActive(),
                     isNativeFullscreen: () => !!this.iosVideo.webkitDisplayingFullscreen,
                     contentKey: () => this.contentKey(),

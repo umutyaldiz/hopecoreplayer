@@ -11,20 +11,23 @@
     -moz-osx-font-smoothing: grayscale;
 }
 
-.hp-icon-check::before { content: "\e900"; }
-.hp-icon-chevron-left::before { content: "\e901"; }
-.hp-icon-close::before { content: "\e902"; }
-.hp-icon-fullscreen-enter::before { content: "\e903"; }
-.hp-icon-fullscreen-exit::before { content: "\e904"; }
-.hp-icon-grid::before { content: "\e905"; }
-.hp-icon-loop::before { content: "\e906"; }
-.hp-icon-pause::before { content: "\e907"; }
-.hp-icon-pip::before { content: "\e908"; }
-.hp-icon-play::before { content: "\e909"; }
-.hp-icon-settings::before { content: "\e90a"; }
-.hp-icon-skip-back::before { content: "\e90b"; }
-.hp-icon-skip-forward::before { content: "\e90c"; }
-.hp-icon-volume-high::before { content: "\e90d"; }
-.hp-icon-volume-low::before { content: "\e90e"; }
-.hp-icon-volume-muted::before { content: "\e90f"; }
-.hp-icon-warning::before { content: "\e910"; }
+.hp-icon-airplay::before { content: "\e900"; }
+.hp-icon-cast-connected::before { content: "\e901"; }
+.hp-icon-cast::before { content: "\e902"; }
+.hp-icon-check::before { content: "\e903"; }
+.hp-icon-chevron-left::before { content: "\e904"; }
+.hp-icon-close::before { content: "\e905"; }
+.hp-icon-fullscreen-enter::before { content: "\e906"; }
+.hp-icon-fullscreen-exit::before { content: "\e907"; }
+.hp-icon-grid::before { content: "\e908"; }
+.hp-icon-loop::before { content: "\e909"; }
+.hp-icon-pause::before { content: "\e90a"; }
+.hp-icon-pip::before { content: "\e90b"; }
+.hp-icon-play::before { content: "\e90c"; }
+.hp-icon-settings::before { content: "\e90d"; }
+.hp-icon-skip-back::before { content: "\e90e"; }
+.hp-icon-skip-forward::before { content: "\e90f"; }
+.hp-icon-volume-high::before { content: "\e910"; }
+.hp-icon-volume-low::before { content: "\e911"; }
+.hp-icon-volume-muted::before { content: "\e912"; }
+.hp-icon-warning::before { content: "\e913"; }

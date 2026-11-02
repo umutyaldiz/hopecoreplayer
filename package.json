@@ -33,7 +33,8 @@
     "test:i18n": "node apps/playground/test/i18n.e2e.mjs",
     "test:sources": "node apps/playground/test/sources.e2e.mjs",
     "test:ad-triggers": "node apps/playground/test/ad-triggers.e2e.mjs",
-    "test": "npm run test:ads && npm run test:prebid && npm run test:interaction && npm run test:content-ops && npm run test:live && npm run test:theme && npm run test:i18n && npm run test:sources && npm run test:ad-triggers && npm run test:mobile && npm run test:react-native",
+    "test:cast": "node apps/playground/test/cast.e2e.mjs",
+    "test": "npm run test:ads && npm run test:prebid && npm run test:interaction && npm run test:content-ops && npm run test:live && npm run test:theme && npm run test:i18n && npm run test:sources && npm run test:ad-triggers && npm run test:cast && npm run test:mobile && npm run test:react-native",
     "test:docs-site": "node apps/docs/test/static-site.e2e.mjs",
     "test:mobile": "node apps/playground/test/mobile.e2e.mjs",
     "test:react-native": "node packages/react-native/test/bridge.e2e.mjs"
