@@ -9,6 +9,9 @@ export type HopeThemePreset =
     | 'neo-dark'
     | 'mono';
 
+/** Kaynak biçimi: `hls` (.m3u8), `mp4` ya da dosya uzantısı (`webm`, `mov`, `mp3`…) — bkz. `sourcePriority`. */
+export type HopeSourceFormat = 'hls' | 'mp4' | 'webm' | (string & {});
+
 export interface HopeSourceOption {
     src: string;
     type?: string;
@@ -310,6 +313,119 @@ export interface SponsorshipOptions {
     refreshSeconds?: number;
     /** İstek zaman aşımı (ms). Varsayılan 5000. */
     timeoutMs?: number;
+}
+
+/**
+ * Reklam tetikleyicisi: ne zaman bir Ad Manager (DFP) out-of-page reklamının isteneceği. `delay` (sn): olaydan bu kadar
+ * sonra — o ana kadar koşul bozulursa (ör. tam ekrandan çıkıldı, oynatma devam etti) iptal.
+ */
+export type AdTrigger =
+    /** İçerikte belirli saniyeler (VOD); canlıda gerçek izleme süresi. Doğal ilerlemede tetiklenir — ileri sarınca atlanır. */
+    | { type: 'time'; at: number[] }
+    /** Her N sn gerçek izlemede (duraklatma, arka plan sekme ve reklam sayılmaz). İlki `startAfter` sn sonra (varsayılan `every`). */
+    | { type: 'interval'; every: number; startAfter?: number }
+    /** İçeriğin yüzdesi (1–99), yalnızca VOD. */
+    | { type: 'percent'; at: number[] }
+    /** Tam ekrana her girişte. */
+    | { type: 'fullscreen'; delay?: number }
+    /** Tam ekrandan her çıkışta. */
+    | { type: 'fullscreenExit'; delay?: number }
+    /** İçerik ilk kez oynamaya başlayınca. */
+    | { type: 'start'; delay?: number }
+    /** Kullanıcı duraklatınca (hâlâ duraklatılmışsa). */
+    | { type: 'pause'; delay?: number }
+    /** Duraklatmadan sonra devam edince. */
+    | { type: 'resume'; delay?: number }
+    /** İçerik bitince. */
+    | { type: 'ended'; delay?: number };
+
+/** Ad Manager key-value'ları: JSON nesnesi (değer metin, sayı, boolean ya da dizi) veya `"k=v&k2=a,b"` metni. */
+export type AdTriggerCustParams = Record<string, string | number | boolean | Array<string | number>> | string;
+
+export type AdTriggerLayout = 'none' | 'full' | 'center' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
+/** Tek bir reklam kuralı: hangi reklam birimi, hangi olaylarda, nasıl gösterilsin. */
+export interface AdTriggerRule {
+    /** Kural kimliği — olaylarda ve `hp_rule` hedeflemesinde. */
+    id?: string;
+    /** Ad Manager reklam birimi yolu, ör. '/1234567/video_oop'. Out-of-page slot olarak istenir; içeriği Ad Manager'da ne doldurulursa o. */
+    adUnitPath: string;
+    /** 'any' (varsayılan): her durumda. 'fullscreen': yalnızca tam ekrandayken. 'normal': yalnızca tam ekran değilken. */
+    mode?: 'any' | 'normal' | 'fullscreen';
+    triggers: AdTrigger[];
+    /** Slot hedeflemesi (key-value). Player ayrıca `hp_trigger`, `hp_mode`, `hp_rule` ekler. */
+    targeting?: Record<string, string | string[]>;
+    /**
+     * DFP isteğinin `cust_params` (key-value) değerleri — JSON: `{ "kategori": "spor", "etiket": ["mac", "ozet"], "sezon": 2026 }`
+     * ya da metin: `"kategori=spor&etiket=mac,ozet"`. API yanıtında `cust_params` adıyla da yazılabilir. `targeting`'i ezer.
+     */
+    custParams?: AdTriggerCustParams;
+    /**
+     * Reklam kutusunun player içindeki yeri. 'none' (varsayılan): player yalnızca out-of-page isteğini atar ve kreatifi
+     * player içine yerleştirir — kutu, etiket, kapat butonu, karartma yok; görünüm ve kapanış kreatifin kendi kodunda
+     * (kapatmak için `player.closeAdTrigger()`). 'full': tüm video alanı; diğerleri o köşede/kenarda bir kutu.
+     */
+    layout?: AdTriggerLayout;
+    /** Kutu boyutu [genişlik, yükseklik] px ('full' dışı) — sığmazsa oranı korunarak küçülür. Verilmezse reklamın kendi boyutu. */
+    size?: [number, number];
+    /** Arkayı karart ('none' dışı). Varsayılan false ('full' düzende true). */
+    backdrop?: boolean;
+    /** Reklam görünürken içeriği duraklat, kapanınca devam et. Varsayılan false. */
+    pauseContent?: boolean;
+    /** Kapat (X) butonu ('none' dışı). Varsayılan true. */
+    closeButton?: boolean;
+    /** Kapat butonu kaç sn sonra görünsün. Varsayılan 0. */
+    closeDelay?: number;
+    /** Kaç sn sonra kendiliğinden kapansın. Verilmezse kullanıcı kapatana / koşul bozulana kadar. */
+    duration?: number;
+    /** Kutunun üstündeki "Reklam" etiketi ('none' dışı) — metin ya da `false` (gizle). */
+    label?: string | false;
+    /** Video başına en fazla kaç gösterim (dolu gelenler). */
+    maxShows?: number;
+    /** Bu kuralın iki gösterimi arasındaki en az süre (sn). */
+    minGapSeconds?: number;
+    /** Player bu genişlikten (px) darsa istenmez. */
+    minPlayerWidth?: number;
+    /** Takip pikselleri (GET). */
+    tracking?: { impression?: string[]; close?: string[]; empty?: string[] };
+}
+
+/** Reklam tetikleyici API'sinin döndürdüğü yapı. */
+export interface AdTriggersConfig {
+    /** false ya da yoksa modül kapalı. */
+    active: boolean;
+    id?: string;
+    /** Geçerlilik aralığı (ISO 8601). */
+    validFrom?: string;
+    validUntil?: string;
+    /** Herhangi iki reklam arasındaki en az süre (sn), tüm kurallar için. Varsayılan 30. */
+    minGapSeconds?: number;
+    rules: AdTriggerRule[];
+}
+
+/**
+ * Reklam tetikleyici: kurallar sizin API'nizden (`endpoint` + `params`) ya da doğrudan `config` ile gelir; belirlenen
+ * anlarda (saniye, aralık, yüzde, tam ekrana giriş, duraklatma…) Ad Manager out-of-page reklamı istenip player içinde
+ * gösterilir — tam ekranda da.
+ */
+export interface AdTriggersOptions {
+    /** JSON (AdTriggersConfig) döndüren adres (GET). */
+    endpoint?: string;
+    /** Adrese eklenecek sorgu parametreleri. */
+    params?: Record<string, string>;
+    fetchInit?: RequestInit;
+    /** API yerine doğrudan kurallar (ya da endpoint'e ulaşılamazsa kullanılacak varsayılan). */
+    config?: AdTriggersConfig;
+    /** Kuralları periyodik yeniden çek (sn, en az 10). */
+    refreshSeconds?: number;
+    /** API isteği zaman aşımı (ms). Varsayılan 5000. */
+    timeoutMs?: number;
+    /** GPT yükleme + reklam yanıtı için en fazla bekleme (ms) — aşılırsa boş sayılır. Varsayılan 8000. */
+    renderTimeoutMs?: number;
+    /** Tüm slotlara eklenecek hedefleme (ör. içerik kimliği, kategori). */
+    targeting?: Record<string, string | string[]>;
+    /** Tüm isteklere eklenecek `cust_params` (sayfa / içerik bilgisi) — kuralın kendi `custParams`'ı aynı anahtarı ezer. */
+    custParams?: AdTriggerCustParams;
 }
 
 export interface AudioOptions {
@@ -662,8 +778,17 @@ export interface HopePlayerOptions {
     id?: string;
     /** Tek kaynak — sources verilmemişse kullanılır. .m3u8 ise otomatik HLS. */
     src?: string;
-    /** Birden fazla kalite/kaynak — doluysa kalite menüsü gösterilir. */
+    /**
+     * Birden fazla kalite/kaynak — doluysa kalite menüsü gösterilir. Farklı biçimler (ör. bir HLS + MP4 kaliteleri)
+     * biçime göre gruplanır: bir grup çalınır ve menüde yalnızca onun kaliteleri görünür; grup ölümcül hata verirse
+     * (yüklenemedi, desteklenmiyor, yayın koptu) konum korunarak sıradaki gruba geçilir. Sıra: `sourcePriority`.
+     */
     sources?: HopeSourceOption[];
+    /**
+     * Biçim grupları hangi sırayla denensin, ör. `['hls', 'mp4']`. Verilmezse listede ilk görünme sırası.
+     * Listede olmayan biçimler sona eklenir. Tarayıcının hiç oynatamadığı biçim (ör. Safari'de webm) atlanır.
+     */
+    sourcePriority?: HopeSourceFormat[];
     poster?: string;
     /**
      * Ses modu: video alanında kapak, plak ve başlık; tam ekran / PiP butonları gizlenir, kontroller hep görünür kalır.
@@ -710,6 +835,8 @@ export interface HopePlayerOptions {
     rewardedUnlock?: RewardedUnlockOptions;
     /** Sponsorluk katmanı (renkler, logo, giriş) — ayarları sizin API'nizden alır. */
     sponsorship?: SponsorshipOptions;
+    /** Kurallara göre (saniye, tam ekrana giriş, duraklatma…) tetiklenen Ad Manager out-of-page reklamları — bkz. AdTriggersOptions. */
+    adTriggers?: AdTriggersOptions;
     /** Süre göstergesinde kalan süreyi (-0:10 / 0:15) gösterme. Varsayılan false (geçen süre). */
     showRemainingTime?: boolean;
     /** Oynat butonunun yanında geri/ileri sarma butonları. `true` = 10 sn geri + 10 sn ileri. Varsayılan kapalı. */
@@ -802,6 +929,11 @@ export type HopePlayerEventMap = {
     'hp:ended': CustomEvent<void>;
     'hp:error': CustomEvent<{ message: string }>;
     'hp:qualitychange': CustomEvent<{ label: string }>;
+    /**
+     * Kaynak grubu değişti: `from` grubu ölümcül hata verdi (ya da tarayıcı oynatamıyor) ve `to` grubuna geçildi.
+     * `code`: MediaError kodu (2 ağ, 3 çözümleme, 4 desteklenmiyor); `skipped`: denenmeden atlandı (desteklenmiyor).
+     */
+    'hp:sourcefallback': CustomEvent<{ from: HopeSourceFormat; to: HopeSourceFormat; code?: number; skipped?: boolean }>;
     'hp:ratechange': CustomEvent<{ rate: number }>;
     /** `linear: false` → overlay (non-linear) reklam: içerik durmaz, reklam içeriğin üstünde gösterilir. */
     'hp:adstart': CustomEvent<{ type: 'preroll' | 'midroll' | 'postroll'; linear?: boolean }>;
@@ -819,5 +951,17 @@ export type HopePlayerEventMap = {
     }>;
     'hp:itemchange': CustomEvent<{ index: number; source: 'playlist' | 'story' }>;
     'hp:sticky': CustomEvent<{ sticky: boolean; corner?: StickyCorner }>;
+    /** Reklam tetikleyici kuralları yüklendi (null = kapalı). */
+    'hp:adtriggers': CustomEvent<{ config: AdTriggersConfig | null }>;
+    /** Tetikleyici reklamı doldu ve gösterildi. */
+    /** `custParams`: isteğe giden tüm key-value'lar (sayfa + kural + hp_*). */
+    'hp:adtriggershow': CustomEvent<{ rule?: string; trigger: AdTrigger['type']; adUnitPath: string; fullscreen: boolean; custParams: Record<string, string | string[]> }>;
+    /** Reklam boş döndü, hata verdi ya da zaman aşımına uğradı. */
+    'hp:adtriggerempty': CustomEvent<{ rule?: string; trigger: AdTrigger['type']; adUnitPath: string }>;
+    /**
+     * Reklam kapandı — `reason`: user (X ya da `closeAdTrigger()`), timeout (duration), mode (tam ekran durumu değişti),
+     * ad (video reklamı başladı), content (içerik değişti), replaced ('none' reklamı yeni tetiklemeyle değişti).
+     */
+    'hp:adtriggerclose': CustomEvent<{ rule?: string; reason: 'user' | 'timeout' | 'mode' | 'ad' | 'content' | 'replaced' }>;
     'hp:pausead': CustomEvent<{ state: 'shown' | 'hidden' | 'empty'; size?: [number, number]; reason?: 'closed' | 'resumed' }>;
 };

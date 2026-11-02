@@ -2,6 +2,7 @@ import tailwindCss from './theme/tailwind.css?inline';
 import type { HopeSourceOption, AdsOptions, HopePlayerOptions } from './types';
 import type Hls from 'hls.js';
 import { SourceManager, type HlsQualityLevel, type PlaybackEngineInfo, type StreamAudioTrack, type StreamTextTrack } from './hls/SourceManager';
+import { cannotPlay, groupSources, type SourceGroup } from './hls/sourceGroups';
 import { ControlBar } from './controls/ControlBar';
 import { TooltipController } from './controls/Tooltip';
 import { KeyboardController } from './keyboard/KeyboardController';
@@ -44,6 +45,7 @@ import type { GeoChecker } from './plugins/geo-checker';
 import type { RedirectScreen } from './plugins/redirect-screen';
 import type { QrResume } from './plugins/qr-resume';
 import type { PauseAd } from './plugins/pause-ad';
+import type { AdTriggers } from './plugins/ad-triggers';
 import type { Dubbing } from './plugins/dubbing';
 import type { LiveWallClock } from './plugins/live';
 import type { DaiController } from './plugins/dai';
@@ -150,7 +152,15 @@ export class HopePlayerElement extends HTMLElement {
     private rewardedUnlock: import('./plugins/rewarded').RewardedUnlock | null = null;
     private sponsorship: import('./plugins/sponsorship').SponsorshipLayer | null = null;
     /** Son uygulanan MP4 kaynak listesi ve seçili etiket — kilit açılınca menü yeniden kurulur. */
+    /** Çalan biçim grubunun kaynakları (kalite menüsü bunlar) — bkz. `sourceGroups`. */
     private currentSources: HopeSourceOption[] = [];
+    /** `sources` biçime göre gruplu, `sourcePriority` sırasıyla; ölümcül hatada sıradakine geçilir. */
+    private sourceGroups: SourceGroup[] = [];
+    private activeGroup = 0;
+    /** Sıradaki gruba geçiş başladı — aynı arızanın ikinci hata olayı hata ekranı açmasın. */
+    private fallbackPending = false;
+    /** hls.js ölümcül hatasının MediaError karşılığı (video.error oluşmaz) — hp:sourcefallback detayı için. */
+    private streamErrorCode: number | undefined;
     private activeSourceLabel = '';
     private lastHlsLevels: HlsQualityLevel[] = [];
     private lastHlsActive = -1;
@@ -168,6 +178,7 @@ export class HopePlayerElement extends HTMLElement {
     private redirectScreen: RedirectScreen | null = null;
     private qrResume: QrResume | null = null;
     private pauseAd: PauseAd | null = null;
+    private adTriggers: AdTriggers | null = null;
     private dubbing: Dubbing | null = null;
     private liveWallClock: LiveWallClock | null = null;
     private daiController: DaiController | null = null;
@@ -260,7 +271,7 @@ export class HopePlayerElement extends HTMLElement {
         this.root.querySelector('.media-layer')!.appendChild(this.loadingSpinner.el);
 
         this.errorScreen = new ErrorScreen(this.videoEl, this.i18n);
-        this.errorScreen.setOnRetry(() => void this.sourceManager.reload());
+        this.errorScreen.setOnRetry(() => void this.retrySource());
         // Chrome'un (z-20) üstünde — merkez play butonu ve kontroller hata ekranına binmesin.
         this.videoArea.appendChild(this.errorScreen.el);
 
@@ -305,7 +316,11 @@ export class HopePlayerElement extends HTMLElement {
             onAudioTracksChanged: this.onStreamAudioTracks,
             onTextTracksFound: this.onStreamTextTracks,
             onCues: this.onStreamCues,
-            onFatalError: (kind) => this.errorScreen.showStreamError(kind === 'network' ? 2 : 3),
+            onFatalError: (kind) => {
+                const code = kind === 'network' ? 2 : 3;
+                this.streamErrorCode = code;
+                this.errorScreen.showStreamError(code);
+            },
             onStreamError: (e) =>
                 this.log.add({
                     source: 'stream',
@@ -314,7 +329,8 @@ export class HopePlayerElement extends HTMLElement {
                     details: { url: e.url, httpStatus: e.httpStatus, reason: e.reason, engine: 'hls.js' },
                 }),
         });
-        this.errorScreen.setShouldShow(() => !this.sourceManager.isRecovering());
+        // Her ölümcül hata (video.error ve hls.js) buradan geçer: sıradaki biçim grubuna geçilecekse ekran açılmaz.
+        this.errorScreen.setShouldShow(() => !this.sourceManager.isRecovering() && !this.tryNextSourceGroup());
 
         this.controlBar = new ControlBar(
             this.videoEl,
@@ -475,6 +491,8 @@ export class HopePlayerElement extends HTMLElement {
         this.rewardedUnlock = null;
         this.sponsorship?.destroy();
         this.sponsorship = null;
+        this.adTriggers?.destroy();
+        this.adTriggers = null;
         this.inViewAutoplay?.destroy();
         this.unregisterSticky?.();
         this.playlistRunner?.destroy();
@@ -573,6 +591,14 @@ export class HopePlayerElement extends HTMLElement {
         const d = (e as CustomEvent<{ src: string; message: string }>).detail;
         this.log.add({ source: 'subtitles', message: `Subtitle file could not be loaded: ${d.message}`, details: { src: d.src } });
     };
+
+    /**
+     * Açık reklam tetikleyici reklamını kapat (adTriggers). `layout: 'none'` kreatifleri kendi kodlarından çağırabilir:
+     * `window.top.document.querySelector('hope-player').closeAdTrigger()`.
+     */
+    closeAdTrigger(): void {
+        this.adTriggers?.close('user');
+    }
 
     /** Teknik istatistik panelini aç/kapat (`force`: true = aç, false = kapat). Sağ tık menüsündeki "İstatistikler" ile aynı. */
     async toggleStats(force?: boolean): Promise<void> {
@@ -804,11 +830,17 @@ export class HopePlayerElement extends HTMLElement {
         this.errorScreen.dismiss();
         await this.applyRewardedUnlock(options);
 
-        const sources: HopeSourceOption[] = options.sources?.length ? options.sources : options.src ? [{ src: options.src, label: this.i18n.autoQuality }] : [];
-        this.currentSources = sources;
+        const all: HopeSourceOption[] = options.sources?.length ? options.sources : options.src ? [{ src: options.src, label: this.i18n.autoQuality }] : [];
+        this.sourceGroups = groupSources(all, options.sourcePriority);
         // O an yüklü kaynak listede varsa (ve kilitli değilse) korunur: seçenekler yeniden uygulanınca (ör. React prop)
-        // kullanıcının seçtiği kalite `selected` olana geri dönmesin.
-        const loaded = sources.find((s) => this.sourceManager.isLoaded(s.src, s.type) && !this.isSourceLocked(s));
+        // kullanıcının seçtiği kalite `selected` olana geri dönmesin — yedek gruba düşülmüşse o grupta kalınır.
+        const isLive = (s: HopeSourceOption): boolean => this.sourceManager.isLoaded(s.src, s.type) && !this.isSourceLocked(s);
+        const loadedGroup = this.sourceGroups.findIndex((g) => g.sources.some(isLive));
+        this.activeGroup = loadedGroup !== -1 ? loadedGroup : this.firstPlayableGroup();
+        const sources = this.sourceGroups[this.activeGroup]?.sources ?? [];
+        this.currentSources = sources;
+        this.fallbackPending = false;
+        const loaded = sources.find(isLive);
         const initial = loaded ?? this.pickInitialSource(sources);
         // Kaynak değişmediyse yeniden yükleme: başka bir seçenek değişince (ör. React'te prop) çalan medya başa sarılmasın.
         if (initial && !this.sourceManager.isLoaded(initial.src, initial.type)) {
@@ -827,6 +859,7 @@ export class HopePlayerElement extends HTMLElement {
 
         await this.installAdsOnce(options);
         await this.applySponsorship(options);
+        await this.applyAdTriggers(options);
 
         if (options.gesture && !this.gestureControls) {
             const gestureOptions = options.gesture === true ? {} : options.gesture;
@@ -1347,8 +1380,8 @@ export class HopePlayerElement extends HTMLElement {
                         if (this.isFullscreenActive()) this.exitFullscreenCompat();
                     },
                     lockedQualityLabel: () => this.lockedQualityLabel(),
-                    // Kalite dosyası değil içerik: aynı videonun 240p ↔ 720p geçişi kilidi kapatmasın.
-                    contentKey: () => this.currentSources.map((s) => s.src).join('|'),
+                    // Kalite dosyası değil içerik: aynı videonun 240p ↔ 720p geçişi (ya da HLS → MP4 yedeği) kilidi kapatmasın.
+                    contentKey: () => this.contentKey(),
                     onLockChange: (upgrade) => this.refreshQualityGate(upgrade),
                 },
                 opts
@@ -1356,6 +1389,44 @@ export class HopePlayerElement extends HTMLElement {
             this.qualityGate = this.rewardedUnlock;
         } else {
             this.rewardedUnlock.update(opts);
+        }
+    }
+
+    /**
+     * İçerik kimliği: `sources` çalıyorsa tüm kaynakları (kalite değişimi / yedek kaynak aynı içerik), eklentinin
+     * yüklediği medya (playlist, hikâye, dublaj) çalıyorsa onun adresi.
+     */
+    private contentKey(): string {
+        const all = this.sourceGroups.flatMap((g) => g.sources.map((s) => s.src));
+        const current = this.sourceManager.currentSrc ?? '';
+        return !current || all.includes(current) ? all.join('|') : current;
+    }
+
+    private async applyAdTriggers(options: HopePlayerOptions): Promise<void> {
+        const opts = options.adTriggers;
+        if (!opts?.endpoint && !opts?.config) {
+            this.adTriggers?.destroy();
+            this.adTriggers = null;
+            return;
+        }
+        if (!this.adTriggers) {
+            const { installAdTriggers } = await import('./plugins/ad-triggers');
+            this.adTriggers ??= installAdTriggers(
+                {
+                    hostEl: this,
+                    videoEl: this.videoEl,
+                    overlayEl: this.videoArea,
+                    i18n: this.i18n,
+                    log: (entry) => this.log.add({ source: 'ads', ...entry }),
+                    isBlocked: () => this.isChromeBlocked || this.isAdPlaying(),
+                    isFullscreen: () => this.isFullscreenActive(),
+                    isNativeFullscreen: () => !!this.iosVideo.webkitDisplayingFullscreen,
+                    contentKey: () => this.contentKey(),
+                },
+                opts
+            );
+        } else {
+            this.adTriggers.update(opts);
         }
     }
 
@@ -1395,15 +1466,91 @@ export class HopePlayerElement extends HTMLElement {
         this.dispatchEvent(new CustomEvent('hp:qualitychange', { detail: { label: source.label } }));
     }
 
+    /** `from`'dan itibaren tarayıcının oynatabileceği ilk grup (oynatamadıkları atlanır); hiçbiri yoksa -1 (from 0'sa 0 — yine de dene). */
+    private firstPlayableGroup(from = 0): number {
+        for (let i = from; i < this.sourceGroups.length; i++) {
+            const g = this.sourceGroups[i]!;
+            if (!cannotPlay(g, this.videoEl)) {
+                if (i > from) {
+                    const skipped = this.sourceGroups[from]!.format;
+                    this.dispatchEvent(new CustomEvent('hp:sourcefallback', { detail: { from: skipped, to: g.format, code: 4, skipped: true } }));
+                }
+                return i;
+            }
+            this.log.add({ source: 'player', message: `Source format "${g.format}" is not playable in this browser — skipped`, details: { src: g.sources[0]?.src } });
+        }
+        return from === 0 ? 0 : -1;
+    }
+
+    /**
+     * Ölümcül hata: sıradaki biçim grubuna geç (konum ve oynatma durumu korunur).
+     * true = geçiliyor, hata ekranı gösterilmez. Hata ekranının `shouldShow`'undan çağrılır.
+     */
+    private tryNextSourceGroup(): boolean {
+        if (this.fallbackPending) return true;
+        const group = this.sourceGroups[this.activeGroup];
+        // Eklentinin yüklediği başka bir medya (playlist, dublaj, hikâye) çalıyorsa gruplara dönülmez.
+        if (!group || this.sourceGroups.length < 2 || !group.sources.some((s) => s.src === this.sourceManager.currentSrc)) return false;
+        const code = this.videoEl.error?.code ?? this.streamErrorCode;
+        this.streamErrorCode = undefined;
+        if (code === 1) return false; // MEDIA_ERR_ABORTED: kullanıcı/kaynak değişimi iptali, arıza değil
+        const next = this.firstPlayableGroup(this.activeGroup + 1);
+        if (next === -1) return false;
+        this.fallbackPending = true;
+        const resumeTime = Number.isFinite(this.videoEl.duration) ? this.videoEl.currentTime : 0;
+        const play = !this.videoEl.paused || !!this._options.autoplay;
+        this.log.add({
+            source: 'player',
+            message: `Source "${group.format}" failed — falling back to "${this.sourceGroups[next]!.format}"`,
+            details: { code, src: this.sourceManager.currentSrc ?? undefined },
+        });
+        this.dispatchEvent(new CustomEvent('hp:sourcefallback', { detail: { from: group.format, to: this.sourceGroups[next]!.format, code } }));
+        // Hata olayının işlenmesi bitsin, sonra yükle (ErrorScreen/ErrorLog dinleyicileri eski kaynağı görsün).
+        queueMicrotask(() => void this.activateSourceGroup(next, resumeTime, play));
+        return true;
+    }
+
+    private async activateSourceGroup(index: number, resumeTime: number, play: boolean): Promise<void> {
+        const group = this.sourceGroups[index];
+        if (!group) return;
+        this.activeGroup = index;
+        this.currentSources = group.sources;
+        const initial = this.pickInitialSource(group.sources)!;
+        this.errorScreen.dismiss();
+        this.controlBar.setQualities([], '');
+        this.hlsQualitiesShown = false;
+        this.activeSourceLabel = initial.label;
+        if (resumeTime > 0) {
+            this.videoEl.addEventListener('loadedmetadata', () => (this.videoEl.currentTime = resumeTime), { once: true });
+        }
+        try {
+            await this.sourceManager.load(initial.src, initial.type);
+        } finally {
+            this.fallbackPending = false;
+        }
+        this.renderSourceQualities();
+        this.rewardedUnlock?.onQualitiesChanged();
+        if (play) this.videoEl.play().catch(() => {});
+    }
+
+    /** Hata ekranındaki "Tekrar dene": birden fazla grup varsa en öncelikli gruptan baştan başla. */
+    private async retrySource(): Promise<void> {
+        const owned = this.sourceGroups.some((g) => g.sources.some((s) => s.src === this.sourceManager.currentSrc));
+        if (this.sourceGroups.length < 2 || !owned) return this.sourceManager.reload();
+        const resumeTime = Number.isFinite(this.videoEl.duration) ? this.videoEl.currentTime : 0;
+        this.fallbackPending = true;
+        await this.activateSourceGroup(this.firstPlayableGroup(), resumeTime, true);
+    }
+
     private readonly onHlsLevelsChanged = (levels: HlsQualityLevel[], activeIndex: number): void => {
-        // Kaynak değişince boş liste gelir — önceki HLS kaynağının seviyeleri menüde kalmasın.
+        this.lastHlsLevels = levels;
+        this.lastHlsActive = activeIndex;
+        // Kaynak değişince boş liste gelir — önceki HLS kaynağının seviyeleri menüde (ve kilit hesabında) kalmasın.
         if (levels.length === 0 && this.hlsQualitiesShown) {
             this.hlsQualitiesShown = false;
             this.controlBar.setQualities([], '');
             return;
         }
-        this.lastHlsLevels = levels;
-        this.lastHlsActive = activeIndex;
         if (levels.length <= 1) return;
         this.hlsQualitiesShown = true;
         const label = (l: HlsQualityLevel) => `${l.height}p`;

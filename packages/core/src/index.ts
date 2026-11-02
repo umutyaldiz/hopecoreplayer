@@ -11,6 +11,8 @@ export type {
     HopeLocale,
     HopeLocaleStrings,
     HopePlayerOptions,
+    HopeSourceOption,
+    HopeSourceFormat,
     HopePlayerEventMap,
     AdsOptions,
     AdsRetryOptions,
@@ -63,6 +65,12 @@ export type {
     RewardedResult,
     SponsorshipOptions,
     SponsorshipConfig,
+    AdTriggersOptions,
+    AdTriggersConfig,
+    AdTriggerRule,
+    AdTrigger,
+    AdTriggerLayout,
+    AdTriggerCustParams,
 } from './types';
 export type { SettingsSubmenuDef, SettingsSubmenuItem } from './controls/SettingsMenu';
 export type { ErrorLog, PlayerLogEntry, PlayerLogSource } from './debug/ErrorLog';

@@ -97,6 +97,7 @@ export const en: HopeLocaleStrings = {
     qrResumeOff: 'Off',
     pauseAdLabel: 'Sponsored',
     pauseAdClose: 'Close ad',
+    adTriggerLabel: 'Advertisement',
     pauseAdResume: 'Resume video',
     markerLearnMore: 'Learn more',
     markerContinue: 'Continue',

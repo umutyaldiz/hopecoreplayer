@@ -25,6 +25,8 @@ export interface HopePlayerProps extends HopePlayerOptions {
     onAdError?: (message: string) => void;
     onItemChange?: (index: number, source: 'playlist' | 'story') => void;
     onSticky?: (sticky: boolean, corner?: StickyCorner) => void;
+    /** Kaynak grubu düştü, sıradakine geçildi (bkz. `sourcePriority`). */
+    onSourceFallback?: (detail: HopePlayerEventMap['hp:sourcefallback']['detail']) => void;
 }
 
 export interface HopePlayerHandle {
@@ -54,6 +56,7 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
         onAdError,
         onItemChange,
         onSticky,
+        onSourceFallback,
         ...options
     },
     ref
@@ -129,6 +132,10 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
             ]);
         }
 
+        if (onSourceFallback) {
+            listeners.push(['hp:sourcefallback', (e) => onSourceFallback((e as HopePlayerEventMap['hp:sourcefallback']).detail)]);
+        }
+
         for (const [name, handler] of listeners) el.addEventListener(name, handler);
         return () => {
             for (const [name, handler] of listeners) el.removeEventListener(name, handler);
@@ -146,6 +153,7 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
         onAdError,
         onItemChange,
         onSticky,
+        onSourceFallback,
     ]);
 
     useImperativeHandle(

@@ -132,6 +132,25 @@ if (player) {
                 },
             },
         };
+    } else if (feature === 'fallback') {
+        // Kaynak yedeği: HLS + MP4 kaliteleri, ?priority=hls,mp4 — testler HLS'i ağdan düşürür (route ile).
+        const priority = new URLSearchParams(location.search).get('priority');
+        player.options = {
+            muted: true,
+            sources: [
+                { src: '/sample.mp4', label: '720p', selected: true },
+                { src: '/sample-240p.mp4', label: '240p' },
+                { src: '/hls/master.m3u8', label: 'Oto' },
+            ],
+            sourcePriority: priority ? priority.split(',') : undefined,
+        };
+    } else if (feature === 'adtriggers') {
+        // Reklam tetikleyici: kurallar /ad-triggers.json'dan (testler route ile değiştirir).
+        player.options = {
+            src: '/sample-30s.mp4',
+            muted: true,
+            adTriggers: { endpoint: '/ad-triggers.json', params: { channel: 'demo' }, targeting: { content: 'istanbul' } },
+        };
     } else if (feature === 'sponsorship') {
         player.options = { src: '/sample.mp4', muted: true, sponsorship: { endpoint: '/sponsorship.json', params: { channel: 'demo' } } };
     } else if (feature === 'audio') {

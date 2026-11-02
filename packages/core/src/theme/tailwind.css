@@ -2095,6 +2095,109 @@ button.hp-context-menu-item:focus-visible {
 :host([data-sponsor-hidden]) .hp-sponsor-intro {
     display: none;
 }
+
+/* ── Reklam tetikleyici (adTriggers) — Ad Manager out-of-page reklamı; kontrollerin (20) üstünde, hata ekranının (30)
+   altında. Reklam div'i host'un light DOM'unda (GPT id ile bulur), kutudaki <slot>'a yansır — tam ekranda da görünür. */
+.hp-adtrigger {
+    position: absolute;
+    inset: 0;
+    z-index: 26;
+    display: none;
+    box-sizing: border-box;
+    padding: 12px;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+}
+.hp-adtrigger[data-open] {
+    display: flex;
+    animation: hp-adtrigger-in 0.3s ease-out;
+}
+.hp-adtrigger[data-backdrop] {
+    background: rgba(0, 0, 0, 0.62);
+    pointer-events: auto;
+}
+.hp-adtrigger[data-layout='full'] {
+    padding: 0;
+}
+/* 'none': yalnızca kreatifin yeri — kutu yok; kreatif kendi boyutunda sol üstte, gerisi tıklamaları geçirir. */
+.hp-adtrigger[data-layout='none'] {
+    padding: 0;
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+/* Kreatif kendini (iframe'ini) position: absolute ile player alanının herhangi bir yerine koyabilsin. */
+.hp-adtrigger[data-layout='none'] .hp-adtrigger-frame {
+    position: static;
+}
+.hp-adtrigger[data-layout='top'] { align-items: flex-start; }
+.hp-adtrigger[data-layout='bottom'] { align-items: flex-end; padding-bottom: 72px; }
+.hp-adtrigger[data-layout='top-left'] { align-items: flex-start; justify-content: flex-start; }
+.hp-adtrigger[data-layout='top-right'] { align-items: flex-start; justify-content: flex-end; }
+.hp-adtrigger[data-layout='bottom-left'] { align-items: flex-end; justify-content: flex-start; padding-bottom: 72px; }
+.hp-adtrigger[data-layout='bottom-right'] { align-items: flex-end; justify-content: flex-end; padding-bottom: 72px; }
+.hp-adtrigger-frame {
+    position: relative;
+    max-width: 100%;
+    max-height: 100%;
+    pointer-events: auto;
+}
+.hp-adtrigger[data-layout='full'] .hp-adtrigger-frame {
+    width: 100%;
+    height: 100%;
+}
+.hp-adtrigger-frame[data-sized] {
+    width: min(var(--hp-adtrigger-w), 100%);
+    height: min(var(--hp-adtrigger-h), 100%);
+}
+.hp-adtrigger[data-layout='full'] ::slotted(*),
+.hp-adtrigger-frame[data-sized] ::slotted(*) {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+.hp-adtrigger-label {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 1;
+    padding: 3px 7px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.66);
+    color: #fff;
+    font: 600 10px/1 system-ui, -apple-system, sans-serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    pointer-events: none;
+}
+.hp-adtrigger-close {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    cursor: pointer;
+}
+.hp-adtrigger-close[hidden] {
+    display: none;
+}
+.hp-adtrigger-close:focus-visible {
+    outline: 2px solid var(--hp-color-accent, #fff);
+    outline-offset: 2px;
+}
+@keyframes hp-adtrigger-in {
+    from {
+        opacity: 0;
+    }
+}
 @media (prefers-reduced-motion: reduce) {
     .hp-sponsor-intro,
     .hp-rw-dialog,

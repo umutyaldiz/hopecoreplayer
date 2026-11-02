@@ -21,6 +21,8 @@ export interface GptPubAds {
 export interface GoogleTag {
     cmd: Array<() => void> | { push(fn: () => void): void };
     defineSlot(adUnitPath: string, sizes: Array<[number, number]>, divId: string): GptSlot | null;
+    /** Out-of-page slot: boyutsuz; içerik (ör. özel HTML, tam sayfa kreatif) Ad Manager'da belirlenir. */
+    defineOutOfPageSlot(adUnitPath: string, divId: string): GptSlot | null;
     pubads(): GptPubAds;
     enableServices(): void;
     display(divId: string): void;

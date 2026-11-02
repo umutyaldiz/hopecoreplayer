@@ -20,6 +20,7 @@ const emit = defineEmits<{
     aderror: [message: string];
     itemchange: [index: number, source: 'playlist' | 'story'];
     sticky: [sticky: boolean, corner: StickyCorner | undefined];
+    sourcefallback: [detail: HopePlayerEventMap['hp:sourcefallback']['detail']];
 }>();
 
 const elRef = ref<HopePlayerEl | null>(null);
@@ -57,6 +58,7 @@ onMounted(() => {
                 emit('sticky', detail.sticky, detail.corner);
             },
         ],
+        ['hp:sourcefallback', (e) => emit('sourcefallback', (e as HopePlayerEventMap['hp:sourcefallback']).detail)],
     ];
     for (const [name, handler] of listeners) el.addEventListener(name, handler);
 

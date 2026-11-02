@@ -98,6 +98,7 @@ export const tr: HopeLocaleStrings = {
     qrResumeOff: 'Kapalı',
     pauseAdLabel: 'Sponsorlu',
     pauseAdClose: 'Reklamı kapat',
+    adTriggerLabel: 'Reklam',
     pauseAdResume: 'Videoya devam et',
     markerLearnMore: 'Daha fazla bilgi',
     markerContinue: 'Devam et',

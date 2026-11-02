@@ -45,7 +45,7 @@ function hasMse(): boolean {
  * Kaynak türünü MIME type veya URL uzantısından belirler.
  * URL'deki query string ve fragment değerlerini de destekler.
  */
-function detectSourceType(src: string, type?: string): MediaSourceType {
+export function detectSourceType(src: string, type?: string): MediaSourceType {
     const normalizedType = type
         ?.split(';')[0]
         ?.trim()
@@ -352,6 +352,11 @@ export class SourceManager {
     }
 
     /** Son kaynağı baştan yükler — hls.js ile oynayan kaynakta da çalışır (çıplak video.load() blob'u yeniden açamaz). */
+    /** Son `load()` edilen kaynak (playlist/dublaj gibi eklentilerin yüklediği dahil). */
+    get currentSrc(): string | null {
+        return this.last?.src ?? null;
+    }
+
     reload(): Promise<void> {
         return this.last ? this.load(this.last.src, this.last.type) : Promise.resolve();
     }

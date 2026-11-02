@@ -1,0 +1,34 @@
+{
+  "active": true,
+  "id": "demo-campaign",
+  "minGapSeconds": 10,
+  "rules": [
+    {
+      "id": "fullscreen-3s",
+      "adUnitPath": "/6355419/Travel",
+      "mode": "fullscreen",
+      "triggers": [{ "type": "fullscreen", "delay": 3 }],
+      "layout": "center",
+      "size": [300, 250],
+      "closeDelay": 3,
+      "duration": 15
+    },
+    {
+      "id": "at-5s-banner",
+      "adUnitPath": "/6355419/Travel",
+      "mode": "normal",
+      "triggers": [{ "type": "time", "at": [5] }],
+      "layout": "bottom",
+      "size": [320, 50],
+      "duration": 8
+    },
+    {
+      "id": "pause",
+      "adUnitPath": "/6355419/Travel",
+      "triggers": [{ "type": "pause", "delay": 1 }],
+      "layout": "center",
+      "size": [300, 250],
+      "backdrop": true
+    }
+  ]
+}

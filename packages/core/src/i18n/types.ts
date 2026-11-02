@@ -103,6 +103,7 @@ export interface HopeLocaleStrings {
     qrResumeOff: string;
     pauseAdLabel: string;
     pauseAdClose: string;
+    adTriggerLabel: string;
     pauseAdResume: string;
     markerLearnMore: string;
     markerContinue: string;
