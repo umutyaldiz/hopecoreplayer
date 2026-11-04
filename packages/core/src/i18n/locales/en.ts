@@ -88,6 +88,8 @@ export const en: HopeLocaleStrings = {
     redirectCancel: 'Cancel',
     redirectPlayNow: 'Play now',
     redirectCountdown: (seconds) => `Next video will play in ${seconds} seconds.`,
+    redirectUpNext: 'Up next',
+    redirectCancelCard: 'Cancel up next',
     redirectNowPlaying: 'Now playing...',
     qrResumeTitle: 'Scan to continue watching on your phone',
     qrResumeDontShowAgain: "Don't show again",

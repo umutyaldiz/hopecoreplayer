@@ -90,6 +90,8 @@ export const tr: HopeLocaleStrings = {
     redirectPlayNow: 'Şimdi Oynat',
     redirectCountdown: (seconds) => `Sıradaki video ${seconds} saniye içinde oynatılacak.`,
     redirectNowPlaying: 'Video oynatılıyor...',
+    redirectUpNext: 'Sıradaki',
+    redirectCancelCard: 'Sıradakini iptal et',
     qrResumeTitle: 'Devam etmek için kodu telefonunuzla okutun',
     qrResumeDontShowAgain: 'Bir daha gösterme',
     qrResumeContinue: 'Devam Et',

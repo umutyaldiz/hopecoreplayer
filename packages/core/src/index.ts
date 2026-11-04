@@ -41,6 +41,7 @@ export type {
     GeoCheckerOptions,
     RedirectScreenSuggestion,
     RedirectScreenOptions,
+    RedirectCardPosition,
     QrResumeOptions,
     PauseAdOptions,
     SkipButtonsOptions,

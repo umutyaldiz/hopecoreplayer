@@ -94,6 +94,9 @@ export interface HopeLocaleStrings {
     redirectPlayNow: string;
     redirectCountdown: (seconds: number) => string;
     redirectNowPlaying: string;
+    /** Kart / ekran üst etiketi. */
+    redirectUpNext: string;
+    redirectCancelCard: string;
     qrResumeTitle: string;
     qrResumeDontShowAgain: string;
     qrResumeContinue: string;

@@ -718,15 +718,42 @@ export interface RedirectScreenSuggestion {
     url: string;
     title: string;
     image: string;
+    /** Görselin üstündeki süre rozeti, ör. "12:34". */
+    duration?: string;
 }
+
+export type RedirectCardPosition = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
 
 export interface RedirectScreenOptions {
     enabled?: boolean;
+    /** 'screen' modunda video bittikten sonraki geri sayım (sn). */
     time: number;
+    /** Sıradaki videonun başlığı. */
     title?: string;
+    /** Sıradaki videonun görseli (16:9 önerilir). */
     image?: string;
+    /** Yönlendirilecek adres. */
     url: string;
+    /** İptal edilince (ya da 'card' modunda iptalden sonra video bitince) gösterilecek öneriler. */
     suggestions?: RedirectScreenSuggestion[];
+    /**
+     * 'screen' (varsayılan): video bitince tam alan "Sıradaki video" ekranı + `time` sn geri sayım.
+     * 'card': video bitmeden `showBefore` sn kala köşede küçük "Sıradaki" kartı; geri sayım videoyla birlikte işler,
+     * video bitince yönlendirilir. Karta tıklayınca hemen gidilir, X ile iptal edilir.
+     */
+    mode?: 'screen' | 'card';
+    /** 'card' modunda bitişe kaç sn kala kart görünsün. Varsayılan 10. */
+    showBefore?: number;
+    /** 'card' modunda kartın köşesi. Varsayılan 'bottom-right'. */
+    position?: RedirectCardPosition;
+    /** Üst etiket, ör. "Sıradaki" / "Şimdi izle". Verilmezse dil dosyasından. */
+    label?: string;
+    /** Başlığın altındaki kısa metin (kanal, kategori…). */
+    subtitle?: string;
+    /** Görselin üstündeki süre rozeti, ör. "12:34". */
+    duration?: string;
+    /** Yeni sekmede aç. Varsayılan false (aynı sekmede). */
+    newTab?: boolean;
 }
 
 /** `options.hls` — HLS (.m3u8) oynatma ayarları. */
@@ -1018,5 +1045,11 @@ export type HopePlayerEventMap = {
      * ad (video reklamı başladı), content (içerik değişti), replaced ('none' reklamı yeni tetiklemeyle değişti).
      */
     'hp:adtriggerclose': CustomEvent<{ rule?: string; reason: 'user' | 'timeout' | 'mode' | 'ad' | 'content' | 'replaced' }>;
+    /**
+     * Yönlendirme ekranı / kartı. `shown`: göründü (`mode`), `cancel`: kullanıcı iptal etti, `redirect`: yönlendirilecek
+     * (`reason`: auto | click). `redirect` olayı iptal edilebilir — `preventDefault()` ile sayfa değişmez, yönlendirmeyi
+     * kendiniz yaparsınız (ör. SPA router, playlist).
+     */
+    'hp:redirect': CustomEvent<{ state: 'shown' | 'cancel' | 'redirect'; url: string; mode: 'screen' | 'card'; reason?: 'auto' | 'click' }>;
     'hp:pausead': CustomEvent<{ state: 'shown' | 'hidden' | 'empty'; size?: [number, number]; reason?: 'closed' | 'resumed' }>;
 };

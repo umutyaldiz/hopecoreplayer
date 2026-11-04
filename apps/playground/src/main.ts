@@ -271,7 +271,22 @@ if (player) {
                           url: 'https://example.com/next-video',
                           suggestions: [{ url: 'https://example.com/s1', title: 'Öneri 1', image: '/sample.vtt' }],
                       }
-                    : undefined,
+                    : feature === 'redirect-card'
+                      ? {
+                            mode: 'card',
+                            showBefore: 5,
+                            time: 3,
+                            title: 'Boğaz turu: martılar ve vapurlar',
+                            subtitle: 'HopeCore · İstanbul',
+                            duration: '0:30',
+                            image: '/sample-cover.jpg',
+                            url: 'https://example.com/next-video',
+                            suggestions: [
+                                { url: 'https://example.com/s1', title: 'Öneri 1', image: '/sample-cover.jpg', duration: '1:20' },
+                                { url: 'https://example.com/s2', title: 'Öneri 2 <b>kalın değil</b>', image: '/sample-cover.jpg' },
+                            ],
+                        }
+                      : undefined,
             dubbing:
                 feature === 'dubbing'
                     ? {

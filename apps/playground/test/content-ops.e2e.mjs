@@ -430,11 +430,87 @@ async function testRedirectScreen(browser) {
     const counterText = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="redirect-screen"]')?.textContent ?? '');
     ok(counterText.includes('3 saniye') || counterText.includes('2 saniye'), `geri sayım metni gösteriliyor ("${counterText.trim().slice(0, 50)}")`);
 
-    const cancelBtn = await page.evaluateHandle(() => document.getElementById('player').shadowRoot.querySelector('[part="redirect-screen"] button'));
+    const cancelBtn = await page.evaluateHandle(() => document.getElementById('player').shadowRoot.querySelector('[part="redirect-screen"] .hp-redirect-btn'));
     await cancelBtn.asElement().click();
 
     const suggestionsShown = await page.evaluate(() => !!document.getElementById('player').shadowRoot.querySelector('[part="redirect-suggestions"]'));
     ok(suggestionsShown, 'iptal sonrası öneriler grid\'i gösterildi');
+    await page.close();
+}
+
+async function testRedirectCard(browser) {
+    console.log('\n[7b] RedirectScreen mode: card — bitime showBefore sn kala köşede kart + geri sayım; X iptal, video bitince yönlendirme');
+    const page = await openFeature(browser, 'redirect-card');
+    // Gerçek yönlendirme olmasın: hp:redirect iptal edilip kayda yazılır.
+    await page.evaluate(() => {
+        window.__redir = [];
+        document.getElementById('player').addEventListener('hp:redirect', (e) => {
+            window.__redir.push(`${e.detail.state}${e.detail.reason ? ':' + e.detail.reason : ''}:${e.detail.mode}`);
+            if (e.detail.state === 'redirect') e.preventDefault();
+        });
+    });
+    const card = () =>
+        page.evaluate(() => {
+            const r = document.getElementById('player').shadowRoot;
+            const c = r.querySelector('[part="redirect-card"]');
+            if (!c) return null;
+            const box = c.getBoundingClientRect();
+            const area = r.querySelector('.video-area').getBoundingClientRect();
+            return {
+                label: c.querySelector('.hp-redirect-label')?.textContent,
+                title: c.querySelector('.hp-redirect-title')?.textContent,
+                duration: c.querySelector('.hp-redirect-duration')?.textContent,
+                ring: c.querySelector('.hp-redirect-ring-bar')?.getAttribute('stroke-dashoffset'),
+                corner: Math.round(area.right - box.right) <= 24 && box.bottom < area.bottom && box.left > area.left + area.width / 3,
+            };
+        });
+    const seekTo = (fromEnd) => page.evaluate((s) => { const v = document.getElementById('player').shadowRoot.querySelector('video'); v.currentTime = v.duration - s; }, fromEnd);
+    await seekTo(8);
+    await page.evaluate(() => document.getElementById('player').play());
+    await page.waitForTimeout(800);
+    ok((await card()) === null, 'bitime 8 sn → kart yok');
+    await page.waitForFunction(() => !!document.getElementById('player').shadowRoot.querySelector('[part="redirect-card"]'), { timeout: 5000 }).catch(() => {});
+    let c = await card();
+    ok(c && /^Sıradaki · [1-5]$/.test(c.label) && c.title === 'Boğaz turu: martılar ve vapurlar' && c.duration === '0:30' && c.corner, `bitime ≤5 sn → sağ altta kart (${JSON.stringify(c)})`);
+    const ring1 = Number(c?.ring);
+    await page.waitForTimeout(1100);
+    c = await card();
+    ok(Number(c?.ring) > ring1, `geri sayım halkası boşalıyor (${ring1.toFixed(1)} → ${Number(c?.ring).toFixed(1)})`);
+
+    // X → iptal: kart kalkar, video bitince yönlendirme yok, öneriler gelir.
+    await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-redirect-close').click());
+    ok((await card()) === null, 'X → kart kapandı');
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').ended, null, { timeout: 8000 });
+    await page.waitForTimeout(300);
+    let s = await page.evaluate(() => ({
+        redir: window.__redir.slice(),
+        sugg: [...document.getElementById('player').shadowRoot.querySelectorAll('[part="redirect-suggestions"] .hp-redirect-title')].map((e) => e.textContent),
+        bold: !!document.getElementById('player').shadowRoot.querySelector('[part="redirect-suggestions"] b'),
+    }));
+    ok(s.redir.includes('cancel:card') && !s.redir.some((r) => r.startsWith('redirect')), `iptal → yönlendirme yok (${s.redir.join(', ')})`);
+    ok(s.sugg.length === 2 && !s.bold && s.sugg[1] === 'Öneri 2 <b>kalın değil</b>', 'öneriler gösterildi, başlık HTML olarak basılmadı');
+
+    // Geri sarınca iptal unutulur; sonuna kadar izlenince otomatik yönlendirme.
+    await page.evaluate(() => (window.__redir = []));
+    await seekTo(4);
+    await page.evaluate(() => document.getElementById('player').play());
+    await page.waitForTimeout(400);
+    ok((await card()) === null, 'iptalden sonra (eşik içinde) kart tekrar gelmiyor');
+    await seekTo(7);
+    await page.waitForFunction(() => !!document.getElementById('player').shadowRoot.querySelector('[part="redirect-card"]'), { timeout: 6000 }).catch(() => {});
+    ok((await card()) !== null, 'geri sarınca iptal unutuldu, kart yeniden geldi');
+    await page.waitForFunction(() => window.__redir.some((r) => r.startsWith('redirect')), null, { timeout: 8000 }).catch(() => {});
+    s = await page.evaluate(() => window.__redir.slice());
+    ok(s.includes('redirect:auto:card'), `video bitti → otomatik yönlendirme (${s.join(', ')})`);
+
+    // Karta tıklamak hemen yönlendirir.
+    await page.evaluate(() => (window.__redir = []));
+    await seekTo(4);
+    await page.evaluate(() => document.getElementById('player').play());
+    await page.waitForFunction(() => !!document.getElementById('player').shadowRoot.querySelector('[part="redirect-card"]'), { timeout: 4000 }).catch(() => {});
+    await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-redirect-card-main').click());
+    s = await page.evaluate(() => window.__redir.slice());
+    ok(s.includes('redirect:click:card') && (await card()) === null, `karta tıklama → hemen yönlendirme (${s.join(', ')})`);
     await page.close();
 }
 
@@ -797,6 +873,7 @@ async function testCaptionFlickNoBounce(browser) {
         await testGeoCheckerFetchFailsOpen(browser);
         await testGeoCheckerCustomApi(browser);
         await testRedirectScreen(browser);
+        await testRedirectCard(browser);
         await testDubbing(browser);
         await testQrResume(browser);
         await testSubtitlesWithoutTrackElements(browser);

@@ -191,6 +191,7 @@ export class HopePlayerElement extends HTMLElement {
     private countdownScreen: CountdownScreen | null = null;
     private geoChecker: GeoChecker | null = null;
     private redirectScreen: RedirectScreen | null = null;
+    private redirectKey = '';
     private qrResume: QrResume | null = null;
     private pauseAd: PauseAd | null = null;
     private adTriggers: AdTriggers | null = null;
@@ -1001,12 +1002,19 @@ export class HopePlayerElement extends HTMLElement {
             );
         }
 
-        if (options.redirectScreen && !this.redirectScreen) {
-            const { installRedirectScreen } = await import('./plugins/redirect-screen');
-            this.redirectScreen = installRedirectScreen(
-                { videoEl: this.videoEl, overlayContainerEl: this.videoArea, isAdActive: () => this.isAdPlaying(), i18n: this.i18n },
-                options.redirectScreen
-            );
+        // Ayar değişince (ör. playlist'te sıradaki video, mode) yeniden kurulur — eski kart / ekran kalmasın.
+        const redirectKey = options.redirectScreen ? JSON.stringify(options.redirectScreen) : '';
+        if (redirectKey !== this.redirectKey) {
+            this.redirectKey = redirectKey;
+            this.redirectScreen?.destroy();
+            this.redirectScreen = null;
+            if (options.redirectScreen) {
+                const { installRedirectScreen } = await import('./plugins/redirect-screen');
+                this.redirectScreen = installRedirectScreen(
+                    { hostEl: this, videoEl: this.videoEl, overlayContainerEl: this.videoArea, isAdActive: () => this.isAdPlaying(), i18n: this.i18n },
+                    options.redirectScreen
+                );
+            }
         }
 
         if (options.qrResume && !this.qrResume) {
