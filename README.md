@@ -6,37 +6,58 @@
 [![npm @hopeplayer/core](https://img.shields.io/npm/v/%40hopeplayer%2Fcore.svg?label=%40hopeplayer%2Fcore)](https://www.npmjs.com/package/@hopeplayer/core)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-A framework-agnostic video player. `<hope-player>` is a dependency-free (except `hls.js`) Custom Element with Shadow DOM encapsulation, Tailwind-based theming, and real plugin code-splitting — it works the same way in plain HTML, React, Vue, and Next.js.
+**An open-source, monetization-first video player.** `<hope-player>` is a framework-agnostic Custom Element (Shadow DOM, TypeScript) with Google IMA, Prebid, rewarded ads, sponsorships, out-of-page ad triggers and Chromecast with TV ads built in — every feature is its own lazy-loaded chunk, so you only download what you configure. It works the same in plain HTML, React, Vue, Next.js and React Native.
 
-**Docs, live demos, and the full options/theming/plugin reference:** **[umutyaldiz.com/hopecoreplayer](https://umutyaldiz.com/hopecoreplayer)**
+**Docs, live demos and the full options reference:** **[umutyaldiz.com/hopecoreplayer](https://umutyaldiz.com/hopecoreplayer)**
 
-## Install
+## Quick start — one line, no build step
 
-```bash
-npm install @hopeplayer/core
+```html
+<script type="module" src="https://cdn.jsdelivr.net/npm/@hopeplayer/core@1/dist/hope-player.js"></script>
+
+<hope-player src="https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" style="display:block;aspect-ratio:16/9"></hope-player>
 ```
+
+That's it: HLS, the quality menu, captions and keyboard shortcuts work out of the box. Configure everything else from JavaScript:
 
 ```html
 <script type="module">
-  import '@hopeplayer/core';
+  const player = document.querySelector('hope-player');
+  player.options = {
+    src: '/video.m3u8',
+    poster: '/poster.jpg',
+    locale: 'en',
+    ads: { adTagPreroll: 'https://pubads.g.doubleclick.net/gampad/ads?…' },
+    cast: { chromecast: true, airplay: true },
+  };
+  player.addEventListener('hp:play', () => console.log('playing'));
 </script>
-
-<hope-player src="/video.mp4" poster="/poster.jpg"></hope-player>
 ```
 
-Or with a framework wrapper:
+> Use the full `…/dist/hope-player.js` path on CDNs — the player loads its plugins as relative chunks next to that file. unpkg (`https://unpkg.com/@hopeplayer/core@1/dist/hope-player.js`) and esm.sh work the same way.
+
+## Install with npm
 
 ```bash
-npm install @hopeplayer/core @hopeplayer/react   # React / Next.js
-npm install @hopeplayer/core @hopeplayer/vue     # Vue 3
+npm install @hopeplayer/core                          # web component
+npm install @hopeplayer/core @hopeplayer/react        # React / Next.js
+npm install @hopeplayer/core @hopeplayer/vue          # Vue 3 / Nuxt
 npx expo install @hopeplayer/react-native react-native-webview   # React Native
 ```
 
-See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for full React/Vue examples, props, and events.
+```js
+import '@hopeplayer/core';
+```
+
+```jsx
+import { HopePlayer } from '@hopeplayer/react';
+
+<HopePlayer src="/video.m3u8" poster="/poster.jpg" cast={{ chromecast: true }} onPlay={() => {}} />;
+```
+
+See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, Next.js (SSR-safe) and React Native.
 
 ## Live demos
-
-Editable examples that run in the browser on StackBlitz (best in Chrome / Edge), using the packages published on npm:
 
 | | |
 |---|---|
@@ -45,14 +66,38 @@ Editable examples that run in the browser on StackBlitz (best in Chrome / Edge),
 | Vue | [Open in StackBlitz](https://stackblitz.com/edit/hopecoreplayer-vue?file=src/App.vue) · [`examples/vue`](./examples/vue) |
 | React Native | [Open in Expo Snack](https://snack.expo.dev/@umutyaldiz/hopecoreplayer) · [`examples/react-native-expo`](./examples/react-native-expo) |
 
-## Why
+## Features
 
-- **Zero runtime dependencies** besides `hls.js`, which is only downloaded (as its own chunk) when the source is HLS and the browser lacks native support.
-- **Shadow DOM** — player styles never leak into, or get overridden by, the host page.
-- **Real plugin code-splitting** — ads (direct Google IMA integration, no `videojs-ima`), Prebid, consent (TCF/USP/GPP), playlist, story mode, markers, segments, sprite thumbnails, countdown/geo/redirect screens, QR resume, dubbing, live wall clock, SCTE-35, DAI, and more each ship as their own dynamically-imported chunk. Nothing you don't configure is ever downloaded or parsed.
-- **4 style presets** (glass dark/light, neomorphism, flat) plus a CSS custom-property token system — the default accent is white; set your brand color with a single `--hp-color-accent` token.
-- **i18n built in** — every label, tooltip, and ad-UI string follows a single `locale`/`labels` option.
-- **One event API** — standard, namespaced DOM `CustomEvent`s (`hp:ready`, `hp:play`, `hp:adstart`, ...), listenable from any framework.
+**Playback** — MP4 / WebM / HLS (hls.js, loaded only for HLS; native on Safari / iOS), live streams with a wall clock, fallback sources (`sourcePriority`), quality menu, alternate audio, WebVTT and in-stream captions, sprite thumbnails, chapters and markers, playlist and story mode, audio player with vinyl mode, Picture-in-Picture, Chromecast and AirPlay.
+
+**Monetization**
+- Google IMA: preroll / midroll / postroll, VMAP, overlay ads, retry and waterfall, OM SDK, SCTE-35 for live, Google DAI.
+- Prebid video header bidding (direct VAST or GAM, with custom `cust_params`), consent (TCF / USP / GPP).
+- Rewarded quality unlock, sponsorship layer from your own API, pause ads, rule-driven Ad Manager out-of-page ads (`adTriggers`).
+- Casting keeps the ads: VAST / VMAP breaks are sent to the TV.
+
+**Engineering**
+- **Shadow DOM** — player styles never leak into the page, and the page never breaks the player.
+- **Real code-splitting** — every plugin is a dynamic import; nothing you don't configure is downloaded or parsed.
+- **Theming** — 4 presets plus CSS custom properties (`--hp-color-accent`…) and `::part()` hooks.
+- **i18n** — every label and ad-UI string follows `locale` / `labels` (Turkish and English included).
+- **One event API** — namespaced DOM `CustomEvent`s (`hp:ready`, `hp:adstart`, `hp:cast`…), from any framework.
+- **Tested** — a Playwright end-to-end suite runs on every change.
+
+## How it compares
+
+| | HopeCorePlayer | video.js | Plyr | JW Player |
+|---|---|---|---|---|
+| License | MIT | Apache-2.0 | MIT | Commercial |
+| Delivered as | Web component | JS library | JS library | JS library (hosted) |
+| HLS | Built in (hls.js, lazy) | Built in (VHS) | Bring your own hls.js | Built in |
+| Google IMA (VAST / VMAP) | Built in | Plugin (`videojs-ima`) | — | Built in |
+| Prebid header bidding | Built in | Third-party plugins | — | Built in |
+| Chromecast | Built in, with TV ads | Third-party plugin | — | Built in |
+| Rewarded unlock / sponsorship / out-of-page triggers | Built in | — | — | — |
+| React / Vue / React Native | Official wrappers | Community | Community | Official SDKs |
+
+Based on each project's documentation as of November 2026 — corrections are welcome via an issue.
 
 ## Packages
 
@@ -60,35 +105,24 @@ Editable examples that run in the browser on StackBlitz (best in Chrome / Edge),
 |---|---|
 | [`@hopeplayer/core`](./packages/core) | The `<hope-player>` custom element. |
 | [`@hopeplayer/react`](./packages/react) | Thin React wrapper (prop/event bridge, SSR-safe for Next.js App Router). |
-| [`@hopeplayer/vue`](./packages/vue) | Thin Vue 3 wrapper (same architecture as the React wrapper). |
-| [`@hopeplayer/react-native`](./packages/react-native) | React Native wrapper — runs the player in a WebView with the same options and callbacks as the React wrapper. |
+| [`@hopeplayer/vue`](./packages/vue) | Thin Vue 3 wrapper. |
+| [`@hopeplayer/react-native`](./packages/react-native) | React Native wrapper — runs the player in a WebView with the same options and callbacks. |
 
-## Monorepo layout
+All four are released together with the same version — see the [CHANGELOG](./CHANGELOG.md) and its versioning policy.
 
-```
-packages/core     — <hope-player> custom element (zero runtime dependencies)
-packages/react    — thin React wrapper
-packages/vue      — thin Vue 3 wrapper
-packages/react-native — React Native wrapper (WebView bridge)
-apps/playground   — plain HTML/TS dev environment
-docs/             — architecture / plugin / theming reference docs
-examples/vanilla, react, vue — StackBlitz live demos (separate install, not workspaces)
-examples/react-native-expo — Expo app (separate install, not a workspace)
-```
+## Contributing
 
-(The marketing/docs website itself, built with Next.js static export and deployed separately to [umutyaldiz.com/hopecoreplayer](https://umutyaldiz.com/hopecoreplayer), is developed locally but is intentionally not part of this repository.)
-
-## Development
+Bug reports, docs fixes and pull requests are welcome, in English or Turkish — see [CONTRIBUTING.md](./CONTRIBUTING.md). Please report security issues privately as described in [SECURITY.md](./SECURITY.md).
 
 ```bash
 npm install
-npm run build:core          # builds @hopeplayer/core (dist/hope-player.js)
-npm run dev                  # opens apps/playground on a Vite dev server
-npm run typecheck            # typechecks every workspace
-npm test                     # full Playwright suite (ads, prebid/consent, interaction, content-ops, live, theme, i18n)
+npx playwright install chromium
+npm run build:core
+npm run dev          # playground on http://localhost:5183
+npm test             # full end-to-end suite (run with the playground up)
 ```
 
-See [README.tr.md](./README.tr.md) for the full, detailed development log (every phase, every bug found and fixed, with root causes) — it's substantially more exhaustive than this file.
+Repository layout: `packages/*` (core and wrappers), `apps/playground` (dev page and tests), `examples/*` (StackBlitz / Expo demos), `docs/` (architecture, plugin and theming notes). The documentation website is deployed separately and is not part of this repository.
 
 ## License
 

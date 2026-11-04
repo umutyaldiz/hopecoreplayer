@@ -1,0 +1,55 @@
+name: Bug report
+description: Something does not work as documented / Bir şey belgelendiği gibi çalışmıyor
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! English or Turkish is fine. For security issues, use **Security → Report a vulnerability** instead.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`@hopeplayer/core` version (`HOPE_PLAYER_VERSION` or package.json)"
+      placeholder: "1.0.17"
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      multiple: true
+      options:
+        - "@hopeplayer/core (web component)"
+        - "@hopeplayer/react"
+        - "@hopeplayer/vue"
+        - "@hopeplayer/react-native"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser / device
+      placeholder: "Chrome 142 on Windows 11, Safari on iPhone 15 (iOS 18.3)…"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened / what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Minimal options to reproduce
+      description: The smallest `player.options` object (or React / Vue props) that shows the problem. Replace private URLs with public ones if you can.
+      render: js
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Console errors / debug log
+      description: Errors from the browser console, or the player's debug log (right-click → Debug log).
+      render: text

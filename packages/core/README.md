@@ -1,8 +1,18 @@
 # @hopeplayer/core
 
-A dependency-free (except `hls.js`) `<hope-player>` custom element — Shadow DOM + Tailwind-based theming, real plugin code-splitting, and a framework-agnostic event API. Works in plain HTML, React, Vue, Next.js, or anywhere else a Custom Element runs.
+**An open-source, monetization-first video player** — a framework-agnostic `<hope-player>` custom element (Shadow DOM, TypeScript) with Google IMA, Prebid, rewarded ads, sponsorships, out-of-page ad triggers and Chromecast with TV ads built in. Every feature is its own lazy-loaded chunk: nothing you don't configure is downloaded.
 
-Full docs, live demos, and the options/theming/plugin reference: **[umutyaldiz.com/hopecoreplayer](https://umutyaldiz.com/hopecoreplayer)**
+Full docs, live demos and the options reference: **[umutyaldiz.com/hopecoreplayer](https://umutyaldiz.com/hopecoreplayer)**
+
+## Quick start (CDN, no build step)
+
+```html
+<script type="module" src="https://cdn.jsdelivr.net/npm/@hopeplayer/core@1/dist/hope-player.js"></script>
+
+<hope-player src="https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" style="display:block;aspect-ratio:16/9"></hope-player>
+```
+
+Use the full `…/dist/hope-player.js` path — plugins load as relative chunks next to it (unpkg and esm.sh work the same way).
 
 ## Install
 
@@ -13,24 +23,24 @@ npm install @hopeplayer/core
 ```ts
 import '@hopeplayer/core';
 
-document.querySelector('#player').options = {
-    src: '/video.mp4',
+document.querySelector('hope-player').options = {
+    src: '/video.m3u8',
     poster: '/poster.jpg',
+    ads: { adTagPreroll: 'https://pubads.g.doubleclick.net/gampad/ads?…' },
+    cast: { chromecast: true, airplay: true },
 };
-```
-
-```html
-<hope-player src="/video.mp4" poster="/poster.jpg"></hope-player>
 ```
 
 ## Highlights
 
-- **Zero runtime dependencies** besides `hls.js`, which is itself only downloaded (as a separate chunk) when the source is an `.m3u8` stream and the browser lacks native HLS support.
-- **Shadow DOM** — the player's styles never leak into (or get overridden by) the host page.
-- **Real plugin code-splitting** — ads, Prebid, playlist, story mode, markers, segments, sprite thumbnails, countdown/geo/redirect screens, dubbing, live/SCTE-35, DAI, and more each ship as their own dynamically-imported chunk. Nothing you don't configure is ever downloaded.
-- **4 built-in style presets** (glass dark/light, neomorphism, flat) plus a CSS custom-property token system — set your brand color with a single `--hp-color-accent` token.
-- **i18n built in** — every label, tooltip, and ad-UI string follows a single `locale`/`labels` option.
-- Framework wrappers: [`@hopeplayer/react`](https://www.npmjs.com/package/@hopeplayer/react), [`@hopeplayer/vue`](https://www.npmjs.com/package/@hopeplayer/vue).
+- **Playback:** MP4 / WebM / HLS (hls.js only when needed, native on Safari / iOS), live, fallback sources, quality and audio menus, captions, sprite thumbnails, chapters, playlist and story mode, audio player, PiP, Chromecast and AirPlay.
+- **Monetization:** Google IMA (VAST / VMAP, overlays, OM SDK, SCTE-35, DAI), Prebid video with GAM `cust_params`, consent (TCF / USP / GPP), rewarded quality unlock, sponsorship layer, pause ads, rule-driven Ad Manager out-of-page ads — and ads keep playing on the TV when casting.
+- **Shadow DOM** — styles never leak into (or get overridden by) the host page.
+- **4 style presets** plus CSS custom properties (`--hp-color-accent`…) and `::part()` hooks.
+- **i18n** — every label and ad-UI string follows `locale` / `labels`.
+- **Wrappers:** [`@hopeplayer/react`](https://www.npmjs.com/package/@hopeplayer/react), [`@hopeplayer/vue`](https://www.npmjs.com/package/@hopeplayer/vue), [`@hopeplayer/react-native`](https://www.npmjs.com/package/@hopeplayer/react-native).
+
+[Changelog](https://github.com/umutyaldiz/hopecoreplayer/blob/main/CHANGELOG.md) · [Contributing](https://github.com/umutyaldiz/hopecoreplayer/blob/main/CONTRIBUTING.md) · [Issues](https://github.com/umutyaldiz/hopecoreplayer/issues)
 
 ## License
 

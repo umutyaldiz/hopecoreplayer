@@ -35,14 +35,7 @@
   "files": [
     "dist"
   ],
-  "keywords": [
-    "react-native",
-    "video",
-    "player",
-    "hls",
-    "webview",
-    "hopeplayer"
-  ],
+  "keywords": ["react-native", "expo", "webview", "video-player", "video", "player", "html5-video", "hls", "m3u8", "web-component", "custom-element", "ima", "vast", "vmap", "prebid", "ads", "monetization", "chromecast", "airplay", "subtitles", "shadow-dom", "hopeplayer"],
   "scripts": {
     "build": "vite build && tsc -p tsconfig.json --emitDeclarationOnly --outDir dist",
     "typecheck": "tsc -p tsconfig.json --noEmit",

@@ -6,6 +6,22 @@ Bağımlılıksız (hls.js hariç), TypeScript + Shadow DOM + Tailwind tabanlı,
 
 Kurulum rehberi, canlı demolar ve tüm options/tema/plugin referansı: **[umutyaldiz.com/hopecoreplayer](https://umutyaldiz.com/hopecoreplayer)**
 
+**Reklam ve gelir odaklı açık kaynak video player:** Google IMA, Prebid, ödüllü reklam, sponsorluk, out-of-page reklam tetikleyici ve TV'de reklamlı Chromecast tek pakette. Her özellik ayrı, gerektiğinde yüklenen bir parça.
+
+## Hızlı başlangıç — tek satır, derleme yok
+
+```html
+<script type="module" src="https://cdn.jsdelivr.net/npm/@hopeplayer/core@1/dist/hope-player.js"></script>
+
+<hope-player src="https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" style="display:block;aspect-ratio:16/9"></hope-player>
+```
+
+CDN'de tam `…/dist/hope-player.js` yolunu kullanın — player eklentilerini bu dosyanın yanındaki parçalardan yükler. unpkg ve esm.sh de aynı şekilde çalışır.
+
+npm ile: `npm install @hopeplayer/core` (React: `@hopeplayer/react`, Vue: `@hopeplayer/vue`, React Native: `@hopeplayer/react-native`).
+
+Sürüm notları: [CHANGELOG.md](./CHANGELOG.md) · Katkı: [CONTRIBUTING.md](./CONTRIBUTING.md) (Türkçe issue / PR olur) · Güvenlik: [SECURITY.md](./SECURITY.md)
+
 ## Canlı demolar
 
 npm'deki paketleri kullanan, tarayıcıda StackBlitz üzerinde çalışan düzenlenebilir örnekler (en iyi Chrome / Edge'de çalışır):
@@ -17,12 +33,14 @@ npm'deki paketleri kullanan, tarayıcıda StackBlitz üzerinde çalışan düzen
 | Vue | [StackBlitz'te aç](https://stackblitz.com/edit/hopecoreplayer-vue?file=src/App.vue) · [`examples/vue`](./examples/vue) |
 | React Native | [Expo Snack'te aç](https://snack.expo.dev/@umutyaldiz/hopecoreplayer) · [`examples/react-native-expo`](./examples/react-native-expo) |
 
-## Kurulum
+## Geliştirme
 
 ```bash
 npm install
+npx playwright install chromium
 npm run build:core   # @hopeplayer/core'u derler (dist/hope-player.js)
-npm run dev          # apps/playground'u Vite dev server'da açar
+npm run dev          # apps/playground'u Vite dev server'da açar (http://localhost:5183)
+npm test             # tüm uçtan uca test takımı (playground açıkken)
 ```
 
 ## Yapı

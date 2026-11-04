@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest a new option, plugin or improvement / Yeni bir özellik öner
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does it solve?
+      description: The use case (e.g. "we sell sponsorships per live match and need…").
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API
+      description: How would you like to configure it? A sketch of the options is perfect.
+      render: js
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives / other players
+      description: Workarounds you use today, or how other players (video.js, JW Player…) solve it.

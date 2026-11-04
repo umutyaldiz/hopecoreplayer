@@ -2,6 +2,7 @@
   "name": "@hopeplayer/vue",
   "version": "1.0.17",
   "description": "Thin Vue 3 wrapper around <hope-player> (@hopeplayer/core) — prop/event bridge only, no state duplication",
+  "keywords": ["vue", "vue3", "nuxt", "vue-component", "video-player", "video", "player", "html5-video", "hls", "m3u8", "web-component", "custom-element", "ima", "vast", "vmap", "prebid", "ads", "monetization", "chromecast", "airplay", "subtitles", "shadow-dom", "hopeplayer"],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/umutyaldiz/hopecoreplayer.git",
