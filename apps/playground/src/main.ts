@@ -73,6 +73,17 @@ const adsOptionsByScenario: Record<string, import('@hopeplayer/core').AdsOptions
         adTagPreroll: 'https://example.com/vast/preroll-fallback',
         prebid: { enabled: true, gamAdUnit: '/123456/site-preroll', timeout: 300, bidders: PREBID_BIDDERS },
     },
+    // Prebid custParams: GAM isteğine (kazanan olsa da olmasa da, Prebid yoksa fallback tag'e) eklenmeli.
+    'prebid-gam-cust': {
+        adTagPreroll: 'https://example.com/vast/preroll-fallback?iu=/123456/site-preroll&cust_params=site%3Dhope%26kategori%3Deski',
+        prebid: {
+            enabled: true,
+            gamAdUnit: '/123456/site-preroll',
+            timeout: 300,
+            bidders: PREBID_BIDDERS,
+            custParams: { kategori: 'spor', etiket: ['mac', 'ozet'], sezon: 2026, canli: true, hb_pb: '99.00' },
+        },
+    },
     'prebid-retry': {
         adTagPreroll: 'https://example.com/vast/preroll-fallback',
         prebid: { enabled: true, timeout: 300, bidders: PREBID_BIDDERS },

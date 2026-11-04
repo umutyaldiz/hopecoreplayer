@@ -1,6 +1,6 @@
 import { AdSurfaceGuard, type AdSurfaceGuardContext } from './AdSurfaceGuard';
 import { loadImaSdk } from './loadImaSdk';
-import { generateVastUrl } from './generateVastUrl';
+import { generateVastUrl, mergeCustParams, toCustRecord } from './generateVastUrl';
 import { RetryController, type AdBreakType } from './RetryController';
 import { initConsentAware } from './consent';
 import { Scte35LiveAdManager } from './scte35';
@@ -389,7 +389,12 @@ export class AdsController {
         const prebid = this.options.prebid;
         if (!prebid) return null;
         if (type === 'Preroll') return prebid.enabled ? prebid : null;
-        if (type === 'Midroll') return prebid.midroll?.enabled ? { ...prebid, ...prebid.midroll } : null;
+        if (type === 'Midroll') {
+            if (!prebid.midroll?.enabled) return null;
+            // custParams birleşir: genel değerler + midroll'a özel olanlar (aynı anahtarda midroll kazanır).
+            const custParams = { ...toCustRecord(prebid.custParams), ...toCustRecord(prebid.midroll.custParams) };
+            return { ...prebid, ...prebid.midroll, custParams };
+        }
         return null;
     }
 
@@ -418,9 +423,13 @@ export class AdsController {
             ? tag
             : generateVastUrl(tag, { includeRefreshCount: !!this.options.retry?.enabled, adRefreshCount: attempt });
 
+        const prebidConfig = skipUrlProcessing ? null : this.getPrebidConfigFor(type);
+        // Prebid custParams: GAM isteğine her durumda gider — auction kazanılsa da (VideoPrebid bu tag'in cust_params'ını
+        // buildVideoUrl'e aktarır), kazanılmasa / Prebid yüklenemese / retry'da da (doğrudan bu tag istenir).
+        if (prebidConfig?.custParams) vastUrl = mergeCustParams(vastUrl, prebidConfig.custParams);
+
         // Prebid yalnızca ham VAST tag'lerinde ve ilk denemede; retry'da auction tekrarlanmaz.
         if (!skipUrlProcessing && attempt === 0) {
-            const prebidConfig = this.getPrebidConfigFor(type);
             if (prebidConfig) {
                 const instance = await this.getOrCreatePrebidInstance(type, prebidConfig);
                 if (instance.isAvailable()) {

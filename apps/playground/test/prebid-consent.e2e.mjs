@@ -102,6 +102,35 @@ async function testPrebidUnavailableFallsBack(browser) {
     await page.close();
 }
 
+async function testPrebidCustParams(browser) {
+    console.log('\n[3b] prebid.custParams: auction kazanılsa da kazanılmasa da (Prebid yoksa fallback tag\'de) GAM isteğine gidiyor mu?');
+    const expectKv = (kv, label) => {
+        ok(kv?.kategori === 'spor' && kv.etiket === 'mac,ozet' && kv.sezon === '2026' && kv.canli === 'true' && kv.site === 'hope',
+            `${label}: key-value'lar var, tag'deki site=hope korunmuş, aynı anahtar (kategori) ezilmiş (${JSON.stringify(kv)})`);
+        ok(!kv || kv.hb_pb === undefined, `${label}: hb_pb dışarıdan verilemez (Prebid hedeflemesi korunur)`);
+    };
+    const gamKv = async (page) => {
+        await page.waitForFunction(() => window.__pbjsLog.some((e) => e.ev === 'buildVideoUrl'), { timeout: 3000 });
+        return page.evaluate(() => window.__pbjsLog.find((e) => e.ev === 'buildVideoUrl').custParams);
+    };
+
+    let page = await openScenario(browser, 'prebid-gam-cust', { withPbjs: true });
+    expectKv(await gamKv(page), 'kazanan bid → GAM buildVideoUrl');
+    await page.close();
+
+    page = await openScenario(browser, 'prebid-gam-cust', { withPbjs: true, extraInit: () => { window.__mockPbjs && (window.__mockPbjs.winningBid = null); } });
+    expectKv(await gamKv(page), 'kazanan yok → GAM buildVideoUrl');
+    await page.close();
+
+    page = await openScenario(browser, 'prebid-gam-cust');
+    await page.waitForFunction(() => window.__adsLog.some((e) => e.ev === 'requestAds'), { timeout: 3000 });
+    const url = await page.evaluate(() => window.__adsLog.find((e) => e.ev === 'requestAds').adTagUrl);
+    const raw = new URL(url).searchParams.get('cust_params') ?? '';
+    const kv = Object.fromEntries(raw.split('&').map((p) => p.split('=')).map(([k, v]) => [decodeURIComponent(k), decodeURIComponent(v ?? '')]));
+    expectKv(kv, 'Prebid yüklenemedi → fallback GAM tag\'i');
+    await page.close();
+}
+
 async function testPrebidSkippedOnRetry(browser) {
     console.log('\n[4] Prebid + retry: ilk denemede auction çalışıyor, RETRY\'de TEKRAR çalışmıyor mu?');
     const page = await openScenario(browser, 'prebid-retry', { withPbjs: true });
@@ -196,6 +225,7 @@ async function testPrebidChunkIsolation(browser) {
         await testPrebidGam(browser);
         await testPrebidGamCustParamsForwarded(browser);
         await testPrebidUnavailableFallsBack(browser);
+        await testPrebidCustParams(browser);
         await testPrebidSkippedOnRetry(browser);
         await testConsentAwareOptIn(browser);
         await testConsentAwareOffByDefault(browser);

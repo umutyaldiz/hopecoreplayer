@@ -71,7 +71,17 @@ export interface PrebidBreakOptions {
     /** true ise kazanan bid ham CPM yerine cpm * lossFactors[bidder] (yoksa 1) ile seçilir — yalnızca gamAdUnit boşken (direkt VAST modu) etkilidir. */
     applyLossFactor?: boolean;
     lossFactors?: Record<string, number>;
+    /**
+     * GAM isteğine eklenecek ek `cust_params` (key-value) — auction kazanılsa da kazanılmasa da (ya da Prebid yüklenemese,
+     * retry'da) GAM reklam birimine gider. JSON: `{ "kategori": "spor", "etiket": ["mac", "ozet"], "sezon": 2026 }` ya da
+     * metin: `"kategori=spor&etiket=mac,ozet"`. Aynı anahtar tag'de varsa bu kazanır; `hb_*` anahtarları (Prebid
+     * hedeflemesi) ezilemez. `midroll.custParams` genel değerlerle birleşir.
+     */
+    custParams?: CustParams;
 }
+
+/** Ad Manager key-value'ları (`cust_params`): JSON nesnesi (değer metin, sayı, boolean ya da dizi) veya `"k=v&k2=a,b"` metni. */
+export type CustParams = Record<string, string | number | boolean | Array<string | number>> | string;
 
 export interface PrebidOptions extends PrebidBreakOptions {
     /** pbjs.setConfig({consentManagement}) içine birebir aktarılır — auction'dan önce, en fazla bir kez. */
@@ -340,7 +350,7 @@ export type AdTrigger =
     | { type: 'ended'; delay?: number };
 
 /** Ad Manager key-value'ları: JSON nesnesi (değer metin, sayı, boolean ya da dizi) veya `"k=v&k2=a,b"` metni. */
-export type AdTriggerCustParams = Record<string, string | number | boolean | Array<string | number>> | string;
+export type AdTriggerCustParams = CustParams;
 
 export type AdTriggerLayout = 'none' | 'full' | 'center' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 

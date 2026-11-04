@@ -61,3 +61,39 @@ export function generateVastUrl(baseUrl: string, options: GenerateVastUrlOptions
         return url;
     }
 }
+
+type CustValue = string | number | boolean | Array<string | number>;
+
+/** `{ k: 'v', etiket: ['a','b'] }` ya da `"k=v&etiket=a,b"` → anahtar → değer(ler). Boş değerler atılır. */
+export function toCustRecord(raw: Record<string, CustValue> | string | undefined): Record<string, string[]> {
+    const out: Record<string, string[]> = {};
+    if (!raw) return out;
+    const entries: Array<[string, unknown]> =
+        typeof raw === 'string' ? [...new URLSearchParams(raw.trim().replace(/^\?/, '')).entries()].map(([k, v]) => [k, v.split(',')]) : Object.entries(raw);
+    for (const [k, v] of entries) {
+        const list = (Array.isArray(v) ? v : [v]).filter((x) => x !== undefined && x !== null && x !== '').map(String);
+        if (k && list.length) out[k] = list;
+    }
+    return out;
+}
+
+/**
+ * Ek key-value'ları tag'in `cust_params`'ına ekler — aynı anahtar varsa eklenen kazanır. `hb_` ile başlayan anahtarlar
+ * Prebid'in hedeflemesidir (hb_pb, hb_uuid…), dışarıdan ezilmesin diye atlanır. GAM'in beklediği gibi anahtar ve değer
+ * ayrı ayrı kodlanır, birden çok değer virgülle ayrılır.
+ */
+export function mergeCustParams(url: string, extra: Record<string, CustValue> | string | undefined): string {
+    const pairs = Object.entries(toCustRecord(extra))
+        .filter(([k]) => !k.startsWith('hb_'))
+        .map(([k, list]) => `${encodeURIComponent(k)}=${list.map(encodeURIComponent).join(',')}`);
+    if (!pairs.length) return url;
+    try {
+        const parsed = new URL(url);
+        const keys = new Set(pairs.map((p) => p.slice(0, p.indexOf('='))));
+        const existing = (parsed.searchParams.get('cust_params') ?? '').split('&').filter((p) => p && !keys.has(p.split('=')[0]!));
+        parsed.searchParams.set('cust_params', [...existing, ...pairs].join('&'));
+        return parsed.toString();
+    } catch {
+        return url;
+    }
+}

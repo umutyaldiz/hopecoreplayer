@@ -71,6 +71,7 @@ export type {
     AdTrigger,
     AdTriggerLayout,
     AdTriggerCustParams,
+    CustParams,
     CastOptions,
     CastSource,
 } from './types';

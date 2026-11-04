@@ -47,7 +47,7 @@ import type { QrResume } from './plugins/qr-resume';
 import type { PauseAd } from './plugins/pause-ad';
 import type { AdTriggers } from './plugins/ad-triggers';
 import type { CastController, CastMedia } from './plugins/cast';
-import { generateVastUrl } from './plugins/ads/generateVastUrl';
+import { generateVastUrl, mergeCustParams, toCustRecord } from './plugins/ads/generateVastUrl';
 import type { Dubbing } from './plugins/dubbing';
 import type { LiveWallClock } from './plugins/live';
 import type { DaiController } from './plugins/dai';
@@ -1473,9 +1473,13 @@ export class HopePlayerElement extends HTMLElement {
         const audio = typeof o.audio === 'object' ? o.audio : null;
         const image = c.metadata?.image ?? audio?.cover ?? o.poster;
         const adsOpts = typeof o.ads === 'object' ? o.ads : null;
-        const tag = (t: string | string[] | undefined): string | undefined => {
+        // TV de aynı GAM birimini ister — Prebid custParams'ı (preroll / midroll) TV tag'lerine de eklenir.
+        const prebid = adsOpts?.prebid;
+        const preCust = prebid?.custParams;
+        const midCust = prebid ? { ...toCustRecord(prebid.custParams), ...toCustRecord(prebid.midroll?.custParams) } : undefined;
+        const tag = (t: string | string[] | undefined, cust?: Parameters<typeof mergeCustParams>[1]): string | undefined => {
             const first = Array.isArray(t) ? t[0] : t;
-            return first ? generateVastUrl(first) : undefined;
+            return first ? mergeCustParams(generateVastUrl(first), cust) : undefined;
         };
         const ads =
             c.ads === false
@@ -1491,8 +1495,8 @@ export class HopePlayerElement extends HTMLElement {
                   : adsOpts
                     ? {
                           vmap: adsOpts.adTagVmap ? generateVastUrl(adsOpts.adTagVmap) : undefined,
-                          preroll: tag(adsOpts.adTagPreroll),
-                          midroll: tag(adsOpts.adTagMidroll),
+                          preroll: tag(adsOpts.adTagPreroll, preCust),
+                          midroll: tag(adsOpts.adTagMidroll, midCust),
                           midrollIntervalSeconds: adsOpts.midrollIntervalSeconds,
                           postroll: tag(adsOpts.adTagPostroll),
                       }
