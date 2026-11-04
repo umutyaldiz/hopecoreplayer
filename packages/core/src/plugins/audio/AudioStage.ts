@@ -103,7 +103,7 @@ export class AudioStage {
             <div class="hp-audio-area">
                 <div class="hp-audio-deck">
                     <div class="hp-audio-sleeve" part="audio-cover"><img alt="" decoding="async"></div>
-                    <div class="hp-vinyl" part="vinyl" role="slider" tabindex="-1" aria-valuemin="0">
+                    <div class="hp-vinyl" part="vinyl" role="slider" tabindex="-1" aria-valuemin="0" aria-valuenow="0">
                         <div class="hp-vinyl-disc"></div>
                         <div class="hp-vinyl-sheen"></div>
                         <div class="hp-tonearm-holder"><div class="hp-tonearm"></div></div>

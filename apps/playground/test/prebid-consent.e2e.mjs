@@ -193,7 +193,7 @@ async function testPrebidChunkIsolation(browser) {
     console.log('\n[7] Plugin izolasyonu: prebid.enabled yokken (düz preroll) VideoPrebid chunk\'ı indirilmiyor mu?');
     const page = await browser.newPage();
     const prebidChunkRequests = [];
-    page.on('request', (req) => { if (/VideoPrebid/.test(req.url())) prebidChunkRequests.push(req.url()); });
+    page.on('request', (req) => { if (/\/chunks\/prebid-/.test(req.url())) prebidChunkRequests.push(req.url()); });
     await page.addInitScript(MOCK_IMA);
     await page.goto(`${BASE}/?ads=preroll`);
     await page.waitForSelector('hope-player');
@@ -208,7 +208,7 @@ async function testPrebidChunkIsolation(browser) {
     console.log('\n[7b] Plugin izolasyonu: prebid.enabled=true iken VideoPrebid chunk\'ı indiriliyor mu?');
     const page2 = await browser.newPage();
     const prebidChunkRequests2 = [];
-    page2.on('request', (req) => { if (/VideoPrebid/.test(req.url())) prebidChunkRequests2.push(req.url()); });
+    page2.on('request', (req) => { if (/\/chunks\/prebid-/.test(req.url())) prebidChunkRequests2.push(req.url()); });
     await page2.addInitScript(MOCK_IMA);
     await page2.addInitScript(MOCK_PBJS);
     await page2.goto(`${BASE}/?ads=prebid`);

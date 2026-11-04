@@ -409,7 +409,10 @@ export class HopePlayerElement extends HTMLElement {
     connectedCallback(): void {
         // tabIndex constructor'da değil burada: tabindex attribute'una yansır ve Custom Elements spec'i
         // constructor'da attribute eklemeyi yasaklar (createElement "must not have attributes" hatası).
-        this.tabIndex = this.tabIndex || 0;
+        // `tabindex` verilmemişse 0 — `this.tabIndex || 0` YAZILMAMALI: attribute'suz öğede tabIndex -1 döner (truthy),
+        // host -1 kalır ve negatif tabindex'li shadow host'un içi Tab sırasından tamamen çıkar (kontrollere klavyeyle
+        // ulaşılamıyordu). Sayfanın kendi verdiği değere (ör. -1) dokunulmaz.
+        if (!this.hasAttribute('tabindex')) this.tabIndex = 0;
 
         this.syncFromAttributes();
 

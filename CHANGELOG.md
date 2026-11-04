@@ -29,11 +29,16 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 - Suggestion titles were rendered as HTML (XSS) — now plain text.
 - The redirect screen never showed after a postroll; the redirect now waits for the postroll to finish.
 - Changing the `redirectScreen` option after the first apply had no effect.
+- **Keyboard access:** the player host got `tabindex="-1"` instead of `0`, which removed every control from the Tab order — keyboard users could not reach play, volume, settings or fullscreen. A `tabindex` set by the page is still respected.
+- Accessibility: the rewarded-ad dialog has an accessible name, the "Unlock 720p" button and the redirect card's accessible names match their visible text, the vinyl slider exposes its value from the start, and the time display has a visible focus ring.
+
+### Changed
+- Plugin chunks are named after their plugin (`ads-…js`, `cast-…js`) instead of `index-…js`.
 
 ### Project
 - `CHANGELOG.md` with a versioning policy, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, issue and pull request templates.
-- npm `keywords` for all packages; README with a one-line CDN quick start and a comparison with other players.
-- CI runs the full Playwright end-to-end suite on every push and pull request.
+- npm `keywords` for all packages; README with a one-line CDN quick start, browser support table and a comparison with other players.
+- CI runs the full Playwright end-to-end suite, an axe-core accessibility scan (WCAG 2.1 A / AA) and a bundle-size budget on every push and pull request; GitHub Actions moved to Node 24 runtimes.
 
 ## [1.0.16] — 2026-11-03
 
@@ -94,9 +99,9 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 Initial public release: the `<hope-player>` custom element with Shadow DOM, HLS via hls.js (lazy), Google IMA ads, Prebid, consent, playlist, story mode, markers, segments, sprite thumbnails, countdown / geo / redirect screens, QR resume, dubbing, live wall clock, SCTE-35, DAI, theming presets and i18n; React and Vue wrappers.
 
 [Unreleased]: https://github.com/umutyaldiz/hopecoreplayer/compare/v1.0.17...HEAD
-[1.0.17]: https://www.npmjs.com/package/@hopeplayer/core/v/1.0.17
-[1.0.16]: https://www.npmjs.com/package/@hopeplayer/core/v/1.0.16
-[1.0.15]: https://www.npmjs.com/package/@hopeplayer/core/v/1.0.15
+[1.0.17]: https://github.com/umutyaldiz/hopecoreplayer/releases/tag/v1.0.17
+[1.0.16]: https://github.com/umutyaldiz/hopecoreplayer/releases/tag/v1.0.16
+[1.0.15]: https://github.com/umutyaldiz/hopecoreplayer/releases/tag/v1.0.15
 [1.0.14]: https://www.npmjs.com/package/@hopeplayer/core/v/1.0.14
 [1.0.13]: https://www.npmjs.com/package/@hopeplayer/core/v/1.0.13
 [1.0.12]: https://www.npmjs.com/package/@hopeplayer/core/v/1.0.12

@@ -34,6 +34,9 @@ type Phase = 'idle' | 'prompt' | 'loading' | 'nofill';
  * "Yüksek kaliteyi aç" butonuna dokunur → ödülü açıkça yazan onay penceresi → yalnızca "Reklamı izle" ile reklam istenir
  * → ödül verildiyse kilit açılır. Vazgeçmek videoyu izlemeyi engellemez (düşük kalitede devam eder).
  */
+/** Diyalog başlık id'leri — aynı sayfada birden çok player olabilir. */
+let dialogSeq = 0;
+
 export class RewardedUnlock {
     private options: RewardedUnlockOptions;
     private readonly button: HTMLButtonElement;
@@ -132,7 +135,11 @@ export class RewardedUnlock {
         const label = this.ctx.lockedQualityLabel();
         const show = this.options.button !== false && !!label && !this.unlocked;
         this.button.hidden = !show;
-        if (show) this.button.innerHTML = `${LOCK_SVG}<span>${escapeHtml(this.fill(this.ctx.i18n.rewardedButton, label!))}</span>`;
+        if (!show) return;
+        const text = this.fill(this.ctx.i18n.rewardedButton, label!);
+        this.button.innerHTML = `${LOCK_SVG}<span>${escapeHtml(text)}</span>`;
+        // Erişilebilir ad görünen metinle aynı (sesli komutla "720p kilidini aç" dendiğinde bulunabilsin).
+        this.button.setAttribute('aria-label', text);
     }
 
     // ── Akış ────────────────────────────────────────────────────────────
@@ -255,6 +262,9 @@ export class RewardedUnlock {
         icon.innerHTML = LOCK_SVG;
         const title = document.createElement('div');
         title.className = 'hp-rw-title';
+        // Diyaloğun erişilebilir adı başlığı (ekran okuyucu "720p kilidini aç" diye okur).
+        title.id = `hp-rw-title-${++dialogSeq}`;
+        d.setAttribute('aria-labelledby', title.id);
         const text = document.createElement('div');
         text.className = 'hp-rw-text';
         const actions = document.createElement('div');
@@ -323,7 +333,6 @@ export class RewardedUnlock {
     }
 
     refreshLabels(): void {
-        this.button.setAttribute('aria-label', this.ctx.i18n.rewardedButton.replace('{quality}', 'HD'));
         this.onQualitiesChanged();
     }
 

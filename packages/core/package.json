@@ -38,6 +38,7 @@
     "dev": "vite build --watch",
     "icons:build": "node scripts/build-icons.mjs",
     "build": "vite build && tsc -p tsconfig.json --emitDeclarationOnly --outDir dist",
+    "size": "node scripts/check-size.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

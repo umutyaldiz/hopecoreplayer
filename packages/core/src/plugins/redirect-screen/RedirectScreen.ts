@@ -192,7 +192,6 @@ export class RedirectScreen {
         const main = document.createElement('button');
         main.type = 'button';
         main.className = 'hp-redirect-card-main';
-        main.setAttribute('aria-label', `${o.label ?? this.ctx.i18n.redirectUpNext}: ${o.title ?? o.url} — ${this.ctx.i18n.redirectPlayNow}`);
         main.addEventListener('click', () => this.go('click'));
         const t = thumb(o.image, o.duration, 'hp-redirect-thumb');
         const text = document.createElement('span');
@@ -212,6 +211,13 @@ export class RedirectScreen {
             sub.textContent = o.subtitle;
             text.appendChild(sub);
         }
+        // Erişilebilir ad görünen metinden oluşur ("Sıradaki · 4 Başlık Alt başlık"); sonuna yalnızca ekran okuyucunun
+        // duyduğu "Şimdi oynat" eklenir — görsel / süre rozeti okunmaz.
+        t.el.setAttribute('aria-hidden', 'true');
+        const action = document.createElement('span');
+        action.className = 'hp-sr-only';
+        action.textContent = ` — ${this.ctx.i18n.redirectPlayNow}`;
+        text.appendChild(action);
         main.append(t.el, text);
 
         const close = document.createElement('button');

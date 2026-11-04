@@ -5,6 +5,28 @@ import { readFileSync } from 'node:fs';
 
 const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')) as { version: string };
 
+/** Klasör adı seçenek adıyla aynı değilse (ör. plugins/rewarded → `rewardedUnlock`). */
+const OPTION_NAMES: Record<string, string> = {
+    rewarded: 'rewardedUnlock',
+    live: 'liveWallClock',
+    stats: 'statsPanel',
+    debug: 'debugPanel',
+};
+/** Eklenti klasörü dışındaki parçalar (dosya adına göre). */
+const FILE_NAMES: Record<string, string> = {
+    index: 'player',
+    VideoPrebid: 'prebid',
+    loadGpt: 'gpt',
+    ScratchSound: 'audioScratchSound',
+};
+const camel = (s: string): string => s.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+
+function chunkName(name: string, facade: string | null): string {
+    const plugin = /[\\/]plugins[\\/]([^\\/]+)[\\/]index\.ts$/.exec(facade ?? '');
+    if (plugin) return OPTION_NAMES[plugin[1]!] ?? camel(plugin[1]!);
+    return FILE_NAMES[name] ?? name;
+}
+
 export default defineConfig({
     plugins: [tailwindcss()],
     // Sağ tık menüsü / istatistik paneli sürümü — package.json'dan, elle güncellenmez.
@@ -20,7 +42,10 @@ export default defineConfig({
         rollupOptions: {
             output: {
                 // Dinamik import()'lar (plugin/hls.js) kendi chunk'larına ayrılır; hope-player.js küçük bir re-export shim'i, asıl kod hash'li chunk'ta.
-                chunkFileNames: 'chunks/[name]-[hash].js',
+                // Parça adı = açan seçeneğin adı (adTriggers-…, redirectScreen-…, player-…) — hepsi "index-…" görünüp ağ
+                // sekmesinde / boyut raporunda ayırt edilemiyordu. Sondaki hash içerikten gelir: içerik değişince ad da
+                // değişir (yeni sürümde eski parça önbellekten gelmez), değişmeyen parça önbellekte kalır.
+                chunkFileNames: (chunk) => `chunks/${chunkName(chunk.name, chunk.facadeModuleId)}-[hash].js`,
             },
         },
         sourcemap: true,

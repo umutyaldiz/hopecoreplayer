@@ -1161,8 +1161,9 @@ button.hp-context-menu-item:focus-visible {
 .hp-live-badge:hover {
     background: var(--hp-chip-bg-hover);
 }
-.hp-live-badge:focus-visible {
-    outline: 2px solid var(--hp-color-accent);
+.hp-live-badge:focus-visible,
+[part='time-display']:focus-visible {
+    outline: 2px solid var(--hp-color-accent, #ffffff);
     outline-offset: 2px;
 }
 .hp-live-dot {

@@ -40,7 +40,8 @@ The playground (`apps/playground`) loads the **built** core (`packages/core/dist
 - **UI text** goes through i18n (`packages/core/src/i18n`) — add the key to `types.ts`, `locales/tr.ts` and `locales/en.ts`.
 - **Styles** live in `packages/core/src/theme/tailwind.css` and use the `--hp-*` theme tokens, so presets and brand colors keep working.
 - **Untrusted data** (API responses, titles, URLs) is rendered with `textContent`, never `innerHTML`; URLs are limited to `http(s)`.
-- **Bundle size:** keep plugin code out of the main chunk — import it dynamically from `HopePlayerElement`.
+- **Bundle size:** keep plugin code out of the main chunk — import it dynamically from `HopePlayerElement`. `npm run size --workspace=packages/core` (also in CI) fails when the first-load code exceeds its budget.
+- **Accessibility:** controls need an accessible name that contains their visible text, a visible `:focus-visible` style and keyboard operation; `npm run test:a11y` scans the player with axe-core.
 - **Backward compatibility:** don't rename or remove options or change defaults in a minor release; see the versioning policy in [CHANGELOG.md](./CHANGELOG.md).
 
 ## Tests

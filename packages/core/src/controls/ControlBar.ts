@@ -180,7 +180,7 @@ export class ControlBar {
         this.timeLabel.type = 'button';
         this.timeLabel.setAttribute('part', 'time-display');
         this.timeLabel.className =
-            'hp:text-xs hp:text-on-surface hp:tabular-nums hp:whitespace-nowrap hp:px-1 hp:bg-transparent hp:border-0 hp:cursor-pointer hp:select-none hp:p-0 hp:hover:opacity-80 hp:transition-opacity hp:focus-visible:outline-none hp:focus-visible:ring-1 hp:focus-visible:ring-accent hp:rounded';
+            'hp:text-xs hp:text-on-surface hp:tabular-nums hp:whitespace-nowrap hp:px-1 hp:bg-transparent hp:border-0 hp:cursor-pointer hp:select-none hp:p-0 hp:hover:opacity-80 hp:transition-opacity hp:rounded';
         this.timeLabel.textContent = '0:00 / 0:00';
         this.timeLabel.addEventListener('click', this.onTimeClick);
         leftGroup.appendChild(this.timeLabel);

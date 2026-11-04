@@ -35,6 +35,8 @@ That's it: HLS, the quality menu, captions and keyboard shortcuts work out of th
 ```
 
 > Use the full `…/dist/hope-player.js` path on CDNs — the player loads its plugins as relative chunks next to that file. unpkg (`https://unpkg.com/@hopeplayer/core@1/dist/hope-player.js`) and esm.sh work the same way.
+>
+> **In production, pin an exact version** (`@hopeplayer/core@1.0.17/dist/hope-player.js`): CDNs cache version ranges like `@1` for a while, so a new release can take time to show up, while an exact version URL never changes and is cached for good. Plugin chunks have content hashes in their names (`ads-DPL7m9PV.js`), so a new release never serves a stale chunk.
 
 ## Install with npm
 
@@ -82,7 +84,24 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 - **Theming** — 4 presets plus CSS custom properties (`--hp-color-accent`…) and `::part()` hooks.
 - **i18n** — every label and ad-UI string follows `locale` / `labels` (Turkish and English included).
 - **One event API** — namespaced DOM `CustomEvent`s (`hp:ready`, `hp:adstart`, `hp:cast`…), from any framework.
-- **Tested** — a Playwright end-to-end suite runs on every change.
+- **Tested** — a Playwright end-to-end suite, an accessibility scan and a bundle-size budget (about 68 KB gzip on first load) run on every change.
+
+## Browser support
+
+**Minimum:** Chrome / Edge 111+, Firefox 128+, Safari 16.4+ (macOS and iOS / iPadOS), Samsung Internet 22+ — the player's styles are built with Tailwind CSS v4, which [requires these versions](https://tailwindcss.com/docs/compatibility). Older browsers are not supported.
+
+| Platform | Status |
+|---|---|
+| Chrome / Edge (desktop, Android) | ✅ Automated end-to-end tests on every change (Chromium), including mobile viewports |
+| Safari (macOS), iOS / iPadOS Safari | ✅ Supported — native HLS, iPhone video fullscreen and AirPlay paths are handled; verified manually on iPhone |
+| Firefox | ✅ Supported — no automated tests yet |
+| React Native (iOS / Android WebView) | ✅ Bridge covered by automated tests; WebView behaves like the platform browser |
+| Chromecast / Google TV, Apple TV | ⚠️ Implemented against the official SDKs and covered by tests with simulated SDKs — not yet verified on real devices |
+| Smart TV browsers (Tizen, webOS) | ❌ Not tested |
+
+Found a problem on a browser or device? Please [open an issue](https://github.com/umutyaldiz/hopecoreplayer/issues/new?template=bug_report.yml) with the browser and version.
+
+**Accessibility:** controls are reachable and operable with the keyboard, have visible focus indicators and accessible names, and the player is scanned with axe-core (WCAG 2.1 A / AA) in CI — including menus, dialogs and overlays.
 
 ## How it compares
 
