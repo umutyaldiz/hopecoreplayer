@@ -1815,7 +1815,9 @@ export class HopePlayerElement extends HTMLElement {
     };
 
     private readonly onPointerDownFocus = (): void => {
-        this.focus();
+        // preventScroll: player ekrana tam sığmıyorken focus() sayfayı kaydırıyordu — basılan butonun altından
+        // kayan sayfa yüzünden bırakma başka bir kontrole (ör. seek bar) düşüyor, tıklama kayboluyordu.
+        this.focus({ preventScroll: true });
         // AdDisplayContainer.initialize() bir kullanıcı jestinde çağrılmalı (IMA) — player'a ilk dokunuşta.
         this.adsController?.initializeDisplayContainerOnce();
     };
