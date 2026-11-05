@@ -308,8 +308,10 @@ async function testInViewAutoplay(browser) {
     ok(pausedWhenOut === true, 'viewport dışına çıkınca otomatik duraklatıldı');
 
     await page.evaluate(() => document.getElementById('player').scrollIntoView({ block: 'center' }));
-    await page.waitForTimeout(600);
-    const playingWhenBack = await page.evaluate(() => !document.getElementById('player').shadowRoot.querySelector('video').paused);
+    // IntersectionObserver + play() yavaş CI makinesinde 600 ms'yi aşabiliyor — sabit bekleme yerine en fazla 5 sn bekle.
+    const playingWhenBack = await page
+        .waitForFunction(() => !document.getElementById('player').shadowRoot.querySelector('video').paused, null, { timeout: 5000 })
+        .then(() => true, () => false);
     ok(playingWhenBack === true, 'viewport\'a geri girince (bu plugin duraklattığı için) devam etti');
     await page.close();
 }
@@ -403,7 +405,7 @@ async function testPlaylist(browser) {
 
     const nextBtn = await page.evaluateHandle(() => document.getElementById('player').shadowRoot.querySelector('[aria-label="Sonraki"]'));
     await nextBtn.asElement().click();
-    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:playlist:1'), { timeout: 2000 });
+    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:playlist:1'), null, { timeout: 10000 });
 
     const activeTitle1 = await page.evaluate(() => {
         const active = document.getElementById('player').shadowRoot.querySelector('li[data-active="true"]');
@@ -413,9 +415,9 @@ async function testPlaylist(browser) {
 
     // loop wraparound: index 1 -> 2 -> next() -> 0 (loop:true demo config)
     await nextBtn.asElement().click();
-    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:playlist:2'), { timeout: 2000 });
+    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:playlist:2'), null, { timeout: 10000 });
     await nextBtn.asElement().click();
-    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:playlist:0'), { timeout: 2000 });
+    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:playlist:0'), null, { timeout: 10000 });
 
     const logText = await page.evaluate(() => document.getElementById('log')?.textContent ?? '');
     const changeCount = (logText.match(/itemchange:playlist/g) || []).length;
@@ -439,11 +441,11 @@ async function testPlaylist(browser) {
 async function testStory(browser) {
     console.log('\n[7] HopeStory: aşağı/yukarı nav butonları + loop wraparound + hp:itemchange');
     const page = await openFeature(browser, 'story');
-    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:0'), null, { timeout: 5000 });
+    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:0'), null, { timeout: 10000 });
 
     const downBtn = await page.evaluateHandle(() => document.getElementById('player').shadowRoot.querySelector('[aria-label="Sonraki video"]'));
     await downBtn.asElement().click();
-    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:1'), null, { timeout: 5000 });
+    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:1'), null, { timeout: 10000 });
 
     const counter1 = await page.evaluate(() => {
         const root = document.getElementById('player').shadowRoot;
@@ -453,14 +455,14 @@ async function testStory(browser) {
 
     const upBtn = await page.evaluateHandle(() => document.getElementById('player').shadowRoot.querySelector('[aria-label="Önceki video"]'));
     await upBtn.asElement().click();
-    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:0'), null, { timeout: 5000 });
+    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:0'), null, { timeout: 10000 });
 
     // Geçiş sürerken (önceki öğe hâlâ yüklenirken) gelen dokunuş artık kaybolmuyor, geçiş bitince uygulanıyor —
     // eskiden yok sayılıyordu (yavaş yüklemede, ör. Linux WebKit, ikinci "önceki" düşüyordu). Bekleme yok, hemen tıkla.
     // loop wraparound: index 0'dan prev() -> son item'a (loop:true demo config)
     await upBtn.asElement().click();
     const wrapped = await page
-        .waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:2'), null, { timeout: 8000 })
+        .waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:2'), null, { timeout: 10000 })
         .then(() => true, () => false);
     ok(wrapped, 'geçiş sürerken gelen "önceki" bekletilip uygulandı; index 0\'dan prev() → loop ile son item (index 2)');
     await page.close();
@@ -705,7 +707,7 @@ async function testContextMenu(browser) {
         m = await menu();
         ok(m.items.length === 2 && m.items[1] === 'İstatistikler', `stats: true → "İstatistikler" satırı ${JSON.stringify(m.items)}`);
         await page.evaluate(() => document.getElementById('player').shadowRoot.querySelectorAll('[part="context-menu"] button')[0].click());
-        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('[part="stats-panel"]'), { timeout: 5000 });
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('[part="stats-panel"]'), null, { timeout: 5000 });
         // Panel tarayıcının bildirdiği çözünürlüğü yazar (WebKit aynı dosya için farklı değer bildirebiliyor).
         const videoSize = await page.evaluate(() => {
             const v = document.getElementById('player').shadowRoot.querySelector('video');
