@@ -84,7 +84,7 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 - **Theming** — 4 presets plus CSS custom properties (`--hp-color-accent`…) and `::part()` hooks.
 - **i18n** — every label and ad-UI string follows `locale` / `labels` (Turkish and English included).
 - **One event API** — namespaced DOM `CustomEvent`s (`hp:ready`, `hp:adstart`, `hp:cast`…), from any framework.
-- **Tested** — a Playwright end-to-end suite, an accessibility scan and a bundle-size budget (about 68 KB gzip on first load) run on every change in Chromium; Firefox and WebKit run nightly and before every release on Linux, and `npm run test:linux` reproduces that exact environment locally with Docker.
+- **Tested** — a Playwright end-to-end suite, an accessibility scan and a bundle-size budget (about 68 KB gzip on first load) run on every change in Chromium; Firefox and WebKit run nightly and before every release on Linux, and `npm run test:linux` reproduces that exact environment locally with Docker; real Safari (macOS) and Safari on the iOS Simulator run nightly on GitHub's macOS machines.
 
 ## Browser support
 
@@ -94,7 +94,7 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 |---|---|
 | Chrome / Edge (desktop, Android) | ✅ Automated end-to-end tests on every change (Chromium), including mobile viewports |
 | Firefox | ✅ Automated end-to-end tests nightly and before every release |
-| Safari (macOS), iOS / iPadOS Safari | ✅ Supported — native HLS, iPhone video fullscreen and AirPlay paths are handled; automated WebKit tests nightly and before every release (HLS tests excluded — Playwright's WebKit has no Apple HLS player); verified manually on iPhone |
+| Safari (macOS), iOS / iPadOS Safari | ✅ Supported — native HLS, iPhone video fullscreen and AirPlay paths are handled; automated WebKit tests nightly and before every release, plus nightly smoke tests in real Safari on macOS and in Safari on the iOS Simulator (playback, seeking, captions, native HLS, QR resume, audio mode); verified manually on iPhone |
 | React Native (iOS / Android WebView) | ✅ Bridge covered by automated tests; WebView behaves like the platform browser |
 | Chromecast / Google TV, Apple TV | ⚠️ Implemented against the official SDKs and covered by tests with simulated SDKs — not yet verified on real devices |
 | Smart TV browsers (Tizen, webOS) | ❌ Not tested |

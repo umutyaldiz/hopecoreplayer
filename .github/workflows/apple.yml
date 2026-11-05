@@ -79,9 +79,16 @@ jobs:
       # bir sayfa hazır olsun — yoksa Appium "remote debugger did not return any connected web applications" diyor.
       - name: Warm up Safari
         if: matrix.target == 'ios'
+        # Soğuk simülatörde `openurl` Safari açılırken zaman aşımına düşebiliyor (code=60): önce Safari'yi başlat,
+        # sonra adresi birkaç kez dene. Olmazsa da sorun değil — test Appium'un webviewConnectTimeout'u ile bekler.
         run: |
-          xcrun simctl openurl "$IOS_UDID" http://localhost:5183/ || true
-          sleep 15
+          xcrun simctl launch "$IOS_UDID" com.apple.mobilesafari || true
+          sleep 10
+          for i in 1 2 3; do
+            xcrun simctl openurl "$IOS_UDID" http://localhost:5183/ 2>/dev/null && { echo "Safari hazır"; sleep 5; exit 0; }
+            echo "openurl denemesi $i olmadı, bekleniyor…"; sleep 10
+          done
+          echo "::notice::Safari önceden ısıtılamadı — test yine çalışacak"
 
       - name: Run Safari tests
         run: node apps/playground/test/apple/safari.e2e.mjs
