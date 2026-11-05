@@ -44,6 +44,7 @@ import type { SpriteThumbnails } from './plugins/sprite-thumbnails';
 import type { CountdownScreen } from './plugins/countdown-screen';
 import type { GeoChecker } from './plugins/geo-checker';
 import type { RedirectScreen } from './plugins/redirect-screen';
+import type { SkipSegments } from './plugins/skip-segments';
 import type { QrResume } from './plugins/qr-resume';
 import type { PauseAd } from './plugins/pause-ad';
 import type { AdTriggers } from './plugins/ad-triggers';
@@ -193,6 +194,8 @@ export class HopePlayerElement extends HTMLElement {
     private geoChecker: GeoChecker | null = null;
     private redirectScreen: RedirectScreen | null = null;
     private redirectKey = '';
+    private skipSegments: SkipSegments | null = null;
+    private skipSegmentsKey = '';
     private qrResume: QrResume | null = null;
     private pauseAd: PauseAd | null = null;
     private adTriggers: AdTriggers | null = null;
@@ -539,6 +542,9 @@ export class HopePlayerElement extends HTMLElement {
         this.countdownScreen?.destroy();
         this.geoChecker?.destroy();
         this.redirectScreen?.destroy();
+        this.skipSegments?.destroy();
+        this.skipSegments = null;
+        this.skipSegmentsKey = '';
         this.qrResume?.destroy();
         this.pauseAd?.destroy();
         this.pauseAd = null;
@@ -791,6 +797,7 @@ export class HopePlayerElement extends HTMLElement {
         this.countdownScreen?.refreshLabels();
         this.geoChecker?.refreshLabels();
         this.redirectScreen?.refreshLabels();
+        this.skipSegments?.refreshLabels();
         this.qrResume?.refreshLabels();
         this.pauseAd?.refreshLabels();
         this.castController?.refreshLabels();
@@ -1030,6 +1037,23 @@ export class HopePlayerElement extends HTMLElement {
                     { hostEl: this, videoEl: this.videoEl, overlayContainerEl: this.videoArea, isAdActive: () => this.isAdPlaying(), i18n: this.i18n },
                     options.redirectScreen
                 );
+            }
+        }
+
+        // Bölümler her içerikte farklı (playlist'te sıradaki bölüm) — değişince yeniden kurulur.
+        const skipKey = options.skipSegments?.length ? JSON.stringify(options.skipSegments) : '';
+        if (skipKey !== this.skipSegmentsKey) {
+            this.skipSegmentsKey = skipKey;
+            this.skipSegments?.destroy();
+            this.skipSegments = null;
+            if (options.skipSegments?.length) {
+                const { installSkipSegments } = await import('./plugins/skip-segments');
+                if (this.skipSegmentsKey === skipKey) {
+                    this.skipSegments = installSkipSegments(
+                        { hostEl: this, videoEl: this.videoEl, overlayContainerEl: this.videoArea, isAdActive: () => this.isAdPlaying(), i18n: this.i18n },
+                        options.skipSegments
+                    );
+                }
             }
         }
 

@@ -2617,3 +2617,91 @@ button.hp-context-menu-item:focus-visible {
         animation: none;
     }
 }
+
+/* ── skipSegments: "İntroyu atla" butonu ── */
+.hp-skip-segment {
+    position: absolute;
+    z-index: 23;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    padding: 10px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 8px;
+    background: rgba(14, 14, 18, 0.72);
+    color: #fff;
+    font: 600 14px/1.2 system-ui, -apple-system, sans-serif;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 10px 28px -12px rgba(0, 0, 0, 0.8);
+    animation: hp-redirect-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition:
+        opacity 0.25s,
+        bottom 0.25s,
+        background-color 0.15s;
+}
+.hp-skip-segment:hover {
+    background: rgba(255, 255, 255, 0.92);
+    color: #111;
+}
+.hp-skip-segment:focus-visible {
+    outline: 2px solid var(--hp-color-accent, #fff);
+    outline-offset: 2px;
+}
+.hp-skip-segment > * {
+    position: relative;
+}
+.hp-skip-segment-icon {
+    font-size: 16px;
+}
+/* autoSkip geri sayımı: buton soldan dolar. */
+.hp-skip-segment[data-auto]::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.22);
+    transform-origin: left;
+    transform: scaleX(var(--hp-skip-progress, 0));
+    transition: transform 0.25s linear;
+}
+.hp-skip-segment[data-position='bottom-right'] {
+    right: 16px;
+    bottom: 76px;
+}
+.hp-skip-segment[data-position='bottom-left'] {
+    left: 16px;
+    bottom: 76px;
+}
+.hp-skip-segment[data-position='top-right'] {
+    right: 16px;
+    top: 16px;
+}
+.hp-skip-segment[data-position='top-left'] {
+    left: 16px;
+    top: 16px;
+}
+.video-area[data-chrome-hidden] .hp-skip-segment[data-position^='bottom'] {
+    bottom: 16px;
+}
+/* hideAfter: süre dolunca çekilir, kontroller açılınca geri gelir. */
+.video-area[data-chrome-hidden] .hp-skip-segment[data-faded] {
+    opacity: 0;
+    pointer-events: none;
+}
+.video-area[data-compact] .hp-skip-segment {
+    padding: 7px 12px;
+    font-size: 12px;
+}
+.video-area[data-compact] .hp-skip-segment[data-position^='bottom'] {
+    bottom: 56px;
+}
+.video-area[data-compact][data-chrome-hidden] .hp-skip-segment[data-position^='bottom'] {
+    bottom: 10px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .hp-skip-segment {
+        animation: none;
+    }
+}

@@ -21,6 +21,8 @@ type MediaSourceType = 'hls' | 'mp4' | 'unknown';
 /** Hangi yoldan oynatılıyor — `reason` native'e neden düşüldüğünü açıklar (ör. CORS). */
 export interface PlaybackEngineInfo {
     engine: 'native' | 'native-hls' | 'hls.js';
+    /** hls.js ile oynarken hangi paket (`options.hls.build`). */
+    build?: 'full' | 'light';
     /** `option` = `options.hls.engine: 'native'` ile istendi. */
     reason?: 'apple-native' | 'no-mse' | 'hlsjs-failed' | 'option';
 }
@@ -243,8 +245,9 @@ export class SourceManager {
     }
 
     private async attachHlsJs(src: string): Promise<void> {
-        // Diğer tarayıcılar: hls.js'i yalnızca gerektiğinde yükle.
-        const { default: Hls } = await import('hls.js');
+        // Diğer tarayıcılar: hls.js'i yalnızca gerektiğinde yükle. İki paket ayrı parçalarda — biri seçilince öbürü inmez.
+        const build = this.hlsOptions.build === 'light' ? 'light' : 'full';
+        const { default: Hls } = build === 'light' ? await import('hls.js/light') : await import('hls.js');
         // import sırasında başka bir kaynak yüklenmiş olabilir.
         if (this.last?.src !== src) return;
 
@@ -258,7 +261,7 @@ export class SourceManager {
         const hls = new Hls(this.buildHlsConfig());
 
         this.hls = hls;
-        this.engineInfo = { engine: 'hls.js' };
+        this.engineInfo = { engine: 'hls.js', build };
         let parsed = false;
         let mediaRecoveryTried = false;
 

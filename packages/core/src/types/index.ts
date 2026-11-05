@@ -665,6 +665,40 @@ export interface SegmentItem {
     color?: string;
 }
 
+/** Atlanabilir bölüm türü — butonun varsayılan metnini belirler ("İntroyu atla", "Özeti atla", "Jeneriği atla", "Atla"). */
+export type SkipSegmentType = 'intro' | 'recap' | 'credits' | 'custom';
+
+/** "İntroyu atla" gibi bir buton: bölüm oynarken görünür, basınca bölümün sonuna atlar. */
+export interface SkipSegment {
+    /** Bölümün başlangıcı (sn). Buton bu andan itibaren görünür (bkz. `showFrom`). */
+    start: number;
+    /** Bölümün sonu (sn) — buton buraya atlar. Verilmezse videonun sonu (jenerik: playlist'te sıradakine geçer). */
+    end?: number;
+    /** Varsayılan `'intro'`. */
+    type?: SkipSegmentType;
+    /** Buton metni — verilmezse türe göre dil dosyasından. */
+    label?: string;
+    /** Varsayılan `'bottom-right'`. */
+    position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+    /**
+     * Butonun ekranda görünmeye başladığı an (sn, videonun zamanı) — varsayılan `start`. Ör. intro 0–90 sn ama buton
+     * 5. sn'de çıksın: `{ start: 0, end: 90, showFrom: 5 }`. `start`'tan önce olamaz.
+     */
+    showFrom?: number;
+    /** Butonun kalktığı an (sn) — varsayılan `end`. Bölüm sürse de buton daha erken kalksın diye. Atlama yine `end`'e. */
+    showUntil?: number;
+    /**
+     * Buton ilk göründükten bu kadar sn sonra kendiliğinden gizlenir; kontroller açıldığında (fare / dokunuş) bölüm
+     * bitene kadar yeniden görünür. Varsayılan 0 = bölüm boyunca hep görünür.
+     */
+    hideAfter?: number;
+    /**
+     * Basılmasa da atla. `true`: hemen; sayı: o kadar sn geri sayımla (buton dolar, basınca hemen atlar).
+     * Kullanıcı bölüm içinde geri sararsa otomatik atlama o gösterim için iptal olur. Varsayılan false.
+     */
+    autoSkip?: boolean | number;
+}
+
 export interface SpriteThumbnailsOptions {
     /**
      * Sprite sheet URL'i. Tek görsel → tüm videoyu kapsar. Çok parçalı setlerde
@@ -764,6 +798,13 @@ export interface HopeHlsOptions {
      * `'native'`: tarayıcı destekliyorsa her zaman kendi HLS oynatıcısı.
      */
     engine?: 'auto' | 'hls.js' | 'native';
+    /**
+     * Hangi hls.js paketi indirilsin (yalnızca hls.js ile oynarken). `'full'` (varsayılan): tümü.
+     * `'light'`: hls.js'in hafif paketi (~%40 küçük) — kalite menüsü, ABR, canlı / DVR, SCTE-35 ve
+     * EXT-X-PROGRAM-DATE-TIME çalışır; yayının kendi altyazıları (WebVTT / IMSC1 / CEA-608), alternatif ses izleri
+     * (EXT-X-MEDIA AUDIO), DRM (EME), CMCD ve interstitials yoktur. `options.subtitles` ile verilen altyazılar etkilenmez.
+     */
+    build?: 'full' | 'light';
     /** hls.js ayarları — olduğu gibi `new Hls(config)`'e geçer (buffer, ABR, düşük gecikme, ağ...). Yalnızca hls.js ile oynarken etkili. */
     config?: Partial<HlsConfig>;
     /** Manifest/segment isteklerinde cookie ve kimlik bilgisi gönder (CORS `credentials: include`). */
@@ -962,6 +1003,8 @@ export interface HopePlayerOptions {
     markers?: MarkersOptions;
     /** Seekbar üzerinde bölüm/segment bantları. */
     segments?: SegmentItem[];
+    /** "İntroyu atla" / "Özeti atla" / "Jeneriği atla" butonları — bölüm oynarken görünür, basınca sonuna atlar. */
+    skipSegments?: SkipSegment[];
     /** Seekbar üzerinde hover-scrub sprite sheet önizlemesi. */
     spriteThumbnails?: SpriteThumbnailsOptions;
     /** Oynatıcı yüklenmeden önce hedef tarihe kadar geri sayım ekranı. */
@@ -1053,4 +1096,9 @@ export type HopePlayerEventMap = {
      */
     'hp:redirect': CustomEvent<{ state: 'shown' | 'cancel' | 'redirect'; url: string; mode: 'screen' | 'card'; reason?: 'auto' | 'click' }>;
     'hp:pausead': CustomEvent<{ state: 'shown' | 'hidden' | 'empty'; size?: [number, number]; reason?: 'closed' | 'resumed' }>;
+    /**
+     * `skipSegments` butonu: `shown` (bölüm başladı, buton göründü) ve `skip` (`reason`: click | auto). `skip` iptal
+     * edilebilir — `preventDefault()` ile atlanmaz (ör. jenerikte sıradaki bölüme kendiniz geçin).
+     */
+    'hp:skip': CustomEvent<{ state: 'shown' | 'skip'; type: SkipSegmentType; start: number; end: number; reason?: 'click' | 'auto' }>;
 };

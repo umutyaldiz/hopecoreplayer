@@ -386,6 +386,57 @@ async function testHlsAudioAndSubtitleMenus(browser) {
     }
 }
 
+async function testHlsLightBuild(browser) {
+    console.log('\n[4k] hls.build: "light" — hafif hls.js paketi iniyor (tam paket inmiyor), kalite menüsü çalışıyor, ses/altyazı menüsü yok');
+    if (!only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok (MSE de Apple yerel HLS oynatıcısı da yok)')) return;
+    const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+    const chunks = [];
+    page.on('request', (r) => {
+        const m = /\/chunks\/(hls(?:Light)?)-[\w-]+\.js$/.exec(r.url());
+        if (m) chunks.push(m[1]);
+    });
+    await page.route('https://hls-av.example.test/**', (route) => {
+        const u = route.request().url();
+        const headers = { 'access-control-allow-origin': '*' };
+        if (u.endsWith('master.m3u8')) return route.fulfill({ status: 200, contentType: 'application/vnd.apple.mpegurl', body: MASTER_AV, headers });
+        if (u.endsWith('.m3u8')) return route.fulfill({ status: 200, contentType: 'application/vnd.apple.mpegurl', body: /\/s-/.test(u) ? SUB_PL : MEDIA_PL, headers });
+        return route.fulfill({ status: 404, body: '', headers });
+    });
+    try {
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+        await page.evaluate(() => { document.getElementById('player').options = { src: 'https://hls-av.example.test/master.m3u8', muted: true, hls: { build: 'light' } }; });
+        await page.waitForFunction(() => (document.getElementById('player').hls?.levels?.length ?? 0) === 2, { timeout: 8000 }).catch(() => {});
+        await page.waitForTimeout(400);
+        const info = await page.evaluate(() => document.getElementById('player').playbackEngine);
+        ok(info.engine === 'hls.js' && info.build === 'light', `playbackEngine hafif paketi bildiriyor ${JSON.stringify(info)}`);
+        ok(chunks.includes('hlsLight') && !chunks.includes('hls'), `yalnızca hafif paket indi (${chunks.join(', ') || 'hiçbiri'})`);
+        const q = await qualityMenu(page);
+        ok(Array.isArray(q) && q.length >= 2, `kalite menüsü çalışıyor ${JSON.stringify(q)}`);
+        // qualityMenu paneli açık bırakıyor — kapat ki aşağıdaki menü kontrolü panelin açılışını görsün.
+        await page.evaluate(() => {
+            const root = document.getElementById('player').shadowRoot;
+            if (!root.querySelector('.hp-chip-panel')?.classList.contains('hp:hidden')) root.querySelector('[aria-label="Ayarlar"]').click();
+        });
+        await page.waitForTimeout(150);
+        const opened = await page.evaluate(async () => {
+            const root = document.getElementById('player').shadowRoot;
+            root.querySelector('[aria-label="Ayarlar"]').click();
+            await new Promise((r) => setTimeout(r, 120));
+            const rows = Array.from(root.querySelectorAll('.hp-chip-panel button')).map((b) => b.textContent.trim());
+            root.querySelector('[aria-label="Ayarlar"]').click();
+            return rows;
+        });
+        ok(opened.some((r) => r.startsWith('Kalite')), `ayarlar paneli açıldı ${JSON.stringify(opened)}`);
+        await page.waitForTimeout(150);
+        const audio = await settingsSubmenu(page, 'Ses');
+        const subs = await settingsSubmenu(page, 'Altyazı');
+        ok(audio === null && subs === null, `hafif pakette yayın ses izi / altyazı menüsü yok (beklenen) ses=${JSON.stringify(audio)} altyazı=${JSON.stringify(subs)}`);
+    } finally {
+        await page.close();
+    }
+}
+
 async function testHlsOptions(browser) {
     console.log('\n[4h] options.hls: config hls.js\'e aynen geçiyor, withCredentials, engine: "native"');
     if (!only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok (MSE de Apple yerel HLS oynatıcısı da yok); gerçek Safari ayrıca doğrulanır')) return;
@@ -624,6 +675,7 @@ async function testDai(browser) {
         await testHlsCorsFallsBackToNative(browser);
         await testHlsAudioAndSubtitleMenus(browser);
         await testHlsOptions(browser);
+        await testHlsLightBuild(browser);
         await testLiveDvrSeekBar(browser);
         await testHlsFatalErrorScreen(browser);
         await testDai(browser);

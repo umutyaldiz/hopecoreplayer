@@ -70,7 +70,7 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 
 ## Features
 
-**Playback** — MP4 / WebM / HLS (hls.js, loaded only for HLS; native on Safari / iOS), live streams with a wall clock, fallback sources (`sourcePriority`), quality menu, alternate audio, WebVTT and in-stream captions, sprite thumbnails, chapters and markers, playlist and story mode, audio player with vinyl mode, Picture-in-Picture, Chromecast and AirPlay.
+**Playback** — MP4 / WebM / HLS (hls.js, loaded only for HLS — a light build is optional; native on Safari / iOS), live streams with a wall clock, fallback sources (`sourcePriority`), quality menu, alternate audio, WebVTT and in-stream captions, sprite thumbnails, chapters and markers, skip intro / credits buttons, playlist and story mode, audio player with vinyl mode, Picture-in-Picture, Chromecast and AirPlay.
 
 **Monetization**
 - Google IMA: preroll / midroll / postroll, VMAP, overlay ads, retry and waterfall, OM SDK, SCTE-35 for live, Google DAI.

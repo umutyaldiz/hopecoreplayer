@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, transformWithEsbuild, type Plugin } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -18,6 +18,7 @@ const FILE_NAMES: Record<string, string> = {
     VideoPrebid: 'prebid',
     loadGpt: 'gpt',
     ScratchSound: 'audioScratchSound',
+    'hls.light': 'hlsLight',
 };
 const camel = (s: string): string => s.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
 
@@ -27,8 +28,27 @@ function chunkName(name: string, facade: string | null): string {
     return FILE_NAMES[name] ?? name;
 }
 
+/**
+ * hls.js parçalarını küçült: Vite kütüphane modunda (es) boşlukları küçültmüyor, hls.js parçası boşluklarıyla çıkıyordu
+ * (~229 KB gzip). Yalnızca bu üçüncü taraf parçalar — kendi kodumuz okunur kalır (kaynak haritası zaten var).
+ */
+const minifyHls = (): Plugin => ({
+    name: 'hope:minify-hls',
+    // order 'post': Vite'in kendi renderChunk'ı (es kütüphanede boşlukları koruyarak) kodu yeniden biçimlendiriyor —
+    // ondan sonra küçültmek gerek. renderChunk'ta olduğu için dosya adındaki hash küçültülmüş içerikten hesaplanır.
+    renderChunk: {
+        order: 'post',
+        async handler(code, chunk) {
+            if (!HLS_CHUNKS.has(chunk.name)) return null;
+            const out = await transformWithEsbuild(code, chunk.fileName, { minify: true, sourcemap: true, target: 'esnext', legalComments: 'none' });
+            return { code: out.code, map: out.map };
+        },
+    },
+});
+const HLS_CHUNKS = new Set(['hls', 'hls.light']);
+
 export default defineConfig({
-    plugins: [tailwindcss()],
+    plugins: [tailwindcss(), minifyHls()],
     // Sağ tık menüsü / istatistik paneli sürümü — package.json'dan, elle güncellenmez.
     define: { __HOPE_VERSION__: JSON.stringify(pkg.version) },
     build: {

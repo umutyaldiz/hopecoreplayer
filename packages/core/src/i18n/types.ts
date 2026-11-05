@@ -97,6 +97,11 @@ export interface HopeLocaleStrings {
     /** Kart / ekran üst etiketi. */
     redirectUpNext: string;
     redirectCancelCard: string;
+    /** `skipSegments` buton metinleri (türe göre). */
+    skipIntro: string;
+    skipRecap: string;
+    skipCredits: string;
+    skipSegment: string;
     qrResumeTitle: string;
     qrResumeDontShowAgain: string;
     qrResumeContinue: string;

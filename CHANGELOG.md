@@ -14,6 +14,15 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-11-06
+
+### Added
+- **Skip intro / recap / credits buttons (`skipSegments`):** a button shows in a corner while a part plays and jumps to its end when pressed. Per part: `start`, `end` (omitted = end of the video, so skipping the credits ends it and a playlist moves on), `type` (`intro` / `recap` / `credits` / `custom` — sets the default text), `label`, `position` (four corners), `showFrom` / `showUntil` (when the button appears and leaves), `hideAfter` (fades out, returns with the controls), `autoSkip` (`true` or a countdown in seconds; not when the viewer seeked into the part). New `hp:skip` event (`shown` / `skip`, cancelable). Hidden during ads, keyboard accessible, `::part(skip-segment)`. Loaded only when used (~2 KB gzip).
+- **`hls.build: 'light'`:** loads hls.js's light build — ~119 KB instead of ~186 KB gzip. Quality menu, ABR, live / DVR, SCTE-35 and the wall clock work the same. It has no stream subtitles (WebVTT / IMSC1 / CEA-608), alternate audio tracks, DRM (EME), CMCD or interstitials; captions from `options.subtitles` are unaffected. Off by default (`'full'`). Only the chosen build is downloaded. `player.playbackEngine` reports it as `build`.
+
+### Changed
+- **Smaller hls.js download:** the hls.js chunk is now minified — it was bundled with its whitespace (Vite does not minify whitespace in library builds). 228.6 → 186.5 KB gzip for the same hls.js 1.7.4 code (the latest stable release).
+
 ## [1.0.18] — 2026-11-06
 
 ### Fixed

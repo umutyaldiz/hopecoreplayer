@@ -1,6 +1,6 @@
 {
   "name": "@hopeplayer/react",
-  "version": "1.0.18",
+  "version": "1.1.0",
   "description": "Thin React wrapper around <hope-player> (@hopeplayer/core) — prop/event bridge only, no state duplication",
   "keywords": ["react", "nextjs", "react-component", "video-player", "video", "player", "html5-video", "hls", "m3u8", "web-component", "custom-element", "ima", "vast", "vmap", "prebid", "ads", "monetization", "chromecast", "airplay", "subtitles", "shadow-dom", "hopeplayer"],
   "repository": {
@@ -35,11 +35,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
-    "@hopeplayer/core": "^1.0.18",
+    "@hopeplayer/core": "^1.1.0",
     "react": ">=18"
   },
   "devDependencies": {
-    "@hopeplayer/core": "^1.0.18",
+    "@hopeplayer/core": "^1.1.0",
     "@types/react": "^18.3.0",
     "react": "^18.3.0",
     "typescript": "^5.7.0",
