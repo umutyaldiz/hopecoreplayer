@@ -383,12 +383,14 @@ export class CastController {
         this.castBtn?.setAttribute('aria-pressed', 'false');
         if (this.castIcon) setIconName(this.castIcon, 'cast');
         // TV'deki saniyeden yerelde devam (bittiyse olduğu yerde kalır).
-        // Seek doğrulanmadan play() çağrılırsa WebKit seek'i kaybedip baştan oynatabiliyor.
-        const resume = () => {
-            if (!paused && !ended) void v.play().catch(() => {});
+        // Sıra önemli: önce oynat, SONRA sar. WebKitGTK / WPE (GStreamer) duraklatılmışken yapılan sarmayı play()'de
+        // kaybediyor (sona fırlıyor ya da takılıyor); oynarken yapılan sarma her motorda tutuyor.
+        const seekTo = Number.isFinite(currentTime) && currentTime > 0 && !ended ? currentTime : null;
+        const seek = () => {
+            if (seekTo !== null) seekWhenReady(v, seekTo, { guardMs: 2000 });
         };
-        if (Number.isFinite(currentTime) && currentTime > 0 && !ended) seekWhenReady(v, currentTime, resume);
-        else resume();
+        if (!paused && !ended) void v.play().then(seek, seek);
+        else seek();
         this.emit('disconnected', 'chromecast');
     }
 

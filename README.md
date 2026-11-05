@@ -84,7 +84,7 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 - **Theming** — 4 presets plus CSS custom properties (`--hp-color-accent`…) and `::part()` hooks.
 - **i18n** — every label and ad-UI string follows `locale` / `labels` (Turkish and English included).
 - **One event API** — namespaced DOM `CustomEvent`s (`hp:ready`, `hp:adstart`, `hp:cast`…), from any framework.
-- **Tested** — a Playwright end-to-end suite, an accessibility scan and a bundle-size budget (about 68 KB gzip on first load) run on every change in Chromium; Firefox and WebKit run nightly and before every release.
+- **Tested** — a Playwright end-to-end suite, an accessibility scan and a bundle-size budget (about 68 KB gzip on first load) run on every change in Chromium; Firefox and WebKit run nightly and before every release on Linux, and `npm run test:linux` reproduces that exact environment locally with Docker.
 
 ## Browser support
 
@@ -98,6 +98,13 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 | React Native (iOS / Android WebView) | ✅ Bridge covered by automated tests; WebView behaves like the platform browser |
 | Chromecast / Google TV, Apple TV | ⚠️ Implemented against the official SDKs and covered by tests with simulated SDKs — not yet verified on real devices |
 | Smart TV browsers (Tizen, webOS) | ❌ Not tested |
+
+**How the cross-browser runs work:** the full end-to-end suite (15 suites — playback, ads, Cast, audio, accessibility, React Native bridge…) runs in Firefox and WebKit on GitHub Actions' Ubuntu 24.04 machines, which have no sound card. That is deliberately strict: it has caught real bugs that a desktop with speakers never shows, such as Firefox reporting a missing audio output as a fatal error, and WebKitGTK / WPE (Linux browsers, WPE-based TVs) losing seeks. Anyone can run the same environment locally with Docker — the official Playwright image, the same steps as CI:
+
+```bash
+npm run test:linux                  # Firefox + WebKit, all suites
+npm run test:linux -- webkit cast   # one engine, chosen suites
+```
 
 Found a problem on a browser or device? Please [open an issue](https://github.com/umutyaldiz/hopecoreplayer/issues/new?template=bug_report.yml) with the browser and version.
 

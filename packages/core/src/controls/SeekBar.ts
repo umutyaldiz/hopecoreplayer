@@ -1,5 +1,6 @@
 import type { HopeLocaleStrings } from '../i18n/types';
 import { formatTime } from '../utils/format-time';
+import { vodSeekTarget } from '../utils/seek-by';
 
 /**
  * Div tabanlı scrubber (role="slider"). Çizim transform ile (layout tetiklemez), oynarken rAF döngüsü.
@@ -306,7 +307,7 @@ export class SeekBar {
         if (!tl) return;
 
         if (e.key === 'ArrowRight') {
-            this.video.currentTime = Math.min(tl.end, this.video.currentTime + this.keyboardStep);
+            this.video.currentTime = vodSeekTarget(this.video, Math.min(tl.end, this.video.currentTime + this.keyboardStep));
             this.onKeyboardSeek?.(this.keyboardStep);
             e.preventDefault();
         } else if (e.key === 'ArrowLeft') {
@@ -321,7 +322,7 @@ export class SeekBar {
         if (!tl) return;
         const time = tl.start + ratio * (tl.end - tl.start);
         // Canlıda tam uca değil biraz gerisine — en son segmentin sonuna seek edince oynatma takılabiliyor.
-        this.video.currentTime = tl.live ? Math.min(time, tl.end - LIVE_EDGE_SAFETY_SEC) : time;
+        this.video.currentTime = tl.live ? Math.min(time, tl.end - LIVE_EDGE_SAFETY_SEC) : vodSeekTarget(this.video, time);
         // video'nun kendi 'timeupdate'i asenkron/gecikmeli olabilir —
         // sürüklerken parmak/imleçle thumb arasında gecikme hissi
         // bırakmamak için konumu HEMEN, burada çiziyoruz.

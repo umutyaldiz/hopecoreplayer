@@ -109,7 +109,7 @@ async function testTimeTrigger(browser) {
     ok(req?.path === '/6355419/Travel' && req.inHost, `GPT out-of-page slotu, div host'un light DOM'unda (${req?.path})`);
     ok(req?.targeting.hp_trigger === 'time' && req.targeting.hp_mode === 'normal' && req.targeting.hp_rule === 'at2' && req.targeting.pos === 'bottom' && req.targeting.content === 'istanbul',
         `hedefleme: ${JSON.stringify(req?.targeting)}`);
-    ok(s.label === 'Reklam' && s.closeVisible && !s.paused, `etiket "${s.label}", kapat butonu, içerik oynamaya devam ediyor`);
+    ok(s.label === 'Reklam' && s.closeVisible && !s.paused, `etiket "${s.label}", kapat butonu (${s.closeVisible}), içerik oynamaya devam ediyor (paused=${s.paused}, t=${s.time.toFixed(2)})`);
     await page.waitForTimeout(2300);
     s = await state(page);
     ok(!s.open && s.lightAds === 0 && s.ev.some((e) => e.t === 'adtriggerclose' && e.reason === 'timeout'), `duration doldu → kapandı, slot temizlendi`);
@@ -283,7 +283,9 @@ async function testLayoutNone(browser) {
     const { page, context } = await open(browser, {
         active: true,
         minGapSeconds: 0,
-        rules: [rule({ id: 'raw', triggers: [{ type: 'start' }] }), rule({ id: 'raw2', triggers: [{ type: 'time', at: [1.5] }] })],
+        // raw2 pause ile: ilk reklam yerleştikten SONRA tetiklenir (time at 1.5 yavaş makinede ilk istek sürerken
+        // geliyor ve doğru biçimde atlanıyordu — bkz. [10]).
+        rules: [rule({ id: 'raw', triggers: [{ type: 'start' }] }), rule({ id: 'raw2', triggers: [{ type: 'pause' }] })],
     });
     await play(page);
     await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggershow'), null, { timeout: 5000 }).catch(() => {});
@@ -293,6 +295,7 @@ async function testLayoutNone(browser) {
         return { label: !!box?.querySelector('.hp-adtrigger-label'), close: !!box?.querySelector('.hp-adtrigger-close'), backdrop: !!box?.hasAttribute('data-backdrop') };
     });
     ok(s.open && s.layout === 'none' && !bare.label && !bare.close && !bare.backdrop && s.lightAds === 1, `none: istek atıldı, kreatif yerleşti; etiket/X/karartma yok (${JSON.stringify(bare)})`);
+    await page.evaluate(() => document.getElementById('player').pause());
     await page.waitForFunction(() => window.__ev.filter((e) => e.t === 'adtriggershow').length >= 2, null, { timeout: 5000 }).catch(() => {});
     s = await state(page);
     ok(s.ev.some((e) => e.t === 'adtriggerclose' && e.rule === 'raw' && e.reason === 'replaced') && s.open && s.lightAds === 1, 'yeni tetikleme önceki none reklamını değiştirdi (reason: replaced)');

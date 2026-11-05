@@ -1,6 +1,7 @@
 import { createIcon } from '../../icons/Icon';
 import type { PlayableItem, PlaylistOptions } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
+import { isAudioOutputError } from '../../utils/media-error';
 
 export interface PlaylistPlayerContext {
     videoEl: HTMLVideoElement;
@@ -181,6 +182,8 @@ export class PlaylistRunner {
 
     private readonly onError = (): void => {
         if (this.destroyed || !this.playlistActive) return;
+        // Ses aygıtı yok (Firefox): video sessiz oynamaya devam ediyor — sonraki öğeye atlama.
+        if (isAudioOutputError(this.ctx.videoEl.error)) return;
         const now = Date.now();
         if (now - this.lastErrorAt < 200) return;
         this.lastErrorAt = now;

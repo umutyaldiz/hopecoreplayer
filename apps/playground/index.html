@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <title>HopeCorePlayer — Playground (Faz 1)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Sayfa hataları en baştan toplanır — Safari / iOS testleri (test/apple) WebDriver bağlanmadan önceki hataları da görür. -->
+  <script>
+    window.__pageErrors = [];
+    addEventListener('error', (e) => window.__pageErrors.push(String(e.message || e)));
+    addEventListener('unhandledrejection', (e) => window.__pageErrors.push('unhandled: ' + String((e.reason && e.reason.message) || e.reason)));
+  </script>
   <style>
     body {
       margin: 0; padding: 2rem; font-family: system-ui, sans-serif;

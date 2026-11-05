@@ -8,6 +8,7 @@ import { TooltipController } from './controls/Tooltip';
 import { KeyboardController } from './keyboard/KeyboardController';
 import { LoadingSpinner } from './screens/LoadingSpinner';
 import { ErrorScreen } from './screens/ErrorScreen';
+import { isAudioOutputError } from './utils/media-error';
 import {
     attachSubtitleTracks,
     clearPooledTracks,
@@ -466,7 +467,12 @@ export class HopePlayerElement extends HTMLElement {
         this.videoEl.addEventListener('touchend', this.onVideoPressEnd);
         this.videoEl.addEventListener('touchcancel', this.onVideoPressCancel);
 
-        this.dispatchEvent(new CustomEvent('hp:ready'));
+        // Bir mikro görev sonra: `import '@hopeplayer/core'` element'i senkron upgrade ediyor — hemen ardından
+        // `addEventListener('hp:ready', …)` ekleyen sayfa (README örneği) olayı eskiden kaçırıyordu. Önceden bağlanan
+        // dinleyiciler (React / Vue wrapper'ları) olayı yine alır.
+        queueMicrotask(() => {
+            if (this.isConnected) this.dispatchEvent(new CustomEvent('hp:ready'));
+        });
     }
 
     disconnectedCallback(): void {
@@ -612,7 +618,8 @@ export class HopePlayerElement extends HTMLElement {
         this.log.add({
             source: 'media',
             message: err.message || names[err.code] || `MediaError ${err.code}`,
-            fatal: true,
+            // Ses aygıtı yok (Firefox): video sessiz oynamaya devam ediyor — kayda düşer ama ölümcül değil.
+            fatal: !isAudioOutputError(err),
             details: { code: err.code, name: names[err.code], src: src && !src.startsWith('blob:') ? src : src ? 'MediaSource (hls.js)' : undefined },
         });
     };

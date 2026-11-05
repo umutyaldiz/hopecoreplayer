@@ -40,6 +40,8 @@
     "test": "node apps/playground/test/run.mjs",
     "test:firefox": "node apps/playground/test/run.mjs --browser firefox",
     "test:webkit": "node apps/playground/test/run.mjs --browser webkit",
+    "test:linux": "node apps/playground/test/linux/run-in-docker.mjs",
+    "test:safari": "node apps/playground/test/apple/safari.e2e.mjs",
     "test:docs-site": "node apps/docs/test/static-site.e2e.mjs",
     "test:mobile": "node apps/playground/test/mobile.e2e.mjs",
     "test:react-native": "node packages/react-native/test/bridge.e2e.mjs"

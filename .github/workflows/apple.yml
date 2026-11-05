@@ -1,0 +1,92 @@
+# Gerçek Safari duman testleri (apps/playground/test/apple): macOS Safari ve iOS Simulator'daki Safari.
+# Playwright'in WebKit'i Safari'nin motoru ama oynatma katmanı farklı (native HLS, iPhone tam ekranı, AirPlay yok) —
+# bunlar gerçek Safari'de player'ın temel işleyişini ve Safari'ye özgü yollarını doğrular.
+#  - her gece (03:30 UTC) ve Actions → "Apple Safari" → "Run workflow" ile elle.
+#  - Açık (public) repolarda GitHub'ın macOS makineleri ücretsiz.
+#  - Henüz sürüm yayınını engellemiyor; kararlı yeşil kalınca publish.yml'e bağlanacak.
+name: Apple Safari
+
+on:
+  schedule:
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  safari:
+    name: safari (${{ matrix.target }})
+    runs-on: macos-15
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [macos, ios]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build core
+        run: npm run build:core
+
+      - name: Start playground
+        run: |
+          npm run dev --workspace=apps/playground -- --port 5183 --strictPort --host 127.0.0.1 > playground.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:5183/ && exit 0; sleep 1; done
+          echo "playground did not start"; cat playground.log; exit 1
+
+      # ── macOS Safari ──
+      - name: Enable safaridriver
+        if: matrix.target == 'macos'
+        run: |
+          sudo safaridriver --enable
+          safaridriver -p 4444 > safaridriver.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf -o /dev/null http://localhost:4444/status && exit 0; sleep 1; done
+          echo "safaridriver did not start"; cat safaridriver.log; exit 1
+
+      # ── iOS Simulator Safari ──
+      - name: Boot iPhone simulator
+        if: matrix.target == 'ios'
+        run: node apps/playground/test/apple/pick-simulator.mjs
+
+      - name: Install Appium (XCUITest)
+        if: matrix.target == 'ios'
+        run: |
+          npm install -g appium@3
+          appium driver install xcuitest
+          appium --port 4723 --log-level warn > appium.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:4723/status && exit 0; sleep 1; done
+          echo "appium did not start"; cat appium.log; exit 1
+
+      - name: Run Safari tests
+        run: node apps/playground/test/apple/safari.e2e.mjs
+        env:
+          APPLE_TARGET: ${{ matrix.target }}
+          HOPE_TEST_PORT: '5183'
+
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: apple-${{ matrix.target }}
+          path: |
+            apple-artifacts/
+            playground.log
+            safaridriver.log
+            appium.log
+          if-no-files-found: ignore
+          retention-days: 7

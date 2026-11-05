@@ -1,3 +1,5 @@
+import { vodSeekTarget } from '../utils/seek-by';
+
 /** Host'a bağlı klavye kısayolları; SeekBar/VolumePanel odaktayken kendi ok tuşlarını işler. */
 export class KeyboardController {
     private readonly host: HTMLElement;
@@ -38,7 +40,7 @@ export class KeyboardController {
             case 'ArrowRight':
             case 'l':
                 if (Number.isFinite(duration)) {
-                    this.video.currentTime = Math.min(duration, this.video.currentTime + this.seekStep);
+                    this.video.currentTime = vodSeekTarget(this.video, Math.min(duration, this.video.currentTime + this.seekStep));
                     this.onSeek?.(this.seekStep);
                 }
                 e.preventDefault();

@@ -100,7 +100,7 @@ export class QrResume {
         const v = this.ctx.videoEl;
         // WebKit (Safari) readyState'i loadedmetadata'dan ÖNCE yükseltiyor; o arada yapılan sarmayı meta veriyi
         // işlerken sıfırlıyor (seeked → 0. sn). Sarmanın sonucu (seeked) doğrulanır, kaydıysa bir kez daha uygulanır.
-        seekWhenReady(v, seconds, undefined, 2);
+        seekWhenReady(v, seconds, { attempts: 2 });
 
         url.searchParams.delete(this.paramName);
         window.history.replaceState(window.history.state, '', url.toString());

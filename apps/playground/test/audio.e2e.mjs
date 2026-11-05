@@ -25,6 +25,23 @@ async function openAudio(browser, vinyl = 'right') {
 
 const q = (page, fn) => page.evaluate(fn);
 
+/** Web Audio bu makinede gerçekten işliyor mu (ses aygıtı var mı): AudioContext saati ilerliyor mu. */
+const audioRendering = (page) =>
+    page.evaluate(async () => {
+        const ac = new AudioContext();
+        try {
+            const resumed = await Promise.race([ac.resume().then(() => true), new Promise((r) => setTimeout(() => r(false), 1500))]);
+            if (!resumed) return false;
+            const t0 = ac.currentTime;
+            await new Promise((r) => setTimeout(r, 300));
+            return ac.currentTime > t0;
+        } catch {
+            return false;
+        } finally {
+            void ac.close().catch(() => {});
+        }
+    });
+
 /** Plağın görünen bir noktası (sağ yerleşimde sol yarısı kapağın altında kalır). */
 const vinylGeometry = (page) =>
     page.evaluate(() => {
@@ -473,7 +490,11 @@ async function testScratchSound(browser) {
     });
     ok(mid.start !== undefined && Math.abs(mid.start - grabAt) < 0.4 && Math.abs(mid.start - 30) < 1.5, `tutunca işlemci tutulan yerden başladı (${mid.start?.toFixed(2)} sn, video ${grabAt.toFixed(2)} sn)`);
     ok(mid.count > 5 && mid.lastTarget > mid.start + 1.5, `çevirdikçe hedef ilerledi: ${mid.count} güncelleme, son hedef ${mid.lastTarget?.toFixed(2)} sn`);
-    ok(mid.pos !== undefined && Math.abs(mid.pos - mid.lastTarget) < 0.1, `işlemcinin okuma kafası hedefte (${mid.pos?.toFixed(2)} ≈ ${mid.lastTarget?.toFixed(2)}) — ses parmağı takip ediyor`);
+    // Ses aygıtı olmayan makinede (CI, Linux Firefox) Web Audio hiç işlemez: AudioContext.resume() dönmez, işlemci konum
+    // bildirmez. Okuma kafası denetimleri yalnızca ses motoru gerçekten çalışıyorsa anlamlı.
+    const rendering = await audioRendering(page);
+    if (!rendering) console.log('  SKIP okuma kafası denetimleri — bu makinede ses aygıtı yok, Web Audio işlemiyor');
+    if (rendering) ok(mid.pos !== undefined && Math.abs(mid.pos - mid.lastTarget) < 0.1, `işlemcinin okuma kafası hedefte (${mid.pos?.toFixed(2)} ≈ ${mid.lastTarget?.toFixed(2)}) — ses parmağı takip ediyor`);
     ok(mid.video, 'scratch sırasında player sustu (yalnızca scratch sesi)');
 
     // Geri çevir.
@@ -486,7 +507,7 @@ async function testScratchSound(browser) {
         lastTarget: window.__scratchMsgs.filter((m) => m.type === 'target').at(-1)?.position,
         pos: window.__scratchPos,
     }));
-    ok(back.lastTarget < before && Math.abs(back.pos - back.lastTarget) < 0.1, `geri çevirince okuma kafası geri gitti (${back.pos?.toFixed(2)} sn)`);
+    ok(back.lastTarget < before && (!rendering || Math.abs(back.pos - back.lastTarget) < 0.1), `geri çevirince ${rendering ? 'okuma kafası' : 'hedef'} geri gitti (${(rendering ? back.pos : back.lastTarget)?.toFixed(2)} sn)`);
     await page.mouse.up();
     await page.waitForTimeout(400);
     const after = await page.evaluate(() => ({

@@ -33,3 +33,6 @@ Thumbs.db
 !.vscode/extensions.json
 
 npm-debug.log*
+
+# Safari / iOS testlerinin ekran görüntüleri (apps/playground/test/apple)
+apple-artifacts/

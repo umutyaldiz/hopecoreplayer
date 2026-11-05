@@ -1,0 +1,2 @@
+# Shell betikleri Linux container'da (npm run test:linux) çalışır — Windows'ta da LF kalsın.
+*.sh text eol=lf

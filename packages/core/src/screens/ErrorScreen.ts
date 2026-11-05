@@ -1,5 +1,6 @@
 import { createIcon } from '../icons/Icon';
 import type { HopeLocaleStrings } from '../i18n/types';
+import { isAudioOutputError } from '../utils/media-error';
 
 const RETRY_ICON =
     '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -116,6 +117,8 @@ export class ErrorScreen {
         // Kaynak yokken gelen hata (kaynak değişimi/temizliği sırasında) kullanıcıya gösterilmez —
         // Safari/iOS bu durumda kod 4 üretebiliyor.
         if (!this.video.getAttribute('src') && !this.video.querySelector('source')) return;
+        // Ses aygıtı yok: video oynamaya devam ediyor — oynayan videonun üstünü hata ekranıyla kapatma.
+        if (isAudioOutputError(this.video.error)) return;
         if (!this.shouldShow()) return;
         this.open();
     };

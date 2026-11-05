@@ -1,5 +1,6 @@
 import type { HlsConfig } from 'hls.js';
 import type { HopeHlsOptions } from '../types';
+import { hasFatalMediaError } from '../utils/media-error';
 
 
 /**
@@ -136,7 +137,7 @@ export class SourceManager {
 
     /** Bu kaynak zaten yüklü ve hatasız mı — aynı kaynak için yeniden yükleme (başa sarma) gerekmez. */
     isLoaded(src: string, type?: string): boolean {
-        return !!this.last && this.last.src === src && this.last.type === type && !this.video.error && this.video.readyState > 0;
+        return !!this.last && this.last.src === src && this.last.type === type && !hasFatalMediaError(this.video) && this.video.readyState > 0;
     }
 
     async load(src: string, type?: string): Promise<void> {

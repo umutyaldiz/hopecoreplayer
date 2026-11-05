@@ -598,7 +598,9 @@ export class AdTriggers {
         }
         s.box.setAttribute('data-open', '');
         const close = s.box.querySelector<HTMLButtonElement>('.hp-adtrigger-close');
-        if (close) s.timers.push(setTimeout(() => (close.hidden = false), (rule.closeDelay ?? 0) * 1000));
+        // closeDelay 0: X kutuyla aynı anda görünsün (setTimeout(0) bir kare butonsuz kutu gösteriyordu).
+        if (close && !rule.closeDelay) close.hidden = false;
+        else if (close) s.timers.push(setTimeout(() => (close.hidden = false), rule.closeDelay! * 1000));
         if (rule.duration) s.timers.push(setTimeout(() => this.close('timeout'), rule.duration * 1000));
         const v = this.ctx.videoEl;
         if (rule.pauseContent && !v.paused) {
