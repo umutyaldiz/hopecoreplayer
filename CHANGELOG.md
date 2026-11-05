@@ -14,11 +14,14 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.0.18] — 2026-11-06
+
 ### Fixed
 - `hp:ended`, `hp:error` and `hp:ratechange` were declared and documented but never dispatched, so React `onEnded` / `onError` / `onRateChange` and Vue `@ended` / `@error` / `@ratechange` never fired. `hp:error` is sent once when the error screen opens (`{ message, code }`) — not for errors the player recovers from (fallback sources, native HLS → hls.js).
 - **Firefox fullscreen:** the fullscreen layout and the larger fullscreen controls / seek bar / captions were never applied in Firefox — the rules used the selector list `:host(:fullscreen), :host(:-webkit-full-screen)`, and Firefox drops the whole rule for the prefixed selector it does not know. They now use the forgiving `:host(:is(:fullscreen, :-webkit-full-screen))`.
 - **Tracking pixels** (sponsorship, ad triggers) now get a cache-buster (`[CACHEBUSTING]` / `[timestamp]` macros are filled, otherwise `hp_cb` is added): a repeated impression of the same URL — e.g. the sponsor intro every N minutes — could be served from the browser's memory cache and never reach the server (Firefox).
-- **Safari / iOS early seeks:** WebKit raises `readyState` before `loadedmetadata` and then resets a seek made in between back to 0. The QR resume `?vtime=` jump and the React Native `seek()` sent before the player is ready now verify the position on `seeked` and re-apply it.
+- **Safari / iOS early seeks:** WebKit raises `readyState` before `loadedmetadata` and then resets a seek made in between back to 0. The QR resume `?vtime=` jump and the React Native `seek()` sent before the player is ready now verify the position on `seeked` and re-apply it. The same applies when a Cast session ends: playback continued locally from the start instead of the TV's position on WebKit, because `play()` was called before the seek had settled.
+- **Story mode:** a quick second "next" / "previous" tap while the previous item was still loading was silently dropped; it is now applied once the switch finishes.
 
 ### Project
 - Docs: release notes page generated from this file; CDN install, browser support and accessibility sections on the install page; full event list.
@@ -110,7 +113,8 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 Initial public release: the `<hope-player>` custom element with Shadow DOM, HLS via hls.js (lazy), Google IMA ads, Prebid, consent, playlist, story mode, markers, segments, sprite thumbnails, countdown / geo / redirect screens, QR resume, dubbing, live wall clock, SCTE-35, DAI, theming presets and i18n; React and Vue wrappers.
 
-[Unreleased]: https://github.com/umutyaldiz/hopecoreplayer/compare/v1.0.17...HEAD
+[Unreleased]: https://github.com/umutyaldiz/hopecoreplayer/compare/v1.0.18...HEAD
+[1.0.18]: https://github.com/umutyaldiz/hopecoreplayer/releases/tag/v1.0.18
 [1.0.17]: https://github.com/umutyaldiz/hopecoreplayer/releases/tag/v1.0.17
 [1.0.16]: https://github.com/umutyaldiz/hopecoreplayer/releases/tag/v1.0.16
 [1.0.15]: https://github.com/umutyaldiz/hopecoreplayer/releases/tag/v1.0.15

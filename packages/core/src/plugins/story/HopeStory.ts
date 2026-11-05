@@ -36,6 +36,8 @@ export class HopeStory {
     private index: number;
     private destroyed = false;
     private switching = false;
+    /** Geçiş sürerken gelen buton / klavye isteği — yok sayılmaz, geçiş bitince uygulanır (yalnızca sonuncusu). */
+    private pendingNav: { dir: Dir; userInitiated: boolean } | null = null;
     private listOpen = false;
     private userHasStartedPlayback = false;
     private lastAdsIndex: number | null = null;
@@ -119,6 +121,10 @@ export class HopeStory {
     // ── public api ──
 
     next(userInitiated = true): void {
+        if (this.switching) {
+            this.pendingNav = { dir: 'next', userInitiated };
+            return;
+        }
         const target = this.index + 1;
         if (target >= this.items.length) {
             if (!this.options.loop) return;
@@ -129,6 +135,10 @@ export class HopeStory {
     }
 
     prev(userInitiated = true): void {
+        if (this.switching) {
+            this.pendingNav = { dir: 'prev', userInitiated };
+            return;
+        }
         const target = this.index - 1;
         if (target < 0) {
             if (!this.options.loop) return;
@@ -155,6 +165,10 @@ export class HopeStory {
         } finally {
             this.switching = false;
         }
+        // Hızlı art arda dokunuş (ör. iki kez "önceki"): ikincisi kaybolmasın — hedef şimdiki konumdan hesaplanır.
+        const pending = this.pendingNav;
+        this.pendingNav = null;
+        if (pending && !this.destroyed) pending.dir === 'next' ? this.next(pending.userInitiated) : this.prev(pending.userInitiated);
     }
 
     toggleList(force?: boolean): void {

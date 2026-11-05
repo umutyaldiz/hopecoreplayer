@@ -1,6 +1,7 @@
 import type { QrResumeOptions } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { buildQrSvg } from './qrSvg';
+import { seekWhenReady } from '../shared/seekWhenReady';
 
 export interface QrResumePlayerContext {
     videoEl: HTMLVideoElement;
@@ -99,14 +100,7 @@ export class QrResume {
         const v = this.ctx.videoEl;
         // WebKit (Safari) readyState'i loadedmetadata'dan ÖNCE yükseltiyor; o arada yapılan sarmayı meta veriyi
         // işlerken sıfırlıyor (seeked → 0. sn). Sarmanın sonucu (seeked) doğrulanır, kaydıysa bir kez daha uygulanır.
-        let retries = 2;
-        const seekOnceReady = () => {
-            if (Math.abs(v.currentTime - seconds) <= 0.5 || retries-- <= 0) return;
-            v.addEventListener('seeked', seekOnceReady, { once: true });
-            v.currentTime = seconds;
-        };
-        if (v.readyState >= 1) seekOnceReady();
-        else v.addEventListener('loadedmetadata', seekOnceReady, { once: true });
+        seekWhenReady(v, seconds, undefined, 2);
 
         url.searchParams.delete(this.paramName);
         window.history.replaceState(window.history.state, '', url.toString());

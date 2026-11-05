@@ -3,6 +3,7 @@ import type { HopeLocaleStrings } from '../../i18n/types';
 import { setIconName } from '../../icons/Icon';
 import { loadCastSdk, type CastApi, type CastContextLike, type CastMediaInfo, type CastSessionLike, type RemotePlayerControllerLike, type RemotePlayerLike } from './castSdk';
 import { RemoteMediaProxy, nativeGet } from './RemoteMediaProxy';
+import { seekWhenReady } from '../shared/seekWhenReady';
 
 /** TV'ye gönderilecek içerik — player o anki duruma göre hazırlar. */
 export interface CastMedia {
@@ -382,8 +383,12 @@ export class CastController {
         this.castBtn?.setAttribute('aria-pressed', 'false');
         if (this.castIcon) setIconName(this.castIcon, 'cast');
         // TV'deki saniyeden yerelde devam (bittiyse olduğu yerde kalır).
-        if (Number.isFinite(currentTime) && currentTime > 0 && !ended) v.currentTime = currentTime;
-        if (!paused && !ended) void v.play().catch(() => {});
+        // Seek doğrulanmadan play() çağrılırsa WebKit seek'i kaybedip baştan oynatabiliyor.
+        const resume = () => {
+            if (!paused && !ended) void v.play().catch(() => {});
+        };
+        if (Number.isFinite(currentTime) && currentTime > 0 && !ended) seekWhenReady(v, currentTime, resume);
+        else resume();
         this.emit('disconnected', 'chromecast');
     }
 

@@ -439,11 +439,11 @@ async function testPlaylist(browser) {
 async function testStory(browser) {
     console.log('\n[7] HopeStory: aşağı/yukarı nav butonları + loop wraparound + hp:itemchange');
     const page = await openFeature(browser, 'story');
-    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:0'), { timeout: 2000 });
+    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:0'), null, { timeout: 5000 });
 
     const downBtn = await page.evaluateHandle(() => document.getElementById('player').shadowRoot.querySelector('[aria-label="Sonraki video"]'));
     await downBtn.asElement().click();
-    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:1'), { timeout: 2000 });
+    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:1'), null, { timeout: 5000 });
 
     const counter1 = await page.evaluate(() => {
         const root = document.getElementById('player').shadowRoot;
@@ -453,17 +453,16 @@ async function testStory(browser) {
 
     const upBtn = await page.evaluateHandle(() => document.getElementById('player').shadowRoot.querySelector('[aria-label="Önceki video"]'));
     await upBtn.asElement().click();
-    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:0'), { timeout: 2000 });
-    // goTo()'nun switching guard'ı itemchange'den SONRA (loadItem() tamamen
-    // bitene kadar) true kalıyor — hemen ikinci bir nav göndermek bu guard'a
-    // takılıp sessizce yok sayılabilir, bu yüzden bir sonraki click'ten önce
-    // kısa bir yerleşme süresi bırakıyoruz.
-    await page.waitForTimeout(300);
+    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:0'), null, { timeout: 5000 });
 
+    // Geçiş sürerken (önceki öğe hâlâ yüklenirken) gelen dokunuş artık kaybolmuyor, geçiş bitince uygulanıyor —
+    // eskiden yok sayılıyordu (yavaş yüklemede, ör. Linux WebKit, ikinci "önceki" düşüyordu). Bekleme yok, hemen tıkla.
     // loop wraparound: index 0'dan prev() -> son item'a (loop:true demo config)
     await upBtn.asElement().click();
-    await page.waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:2'), { timeout: 2000 });
-    ok(true, 'index 0\'dan prev() → loop ile son item\'a (index 2) geçti');
+    const wrapped = await page
+        .waitForFunction(() => (document.getElementById('log')?.textContent ?? '').includes('itemchange:story:2'), null, { timeout: 8000 })
+        .then(() => true, () => false);
+    ok(wrapped, 'geçiş sürerken gelen "önceki" bekletilip uygulandı; index 0\'dan prev() → loop ile son item (index 2)');
     await page.close();
 }
 
