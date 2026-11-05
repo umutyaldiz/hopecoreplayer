@@ -63,6 +63,7 @@ async function open(path = '/', options) {
     await s.goto(`${BASE}${path}`);
     const booted = await s.waitFor(() => !!document.getElementById('player')?.shadowRoot?.querySelector('video'), { timeoutMs: 20000 });
     if (!booted) throw new Error(`player kurulmadı: ${path}`);
+    await trackEvents();
     if (options) {
         // Yeni kaynağın meta verisi gelene kadar bekle — eski kaynağın süresi hâlâ geçerli görünür.
         await s.run((o) => {
@@ -77,13 +78,38 @@ async function open(path = '/', options) {
 }
 
 const video = (prop) => s.run((p) => document.getElementById('player').shadowRoot.querySelector('video')[p], prop);
-/** Oynuyor ve zaman ilerliyor mu (iki ölçüm arası). */
-async function advancing(ms = 1200) {
+/**
+ * Oynuyor ve zaman ilerliyor mu: `timeoutMs` içinde en az `minDelta` sn ilerlemesi beklenir (yavaş CI makinesinde
+ * sarmadan sonra verinin gelmesi sürebilir). İlerlemezse videonun durumu ve olay sırası `diag`'da.
+ */
+async function advancing(timeoutMs = 6000, minDelta = 0.3) {
     const t0 = await video('currentTime');
-    await sleep(ms);
-    const t1 = await video('currentTime');
-    return { ok: t1 > t0 + 0.2 && !(await video('paused')), t0, t1 };
+    const end = Date.now() + timeoutMs;
+    let t1 = t0;
+    while (Date.now() < end) {
+        await sleep(250);
+        t1 = await video('currentTime');
+        if (t1 > t0 + minDelta && !(await video('paused'))) return { ok: true, t0, t1, diag: '' };
+    }
+    return { ok: false, t0, t1, diag: await diag() };
 }
+
+/** Videonun durumu + open()'dan beri olay sırası (FAIL satırına eklenir). */
+const diag = () =>
+    s.run(() => {
+        const v = document.getElementById('player').shadowRoot.querySelector('video');
+        const ranges = (r) => Array.from({ length: r.length }, (_, i) => `${r.start(i).toFixed(1)}-${r.end(i).toFixed(1)}`).join(',') || '—';
+        return ` — paused=${v.paused} rs=${v.readyState} ns=${v.networkState} muted=${v.muted} error=${v.error ? `${v.error.code}:${v.error.message}` : '—'} buffered=${ranges(v.buffered)} olaylar: ${(window.__hpEvents ?? []).slice(-14).join(' ')}`;
+    });
+
+/** Video olaylarını kaydetmeye başla (sayfa her açıldığında). */
+const trackEvents = () =>
+    s.run(() => {
+        const v = document.getElementById('player').shadowRoot.querySelector('video');
+        window.__hpEvents = [];
+        for (const e of ['play', 'playing', 'pause', 'waiting', 'stalled', 'seeking', 'seeked', 'suspend', 'error', 'ended', 'emptied', 'loadstart', 'canplay'])
+            v.addEventListener(e, () => window.__hpEvents.push(`${e}@${v.currentTime.toFixed(2)}`));
+    });
 
 async function test(name, fn) {
     current = name;
@@ -126,7 +152,7 @@ await test('[2] MP4: orta oynat butonuna dokununca oynuyor, zaman ilerliyor', as
     await s.tap('[part="center-play-button"]');
     const playing = await s.waitFor(() => !document.getElementById('player').shadowRoot.querySelector('video').paused, { timeoutMs: 10000 });
     const a = await advancing();
-    ok(playing && a.ok, `oynuyor (${a.t0.toFixed(2)} → ${a.t1.toFixed(2)} sn)`);
+    ok(playing && a.ok, `oynuyor (${a.t0.toFixed(2)} → ${a.t1.toFixed(2)} sn)${a.diag}`);
     const log = await s.run(() => document.getElementById('log')?.textContent ?? '');
     ok(log.includes('play'), 'hp:play olayı geldi');
 });
@@ -151,9 +177,9 @@ await test('[4] Sarma: oynarken 6. saniyeye — konum tutuyor, oynatma sürüyor
             })
     );
     const t = await video('currentTime');
-    const a = await advancing(800);
+    const a = await advancing();
     ok(t >= 5.5 && t < 8, `seeked sonrası konum ${t.toFixed(2)} sn`);
-    ok(a.ok && a.t1 >= 6, `sarmadan sonra oynamaya devam (${a.t0.toFixed(2)} → ${a.t1.toFixed(2)})`);
+    ok(a.ok && a.t1 >= 6, `sarmadan sonra oynamaya devam (${a.t0.toFixed(2)} → ${a.t1.toFixed(2)})${a.diag}`);
 });
 
 await test('[5] Altyazı: <track> kullanılmıyor (iOS kod 4), ipuçları yüklendi, ekranda metin', async () => {
@@ -181,10 +207,10 @@ await test('[6] HLS: Safari native HLS ile oynuyor (hls.js değil)', async () =>
     await open('/', { src: '/hls/master.m3u8', muted: true });
     await s.tap('[part="center-play-button"]');
     await s.waitFor(() => !document.getElementById('player').shadowRoot.querySelector('video').paused, { timeoutMs: 15000 });
-    const a = await advancing(1500);
+    const a = await advancing();
     const src = await video('currentSrc');
     ok(/\.m3u8(\?|$)/.test(src), `native HLS (currentSrc: ${src.split('/').pop()})`);
-    ok(a.ok, `HLS oynuyor (${a.t0.toFixed(2)} → ${a.t1.toFixed(2)} sn)`);
+    ok(a.ok, `HLS oynuyor (${a.t0.toFixed(2)} → ${a.t1.toFixed(2)} sn)${a.diag}`);
     const err = await s.run(() => document.getElementById('player').shadowRoot.querySelector('.hp-error-screen')?.hasAttribute('data-visible'));
     ok(!err, 'hata ekranı yok');
 });
@@ -200,15 +226,32 @@ await test('[7] QR ile devam (?vtime=5): erken sarma Safari\'de sıfırlanmıyor
 await test('[8] Ses modu: mp3, plak arayüzü, oynuyor', async () => {
     await s.goto(`${BASE}/?feature=audio`);
     await s.waitFor(() => !!document.getElementById('player')?.shadowRoot?.querySelector('.hp-audio'), { timeoutMs: 15000 });
+    await s.waitFor(() => Number.isFinite(document.getElementById('player').shadowRoot.querySelector('video').duration), { timeoutMs: 15000 });
+    await trackEvents();
+    // Bilgi: bu makinede ses aygıtı / Web Audio çalışıyor mu (CI sanal makinelerinde olmayabilir).
+    const audioOut = await s
+        .runAsync(async () => {
+            const ac = new AudioContext();
+            try {
+                const resumed = await Promise.race([ac.resume().then(() => true), new Promise((r) => setTimeout(() => r(false), 1500))]);
+                const t0 = ac.currentTime;
+                await new Promise((r) => setTimeout(r, 300));
+                return `${ac.state}, saat ${resumed && ac.currentTime > t0 ? 'ilerliyor' : 'durgun'}`;
+            } finally {
+                void ac.close().catch(() => {});
+            }
+        })
+        .catch((e) => `ölçülemedi (${e.message})`);
+    info(true, `Web Audio / ses çıkışı: ${audioOut}`);
     await s.run(() => {
         document.getElementById('player').shadowRoot.querySelector('video').muted = true;
     });
-    await s.run(() => document.getElementById('player').play());
+    await s.tap('[part="play-pause-button"]');
     await s.waitFor(() => !document.getElementById('player').shadowRoot.querySelector('video').paused, { timeoutMs: 10000 });
     const a = await advancing();
     const ui = await s.run(() => !!document.getElementById('player').shadowRoot.querySelector('.hp-vinyl'));
     ok(ui, 'plak arayüzü görünüyor');
-    ok(a.ok, `mp3 oynuyor (${a.t0.toFixed(2)} → ${a.t1.toFixed(2)} sn)`);
+    ok(a.ok, `mp3 oynuyor (${a.t0.toFixed(2)} → ${a.t1.toFixed(2)} sn)${a.diag}`);
 });
 
 await test('[9] Tam ekran ve AirPlay (bilgi — simülatöre / makineye göre değişir)', async () => {

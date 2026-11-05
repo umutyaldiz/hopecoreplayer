@@ -22,7 +22,7 @@ jobs:
   safari:
     name: safari (${{ matrix.target }})
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -68,6 +68,8 @@ jobs:
         run: |
           npm install -g appium@3
           appium driver install xcuitest
+          # WebDriverAgent'ı önceden derle: ilk oturum açılışı (yoksa 5-10 dk) kısalır. Olmazsa test yine çalışır, yalnızca yavaş açılır.
+          appium driver run xcuitest build-wda || echo "build-wda atlandı — WebDriverAgent ilk oturumda derlenecek"
           appium --port 4723 --log-level warn > appium.log 2>&1 &
           for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:4723/status && exit 0; sleep 1; done
           echo "appium did not start"; cat appium.log; exit 1

@@ -1,4 +1,6 @@
-// W3C WebDriver istemcisi — bağımlılık yok, yalnızca fetch. Gerçek Safari (safaridriver, macOS) ve iOS Simulator'daki
+import { request } from 'node:http';
+
+// W3C WebDriver istemcisi — bağımlılık yok, yalnızca node:http. Gerçek Safari (safaridriver, macOS) ve iOS Simulator'daki
 // Safari (Appium XCUITest) aynı protokolü konuşur; Playwright gerçek Safari'yi süremediği için bu testler bununla çalışır.
 
 const ELEMENT = 'element-6066-11e4-a52e-4f735466cecf';
@@ -11,7 +13,8 @@ export class Session {
         this.id = id;
     }
 
-    static async create(base, capabilities, { timeoutMs = 600_000 } = {}) {
+    // İlk iOS oturumu WebDriverAgent'ı derleyip simülatöre kuruyor — 10 dakikayı aşabiliyor.
+    static async create(base, capabilities, { timeoutMs = 900_000 } = {}) {
         const res = await call(base, 'POST', '/session', { capabilities: { alwaysMatch: capabilities } }, timeoutMs);
         return new Session(base, res.sessionId ?? res.value?.sessionId);
     }
@@ -94,22 +97,39 @@ export class Session {
     }
 }
 
-async function call(base, method, path, body, timeoutMs = 120_000) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    try {
-        const res = await fetch(base.replace(/\/$/, '') + path, {
-            method,
-            headers: body ? { 'content-type': 'application/json' } : undefined,
-            body: body ? JSON.stringify(body) : undefined,
-            signal: ctrl.signal,
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok || json.value?.error) throw new WebDriverError(`${method} ${path}: ${json.value?.error ?? res.status} — ${json.value?.message ?? ''}`.slice(0, 600));
-        return json;
-    } finally {
-        clearTimeout(timer);
-    }
+/**
+ * node:http ile (fetch değil): Node'un fetch'i (undici) yanıt başlığını en fazla 300 sn bekliyor — Appium ilk iOS
+ * oturumunda WebDriverAgent'ı derleyip kurarken bu süreyi aşıyor. Süreyi burada `timeoutMs` belirler.
+ */
+function call(base, method, path, body, timeoutMs = 120_000) {
+    const url = new URL(base.replace(/\/$/, '') + path);
+    const payload = body ? JSON.stringify(body) : undefined;
+    return new Promise((resolve, reject) => {
+        const req = request(
+            url,
+            { method, headers: payload ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } : {} },
+            (res) => {
+                let data = '';
+                res.setEncoding('utf8');
+                res.on('data', (c) => (data += c));
+                res.on('end', () => {
+                    let json = {};
+                    try {
+                        json = data ? JSON.parse(data) : {};
+                    } catch {
+                        /* gövde JSON değil */
+                    }
+                    if (res.statusCode >= 400 || json.value?.error)
+                        reject(new WebDriverError(`${method} ${path}: ${json.value?.error ?? res.statusCode} — ${json.value?.message ?? data.slice(0, 200)}`.slice(0, 600)));
+                    else resolve(json);
+                });
+            }
+        );
+        req.setTimeout(timeoutMs, () => req.destroy(new WebDriverError(`${method} ${path}: ${Math.round(timeoutMs / 1000)} sn içinde yanıt yok`)));
+        req.on('error', reject);
+        if (payload) req.write(payload);
+        req.end();
+    });
 }
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
