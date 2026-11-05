@@ -21,7 +21,10 @@ export class Session {
         for (let i = 1; ; i++) {
             try {
                 const res = await call(base, 'POST', '/session', { capabilities: { alwaysMatch: capabilities } }, timeoutMs);
-                return new Session(base, res.sessionId ?? res.value?.sessionId);
+                const session = new Session(base, res.sessionId ?? res.value?.sessionId);
+                // Appium (XCUITest) async betik süresini ~0'da başlatıyor ("after 1 ms") — W3C'nin 30 sn'sini açıkça ver.
+                await session.cmd('POST', '/timeouts', { script: 30_000 }).catch(() => {});
+                return session;
             } catch (e) {
                 // Yalnızca bağlantı hataları (ECONNRESET vb.) — sürücünün döndürdüğü hata ya da 15 dk'lık zaman aşımı tekrarlanmaz.
                 if (e instanceof WebDriverError || i >= attempts) throw e;
