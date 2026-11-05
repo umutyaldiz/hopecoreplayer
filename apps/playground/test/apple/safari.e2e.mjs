@@ -43,6 +43,9 @@ const capabilities = IOS
           // pick-simulator.mjs'in açtığı simülatörü sıfırlayıp yeniden başlatmadan kullan.
           'appium:noReset': true,
           'appium:safariInitialUrl': `${BASE}/`,
+          // Yavaş CI makinesinde Safari'nin sayfası Web Inspector'a geç görünüyor (varsayılan ~12 sn yetmedi).
+          'appium:webviewConnectTimeout': 120_000,
+          'appium:webviewConnectRetries': 30,
           // Web öğesi tıklaması gerçek dokunuş olsun (tam ekran gibi kullanıcı hareketi isteyen API'ler için).
           'appium:nativeWebTap': true,
           'appium:safariAllowPopups': true,

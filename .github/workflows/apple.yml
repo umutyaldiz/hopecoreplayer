@@ -75,6 +75,14 @@ jobs:
           for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:4723/status && exit 0; sleep 1; done
           echo "appium did not start"; cat appium.log; exit 1
 
+      # Safari'yi önceden açık bir sayfayla başlat: ilk açılış ekranları geçilmiş ve Web Inspector'a görünen
+      # bir sayfa hazır olsun — yoksa Appium "remote debugger did not return any connected web applications" diyor.
+      - name: Warm up Safari
+        if: matrix.target == 'ios'
+        run: |
+          xcrun simctl openurl "$IOS_UDID" http://localhost:5183/ || true
+          sleep 15
+
       - name: Run Safari tests
         run: node apps/playground/test/apple/safari.e2e.mjs
         env:
