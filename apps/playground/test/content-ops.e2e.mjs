@@ -3,7 +3,7 @@
 // dışında hiçbiri gerçek bir ağ SDK'sına bağımlı değil; geo-checker'ın
 // window.fetch çağrısı test içinde mock'lanıyor (gerçek IP servisine bağımlı
 // olmasın diye), diğerleri gerçek DOM/zamanlayıcı davranışıyla sürülüyor.
-import { chromium } from 'playwright';
+import { launchBrowser } from './_browser.mjs';
 
 const BASE = `http://localhost:${process.env.HOPE_TEST_PORT ?? 5183}`;
 let failures = 0;
@@ -252,8 +252,17 @@ async function testSpriteThumbnails(browser) {
         requests.length = 0;
         await spriteHoverAt(page, 7200.5);
         await page.waitForTimeout(400);
-        const expected = `sprite-${Math.floor(7200.5 / 4) + 1}.jpg`;
-        ok(requests.includes(expected), `3 saatlik videoda 2. saat → doğru sheet istendi (${expected})`);
+        // 3 saatte 1 px ≈ 18 sn: Chromium fare konumunu ondalıklı uygular, Firefox / WebKit tam piksele yuvarlar —
+        // beklenen sheet, imlecin düşebileceği piksellerden (aşağı / yukarı yuvarlanmış) hesaplanır.
+        const candidates = await page.evaluate((t) => {
+            const root = document.getElementById('player').shadowRoot;
+            const r = root.querySelector('[part="seek-bar"]').getBoundingClientRect();
+            const d = root.querySelector('video').duration;
+            const x = r.left + (t / d) * r.width;
+            return [...new Set([Math.floor(x), x, Math.ceil(x)].map((px) => `sprite-${Math.floor((((px - r.left) / r.width) * d) / 4) + 1}.jpg`))];
+        }, 7200.5);
+        const expected = candidates.find((c) => requests.includes(c)) ?? candidates.join(' | ');
+        ok(requests.includes(expected), `3 saatlik videoda 2. saat → imlecin altındaki sheet istendi (${expected})`);
         ok(requests.length <= 3, `yalnızca o sheet + komşuları istendi, 2700 sheet'in hepsi değil (${requests.length}: ${requests.join(', ')})`);
         await page.close();
     }
@@ -464,7 +473,18 @@ async function testRedirectCard(browser) {
                 corner: Math.round(area.right - box.right) <= 24 && box.bottom < area.bottom && box.left > area.left + area.width / 3,
             };
         });
-    const seekTo = (fromEnd) => page.evaluate((s) => { const v = document.getElementById('player').shadowRoot.querySelector('video'); v.currentTime = v.duration - s; }, fromEnd);
+    // Sarma bitene (seeked) kadar beklenir: WebKit'te sarma sürerken video hâlâ "bitti" sayılır ve hemen ardından gelen
+    // play() spesifikasyon gereği baştan başlatır.
+    const seekTo = (fromEnd) =>
+        page.evaluate(
+            (s) =>
+                new Promise((resolve) => {
+                    const v = document.getElementById('player').shadowRoot.querySelector('video');
+                    v.addEventListener('seeked', () => resolve(), { once: true });
+                    v.currentTime = v.duration - s;
+                }),
+            fromEnd
+        );
     await seekTo(8);
     await page.evaluate(() => document.getElementById('player').play());
     await page.waitForTimeout(800);
@@ -861,7 +881,7 @@ async function testCaptionFlickNoBounce(browser) {
 }
 
 (async () => {
-    const browser = await chromium.launch();
+    const browser = await launchBrowser();
     try {
         await testPluginIsolation(browser);
         await testMarkers(browser);

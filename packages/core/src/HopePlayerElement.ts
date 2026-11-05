@@ -291,6 +291,8 @@ export class HopePlayerElement extends HTMLElement {
 
         this.errorScreen = new ErrorScreen(this.videoEl, this.i18n);
         this.errorScreen.setOnRetry(() => void this.retrySource());
+        // hp:error yalnızca kullanıcı hatayı gerçekten görünce — kurtarılan hatalar (yedek kaynak, native → hls.js) sayılmaz.
+        this.errorScreen.setOnShown(({ code, message }) => this.dispatchEvent(new CustomEvent('hp:error', { detail: { message, code } })));
         // Chrome'un (z-20) üstünde — merkez play butonu ve kontroller hata ekranına binmesin.
         this.videoArea.appendChild(this.errorScreen.el);
 
@@ -429,6 +431,8 @@ export class HopePlayerElement extends HTMLElement {
 
         this.videoEl.addEventListener('play', this.onPlay);
         this.videoEl.addEventListener('pause', this.onPause);
+        this.videoEl.addEventListener('ended', this.onEnded);
+        this.videoEl.addEventListener('ratechange', this.onRateChange);
         this.addEventListener('pointermove', this.onPointerMove);
         this.addEventListener('pointerleave', this.onPointerLeave);
         this.addEventListener('pointerdown', this.onPointerDownFocus);
@@ -472,6 +476,8 @@ export class HopePlayerElement extends HTMLElement {
         this.miniProgress = null;
         this.videoEl.removeEventListener('play', this.onPlay);
         this.videoEl.removeEventListener('pause', this.onPause);
+        this.videoEl.removeEventListener('ended', this.onEnded);
+        this.videoEl.removeEventListener('ratechange', this.onRateChange);
         this.removeEventListener('pointermove', this.onPointerMove);
         this.removeEventListener('pointerleave', this.onPointerLeave);
         this.removeEventListener('pointerdown', this.onPointerDownFocus);
@@ -1798,6 +1804,14 @@ export class HopePlayerElement extends HTMLElement {
             this.showChrome();
         }
         this.dispatchEvent(new CustomEvent('hp:pause'));
+    };
+
+    private readonly onEnded = (): void => {
+        this.dispatchEvent(new CustomEvent('hp:ended'));
+    };
+
+    private readonly onRateChange = (): void => {
+        this.dispatchEvent(new CustomEvent('hp:ratechange', { detail: { rate: this.videoEl.playbackRate } }));
     };
 
     private readonly onPointerDownFocus = (): void => {

@@ -39,6 +39,18 @@ function load(source: keyof typeof SOURCES): void {
         skipButtons: { back: 10, forward: 10 },
         tapGestures: true,
         contextMenu: { stats: true },
+        // Bitime 5 sn kala "Sıradaki" kartı (1.0.17) — MP4 örneği 10 sn, kart 5. saniyede çıkar.
+        redirectScreen: {
+            mode: 'card',
+            showBefore: 5,
+            time: 5,
+            url: 'https://www.umutyaldiz.com/hopecoreplayer/plugins/redirect-screen',
+            title: 'Yönlendirme kartı nasıl çalışır?',
+            subtitle: 'HopeCorePlayer · Docs',
+            image: POSTER,
+        },
+        // TV'ye yayın (1.0.16) — buton yalnızca yakında Chromecast / Apple TV varken görünür.
+        cast: { chromecast: true, airplay: true },
     };
     document.querySelectorAll<HTMLButtonElement>('[data-source]').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.source === source);
@@ -55,6 +67,12 @@ on('hp:pause', () => log('pause'));
 on('hp:ended', () => log('ended'));
 on('hp:error', (e) => log(`error: ${e.detail.message}`));
 on('hp:qualitychange', (e) => log(`quality: ${e.detail.label}`));
+on('hp:cast', (e) => log(`cast: ${e.detail.via} ${e.detail.state}${e.detail.device ? ` (${e.detail.device})` : ''}`));
+on('hp:redirect', (e) => {
+    // Örnek sayfadan çıkmasın: yönlendirme iptal edilip kayda yazılır. Gerçek sitede bu satıra gerek yok.
+    if (e.detail.state === 'redirect') e.preventDefault();
+    log(`redirect: ${e.detail.state}${e.detail.reason ? ` (${e.detail.reason})` : ''}`);
+});
 
 document.querySelectorAll<HTMLButtonElement>('[data-action]').forEach((btn) => {
     btn.addEventListener('click', () => {

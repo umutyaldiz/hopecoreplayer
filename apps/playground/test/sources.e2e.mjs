@@ -1,6 +1,6 @@
 // HopeCorePlayer — birden fazla biçimde kaynak: biçim grupları, sourcePriority ve ölümcül hatada yedek gruba geçiş.
 // Playground çalışıyor olmalı (npm run dev --workspace=apps/playground, port HOPE_TEST_PORT ya da 5183).
-import { chromium } from 'playwright';
+import { launchBrowser, only } from './_browser.mjs';
 
 const BASE = `http://localhost:${process.env.HOPE_TEST_PORT ?? 5183}`;
 let failures = 0;
@@ -74,6 +74,7 @@ async function testDefaultOrder(browser) {
 
 async function testHlsPriority(browser) {
     console.log('\n[2] sourcePriority: hls,mp4 → HLS çalıyor; menüde HLS seviyeleri, MP4 etiketleri yok');
+    if (!only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok (MSE de Apple yerel HLS oynatıcısı da yok); gerçek Safari ayrıca doğrulanır')) return;
     const { page, context } = await open(browser, '&priority=hls,mp4');
     const s = await state(page);
     const rows = await qualityRows(page);
@@ -84,6 +85,7 @@ async function testHlsPriority(browser) {
 
 async function testHlsFailsToMp4(browser) {
     console.log('\n[3] HLS yüklenemedi (404) → hata ekranı yok, MP4 kalitelerine geçildi');
+    if (!only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok (MSE de Apple yerel HLS oynatıcısı da yok); gerçek Safari ayrıca doğrulanır')) return;
     const { page, context } = await open(browser, '&priority=hls,mp4', hls404);
     await page.waitForTimeout(1500);
     const s = await state(page);
@@ -96,6 +98,7 @@ async function testHlsFailsToMp4(browser) {
 
 async function testMp4FailsToHls(browser) {
     console.log('\n[4] Ters öncelik: MP4 yüklenemedi → HLS');
+    if (!only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok (MSE de Apple yerel HLS oynatıcısı da yok); gerçek Safari ayrıca doğrulanır')) return;
     const { page, context } = await open(browser, '&priority=mp4,hls', mp4404);
     await page.waitForTimeout(1500);
     const s = await state(page);
@@ -105,6 +108,7 @@ async function testMp4FailsToHls(browser) {
 
 async function testMidPlayback(browser) {
     console.log('\n[5] Oynarken HLS koptu → MP4\'e geçildi, konum ve oynatma korundu');
+    if (!only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok (MSE de Apple yerel HLS oynatıcısı da yok); gerçek Safari ayrıca doğrulanır')) return;
     const { page, context } = await open(browser, '&priority=hls,mp4');
     await page.evaluate(() => document.getElementById('player').play());
     await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').currentTime > 2, null, { timeout: 8000 });
@@ -124,6 +128,7 @@ async function testMidPlayback(browser) {
 
 async function testAllFail(browser) {
     console.log('\n[6] Tüm gruplar düştü → hata ekranı; "Tekrar dene" en öncelikli gruptan başlar');
+    if (!only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok (MSE de Apple yerel HLS oynatıcısı da yok); gerçek Safari ayrıca doğrulanır')) return;
     let down = true;
     const { page, context } = await open(browser, '&priority=hls,mp4', async (ctx) => {
         await ctx.route(/\.m3u8|\.mp4(\?|$)/, (r) => (down ? r.fulfill({ status: 404, body: 'nope' }) : r.fallback()));
@@ -159,7 +164,7 @@ async function testSkipUnsupported(browser) {
 }
 
 (async () => {
-    const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+    const browser = await launchBrowser({ autoplay: true });
     try {
         await testDefaultOrder(browser);
         await testHlsPriority(browser);

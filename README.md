@@ -84,7 +84,7 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 - **Theming** — 4 presets plus CSS custom properties (`--hp-color-accent`…) and `::part()` hooks.
 - **i18n** — every label and ad-UI string follows `locale` / `labels` (Turkish and English included).
 - **One event API** — namespaced DOM `CustomEvent`s (`hp:ready`, `hp:adstart`, `hp:cast`…), from any framework.
-- **Tested** — a Playwright end-to-end suite, an accessibility scan and a bundle-size budget (about 68 KB gzip on first load) run on every change.
+- **Tested** — a Playwright end-to-end suite, an accessibility scan and a bundle-size budget (about 68 KB gzip on first load) run on every change in Chromium; Firefox and WebKit run nightly and before every release.
 
 ## Browser support
 
@@ -93,8 +93,8 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 | Platform | Status |
 |---|---|
 | Chrome / Edge (desktop, Android) | ✅ Automated end-to-end tests on every change (Chromium), including mobile viewports |
-| Safari (macOS), iOS / iPadOS Safari | ✅ Supported — native HLS, iPhone video fullscreen and AirPlay paths are handled; verified manually on iPhone |
-| Firefox | ✅ Supported — no automated tests yet |
+| Firefox | ✅ Automated end-to-end tests nightly and before every release |
+| Safari (macOS), iOS / iPadOS Safari | ✅ Supported — native HLS, iPhone video fullscreen and AirPlay paths are handled; automated WebKit tests nightly and before every release (HLS tests excluded — Playwright's WebKit has no Apple HLS player); verified manually on iPhone |
 | React Native (iOS / Android WebView) | ✅ Bridge covered by automated tests; WebView behaves like the platform browser |
 | Chromecast / Google TV, Apple TV | ⚠️ Implemented against the official SDKs and covered by tests with simulated SDKs — not yet verified on real devices |
 | Smart TV browsers (Tizen, webOS) | ❌ Not tested |

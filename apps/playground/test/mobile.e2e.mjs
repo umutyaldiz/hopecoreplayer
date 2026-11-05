@@ -5,7 +5,7 @@
 // ses butonunun gizlenmesi + sessiz videoda "Sesi aç" rozeti, masaüstünde
 // normal düzen, canlı yeniden boyutlandırma ve altyazının kontroller
 // gizlenince en alta inmesi.
-import { chromium } from 'playwright';
+import { launchBrowser, only } from './_browser.mjs';
 
 const BASE = `http://localhost:${process.env.HOPE_TEST_PORT ?? 5183}`;
 let failures = 0;
@@ -400,6 +400,8 @@ async function testCenterPlayClearOfSeekBar(browser) {
 
 async function testAndroidJitterTap(browser) {
     console.log('\n[10] Android (Honor/Magic OS) titreyen dokunuş: kontroller yanıp sönmüyor, açılıp ~3 sn kalıyor; ikinci dokunuş kapatıyor');
+    // Ham dokunma olaylarını CDP (Input.dispatchTouchEvent) üretiyor — yalnızca Chromium.
+    if (!only(['chromium'], 'CDP ile dokunma olayları')) return;
     const { context, page } = await openPlayer(browser, { width: 360, touch: true });
     try {
         const cdp = await context.newCDPSession(page);
@@ -533,7 +535,7 @@ async function testCaptionsDropToBottom(browser) {
 }
 
 (async () => {
-    const browser = await chromium.launch();
+    const browser = await launchBrowser();
     try {
         await testCompactTouchLayout(browser);
         await testSettingsMenuStaysInside(browser);

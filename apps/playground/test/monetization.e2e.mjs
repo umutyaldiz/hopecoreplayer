@@ -1,6 +1,6 @@
 // HopeCorePlayer — gelir modelleri: ödüllü reklamla kalite kilidi (rewardedUnlock) ve sponsorluk katmanı (sponsorship).
 // Playground çalışıyor olmalı (npm run dev --workspace=apps/playground, port HOPE_TEST_PORT ya da 5183).
-import { chromium } from 'playwright';
+import { launchBrowser, only } from './_browser.mjs';
 
 const BASE = `http://localhost:${process.env.HOPE_TEST_PORT ?? 5183}`;
 let failures = 0;
@@ -247,6 +247,7 @@ async function testRewardedGptFailures(browser) {
 
 async function testRewardedHls(browser) {
     console.log('\n[6] Ödüllü reklam (HLS): ABR üst sınırı serbest seviyede; ödülle sınır kalkar');
+    if (!only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok (MSE de Apple yerel HLS oynatıcısı da yok); gerçek Safari ayrıca doğrulanır')) return;
     const page = await openRewarded(browser, 'hls');
     await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('[part="rewarded-button"]:not([hidden])'), null, { timeout: 8000 }).catch(() => {});
     let s = await state(page);
@@ -376,6 +377,9 @@ async function testSponsorship(browser) {
 
 async function testSponsorshipIntroRepeat(browser) {
     console.log('\n[8b] intro.repeatMinutes: yalnızca izlerken sayar; süre dolunca giriş tekrar; maxShows sınırı; her gösterimde pikseli');
+    // Sahte saatle dakikalarca kesintisiz izleme gerekir. Playwright'ın WebKit'i (Windows) sona gelen <video loop>'u
+    // başa sarıp durduruyor ve playbackRate'i uygulamıyor — izleme simüle edilemiyor. Sayaç tarayıcıdan bağımsız JS.
+    if (!only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde <video loop> sona gelince duruyor')) return;
     const { context, page, requests } = await openSponsorship(browser, {
         fakeClock: true,
         body: {
@@ -410,7 +414,10 @@ async function testSponsorshipIntroRepeat(browser) {
 
     await page.clock.runFor(130_000);
     ok((await shows()) === 2, `maxShows: 2 → üçüncü gösterim yok (${await shows()})`);
-    ok(requests.filter((r) => r.includes('e=intro')).length === 2, `giriş pikseli her gösterimde (${requests.filter((r) => r.includes('e=intro')).length})`);
+    const intros = requests.filter((r) => r.includes('e=intro'));
+    ok(intros.length === 2, `giriş pikseli her gösterimde (${intros.length})`);
+    // Aynı adres ikinci kez istenince tarayıcı görseli bellekten verip sunucuya gitmeyebilir (Firefox) — önbellek kırıcı.
+    ok(intros.every((r) => /[?&]hp_cb=\d+/.test(r)) && new Set(intros).size === intros.length, `her piksel ayrı adres (hp_cb) — önbellekten dönmez (${intros.join(', ')})`);
     await context.close();
 }
 
@@ -514,7 +521,7 @@ async function testSponsorshipValidation(browser) {
 }
 
 (async () => {
-    const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+    const browser = await launchBrowser({ autoplay: true });
     try {
         await testRewardedMp4(browser);
         await testRewardedNoFillGrants(browser);

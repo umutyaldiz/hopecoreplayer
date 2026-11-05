@@ -1,9 +1,20 @@
 name: CI
 
+# Yalnızca belge / örnek değişikliklerinde (README, CHANGELOG, docs/, examples/) çalışmaz.
 on:
   push:
     branches: [main]
+    paths-ignore: ['**/*.md', 'docs/**', 'examples/**', 'LICENSE', '.github/ISSUE_TEMPLATE/**']
   pull_request:
+    paths-ignore: ['**/*.md', 'docs/**', 'examples/**', 'LICENSE', '.github/ISSUE_TEMPLATE/**']
+
+# Aynı dala art arda push'ta önceki (yarım kalan) çalışma iptal edilir — yalnızca son commit test edilir.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -27,6 +38,9 @@ jobs:
       - name: Size budget (@hopeplayer/core)
         run: npm run size --workspace=packages/core
 
+      - name: Every declared hp:* event is dispatched
+        run: npm run check-events --workspace=packages/core
+
       - name: Build @hopeplayer/react
         run: npm run build:react
 
@@ -40,10 +54,16 @@ jobs:
         run: npm run typecheck
 
   e2e:
-    # Playwright uçtan uca testleri (apps/playground/test, packages/react-native/test). Dış servisler (IMA, Prebid,
-    # GPT, Cast SDK) testlerde sahte — ağa bağımlı değil.
+    # Chromium uçtan uca testleri 4 paralel parçada (süreye göre dengeli). Firefox + WebKit: cross-browser.yml
+    # (gece, elle ve sürüm öncesi). Dış servisler (IMA, Prebid, GPT, Cast SDK) testlerde sahte — ağa bağımlı değil.
+    name: e2e (${{ matrix.shard }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Takımları run.mjs süre ağırlıklarına göre kendisi dağıtır; yeni bir takım otomatik olarak bir parçaya düşer.
+        shard: ['1/4', '2/4', '3/4', '4/4']
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -63,8 +83,6 @@ jobs:
       - name: Build packages
         run: |
           npm run build:core
-          npm run build:react
-          npm run build:vue
           npm run build:react-native
 
       - name: Start playground
@@ -73,8 +91,8 @@ jobs:
           for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:5183/ && exit 0; sleep 1; done
           echo "playground did not start"; cat playground.log; exit 1
 
-      - name: Run end-to-end tests
-        run: npm test
+      - name: Run end-to-end tests (shard ${{ matrix.shard }})
+        run: node apps/playground/test/run.mjs --shard ${{ matrix.shard }}
         env:
           HOPE_TEST_PORT: '5183'
 
@@ -82,5 +100,5 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: playground-log
+          name: playground-log-${{ strategy.job-index }}
           path: playground.log

@@ -1,7 +1,7 @@
 // HopeCorePlayer — reklam tetikleyici (adTriggers): API kuralları, saniye / tam ekran / duraklatma tetikleyicileri,
 // out-of-page GPT slotu (sahte GPT ile), sıklık sınırları ve kapanış. Gerçek gpt.js yerine route ile sahtesi verilir.
 // Playground çalışıyor olmalı (npm run dev --workspace=apps/playground, port HOPE_TEST_PORT ya da 5183).
-import { chromium } from 'playwright';
+import { launchBrowser } from './_browser.mjs';
 
 const BASE = `http://localhost:${process.env.HOPE_TEST_PORT ?? 5183}`;
 let failures = 0;
@@ -331,7 +331,7 @@ async function testCustParams(browser) {
 }
 
 (async () => {
-    const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+    const browser = await launchBrowser({ autoplay: true });
     try {
         await testTimeTrigger(browser);
         await testFullscreenTrigger(browser);

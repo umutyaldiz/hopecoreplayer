@@ -1,0 +1,63 @@
+# Firefox + WebKit uçtan uca testleri. Her push'ta değil (Chromium ci.yml'de her push'ta koşar):
+#  - her gece (03:00 UTC), main'in son hali üzerinde,
+#  - Actions → "Cross-browser" → "Run workflow" ile elle,
+#  - sürüm yayınlanmadan önce (publish.yml bu iş akışını çağırır; kırmızıysa npm'e yayın yapılmaz).
+name: Cross-browser
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: e2e (${{ matrix.browser }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [firefox, webkit]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright ${{ matrix.browser }}
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Build packages
+        run: |
+          npm run build:core
+          npm run build:react-native
+
+      - name: Start playground
+        run: |
+          npm run dev --workspace=apps/playground -- --port 5183 --strictPort > playground.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:5183/ && exit 0; sleep 1; done
+          echo "playground did not start"; cat playground.log; exit 1
+
+      - name: Run end-to-end tests
+        run: node apps/playground/test/run.mjs
+        env:
+          HOPE_BROWSER: ${{ matrix.browser }}
+          HOPE_TEST_PORT: '5183'
+
+      - name: Upload playground log
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playground-log-${{ matrix.browser }}
+          path: playground.log

@@ -3,7 +3,7 @@
 // ileri/geri sarma (scratch), ses modunda tam ekran / PiP / otomatik gizlemenin kapalı olması, sistem medya
 // kontrolleri (Media Session) ve seçeneklerin canlı değişmesi.
 // Playground çalışıyor olmalı (npm run dev --workspace=apps/playground, port HOPE_TEST_PORT ya da 5183).
-import { chromium } from 'playwright';
+import { launchBrowser } from './_browser.mjs';
 
 const BASE = `http://localhost:${process.env.HOPE_TEST_PORT ?? 5183}`;
 let failures = 0;
@@ -198,6 +198,12 @@ async function testChromeStaysVisible(browser) {
 async function testMediaSession(browser) {
     console.log('\n[6] Sistem medya kontrolleri (Media Session): başlık, sanatçı, kapak; ileri sar eylemi');
     const page = await openAudio(browser);
+    // Playwright WebKit'inde (Windows) Media Session API yok — gerçek Safari'de var; player API yoksa atlar.
+    if (!(await q(page, () => 'mediaSession' in navigator))) {
+        console.log('  SKIP Media Session API bu tarayıcıda yok');
+        await page.close();
+        return;
+    }
     await q(page, () => document.getElementById('player').play());
     await page.waitForTimeout(300);
     const m = await q(page, () => {
@@ -433,6 +439,13 @@ async function testScratchSoundOffByDefault(browser) {
 async function testScratchSound(browser) {
     console.log('\n[12] Scratch sesi açık: çalınca boşta hazırlanıyor; plak çevrilince işlemci hedef konuma gidiyor, bırakınca susuyor');
     const { page, chunks } = await openScratchSound(browser);
+    // Playwright WebKit'inde (Windows) Web Audio hiç yok — gerçek Safari'de var; player API yoksa sessizce "unsupported".
+    if (!(await page.evaluate(() => typeof AudioContext !== 'undefined' && typeof AudioWorkletNode !== 'undefined'))) {
+        ok((await stageAttr(page)) !== 'ready', `Web Audio yok → ses motoru kurulmadı, oynatma bozulmadı (${await stageAttr(page)})`);
+        console.log('  SKIP Web Audio API bu tarayıcıda yok — scratch sesi denetimleri atlandı');
+        await page.close();
+        return;
+    }
     await page.evaluate(() => document.getElementById('player').play());
     await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('.hp-audio').getAttribute('data-scratch-sound') === 'ready', null, { timeout: 8000 }).catch(() => {});
     ok((await stageAttr(page)) === 'ready' && chunks.length === 1, `hazır (${await stageAttr(page)}), motor parçası bir kez yüklendi (${chunks.length})`);
@@ -647,7 +660,7 @@ async function testCompactLayout(browser) {
 }
 
 (async () => {
-    const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+    const browser = await launchBrowser({ autoplay: true });
     try {
         await testStageAndChrome(browser);
         await testRotationFollowsTime(browser);

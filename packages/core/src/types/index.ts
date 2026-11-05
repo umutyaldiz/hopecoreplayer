@@ -1004,7 +1004,8 @@ export type HopePlayerEventMap = {
     'hp:play': CustomEvent<void>;
     'hp:pause': CustomEvent<void>;
     'hp:ended': CustomEvent<void>;
-    'hp:error': CustomEvent<{ message: string }>;
+    /** Hata ekranı açıldı (oynatılamayan kaynak, kopan yayın…). `code`: MediaError kodu (2 ağ, 3 çözümleme, 4 desteklenmiyor). */
+    'hp:error': CustomEvent<{ message: string; code?: number }>;
     'hp:qualitychange': CustomEvent<{ label: string }>;
     /**
      * Kaynak grubu değişti: `from` grubu ölümcül hata verdi (ya da tarayıcı oynatamıyor) ve `to` grubuna geçildi.

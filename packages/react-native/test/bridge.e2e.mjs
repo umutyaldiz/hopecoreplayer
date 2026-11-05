@@ -5,7 +5,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
+import { launchBrowser } from '../../../apps/playground/test/_browser.mjs';
 import { buildPlayerHtml, commandScript } from '../dist/player-html.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -54,7 +54,7 @@ const waitFor = (page, type, timeout = 10000) =>
     page.waitForFunction((type) => window.__msgs.some((m) => m.type === type), type, { timeout }).then(() => true, () => false);
 const send = (page, cmd) => page.evaluate((script) => eval(script), commandScript(cmd));
 
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 try {
     console.log('\n[1] Köprü: sayfa + core yükleniyor, "ready" geliyor, hazır olmadan gelen komut sıraya alınıyor');
     pages.set('/player.html', buildPlayerHtml({

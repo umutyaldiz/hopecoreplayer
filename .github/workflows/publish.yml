@@ -14,11 +14,20 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
+  # Yayın öncesi Firefox + WebKit uçtan uca testleri (Chromium her push'ta ci.yml'de koşuyor). Kırmızıysa yayın yapılmaz;
+  # sorun giderilince Release sayfasından iş akışı yeniden çalıştırılır.
+  cross-browser:
+    uses: ./.github/workflows/cross-browser.yml
+
   publish:
+    needs: cross-browser
     runs-on: ubuntu-24.04
+    # OIDC (npm Trusted Publishing) yalnızca yayın job'unda.
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v5

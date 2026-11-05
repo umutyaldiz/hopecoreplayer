@@ -356,9 +356,11 @@ button.hp-chip:active {
     }
 }
 
-/* :host(:fullscreen): fullscreen host'un kendisinde isteniyor (requestFullscreenCompat); -webkit- eski Safari için. */
-:host(:fullscreen),
-:host(:-webkit-full-screen) {
+/* :host(:fullscreen): fullscreen host'un kendisinde isteniyor (requestFullscreenCompat); -webkit- eski Safari için.
+   :is() ŞART: `:host(:fullscreen), :host(:-webkit-full-screen)` listesinde Firefox önekli seçiciyi tanımadığı için
+   BÜTÜN kural geçersiz sayılıyordu (tam ekran düzeni ve büyük kontroller Firefox'ta hiç uygulanmıyordu); :is()
+   tanımadığı seçiciyi görmezden gelir. */
+:host(:is(:fullscreen, :-webkit-full-screen)) {
     --hp-ctrl-btn-size: 44px;
     --hp-ctrl-icon-size: 20px;
     --hp-seek-hit-h: 26px;
@@ -367,8 +369,7 @@ button.hp-chip:active {
     --hp-seek-thumb-size: 18px;
     --hp-caption-font-size: 22px;
 }
-:host(:fullscreen) [part='control-bar'],
-:host(:-webkit-full-screen) [part='control-bar'] {
+:host(:is(:fullscreen, :-webkit-full-screen)) [part='control-bar'] {
     padding: 28px 20px 18px;
 }
 
@@ -402,18 +403,15 @@ button.hp-chip:active {
    video tepeye yapışıyor, geniş/yatay ekranlarda alan ekran yüksekliğini aşıp kontroller dışarıda kalıyordu. */
 /* Host'un display'ine güvenilmez (sayfa CSS'i `hope-player { display: block }` :host'u ezer) — boyut
    doğrudan height:100% ile; tarayıcı tam ekrandaki elementin yüksekliğini zaten ekrana kilitliyor. */
-:host(:fullscreen),
-:host(:-webkit-full-screen) {
+:host(:is(:fullscreen, :-webkit-full-screen)) {
     border-radius: 0;
     background: #000;
 }
 /* Şablon sarmalayıcısı da %100 olmalı — yoksa video alanının height:100%'ü auto'ya çözülüp 0 oluyor. */
-:host(:fullscreen) .hp-root,
-:host(:-webkit-full-screen) .hp-root {
+:host(:is(:fullscreen, :-webkit-full-screen)) .hp-root {
     height: 100%;
 }
-:host(:fullscreen) .video-area,
-:host(:-webkit-full-screen) .video-area {
+:host(:is(:fullscreen, :-webkit-full-screen)) .video-area {
     width: 100%;
     height: 100%;
     aspect-ratio: auto;
@@ -421,8 +419,7 @@ button.hp-chip:active {
     background: #000;
 }
 /* Story (9:16) tam ekranda: tam yükseklik, yatayda ortalı — ekran daha darsa genişliğe sığar. */
-:host(:fullscreen) .video-area[data-story],
-:host(:-webkit-full-screen) .video-area[data-story] {
+:host(:is(:fullscreen, :-webkit-full-screen)) .video-area[data-story] {
     height: 100%;
     width: auto;
     max-width: 100%;

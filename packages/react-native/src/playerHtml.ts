@@ -118,12 +118,32 @@ video.addEventListener('timeupdate', () => sendTime(false));
 video.addEventListener('seeked', () => sendTime(true));
 video.addEventListener('loadedmetadata', () => post('loadedmetadata', { duration: Number.isFinite(video.duration) ? video.duration : null, width: video.videoWidth, height: video.videoHeight }));
 
+// Sarma: meta veri yoksa beklenir; WebKit (iOS WKWebView) meta veri işlenirken yapılan sarmayı sıfırlayabildiği için
+// sonucu (seeked) doğrulanır, kaydıysa yeniden uygulanır. Art arda gelen sarmalarda son hedef geçerli.
+let seekTarget = null;
+let seekRetries = 0;
+const applySeek = () => {
+    if (seekTarget === null) return;
+    if (Math.abs(video.currentTime - seekTarget) <= 0.5 || seekRetries-- <= 0) {
+        seekTarget = null;
+        return;
+    }
+    video.addEventListener('seeked', applySeek, { once: true });
+    video.currentTime = seekTarget;
+};
+const seekTo = (time) => {
+    seekTarget = Number(time) || 0;
+    seekRetries = 3;
+    if (video.readyState >= 1) applySeek();
+    else video.addEventListener('loadedmetadata', applySeek, { once: true });
+};
+
 run = (cmd) => {
     switch (cmd && cmd.type) {
         case 'options': el.options = cmd.options; break;
         case 'play': video.play().catch((err) => post('error', { message: String(err && err.message ? err.message : err), code: 'play' })); break;
         case 'pause': video.pause(); break;
-        case 'seek': video.currentTime = cmd.time; break;
+        case 'seek': seekTo(cmd.time); break;
         case 'muted': video.muted = !!cmd.value; break;
         case 'toggleStats': el.toggleStats(cmd.force); break;
     }

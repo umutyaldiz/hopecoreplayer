@@ -6,7 +6,7 @@
 // Çalıştırmadan önce apps/playground dev server'ı ayrı bir terminalde
 // çalışıyor olmalı (npm run dev --workspace=apps/playground, port HOPE_TEST_PORT
 // ile override edilebilir, varsayılan 5183).
-import { chromium } from 'playwright';
+import { launchBrowser } from './_browser.mjs';
 import { readFileSync } from 'fs';
 
 const BASE = `http://localhost:${process.env.HOPE_TEST_PORT ?? 5183}`;
@@ -1073,6 +1073,10 @@ async function testNonLinearOverlay(browser) {
             mgr.dispatch('loaded', e);
         });
         await page.waitForFunction(() => !document.getElementById('player').shadowRoot.querySelector('video').paused, null, { timeout: 3000 }).catch(() => {});
+        // `paused` false olduktan bir görev sonra 'play' olayı gelir ve orta oynat butonu (tüm alanı kaplar) kapanır.
+        await page
+            .waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('[part="center-play-button"]').style.pointerEvents === 'none', null, { timeout: 3000 })
+            .catch(() => {});
         const s = await page.evaluate(() => {
             const root = document.getElementById('player').shadowRoot;
             const layer = root.querySelector('[part="ad-layer"]');
@@ -1086,13 +1090,14 @@ async function testNonLinearOverlay(browser) {
                 layerH: Math.round(lr.height),
                 areaH: Math.round(area.height),
                 midHit: mid?.tagName,
+                midInfo: mid ? `${mid.getAttribute('part') ?? ''} ${mid.className.slice?.(0, 40) ?? ''} pe=${getComputedStyle(mid).pointerEvents} op=${getComputedStyle(mid).opacity}` : '',
                 events: window.__nl.slice(),
             };
         });
         ok(!s.paused, 'overlay yüklenince içerik zaman aşımı beklemeden başladı');
         ok(s.nonlinear && s.visible, 'reklam katmanı overlay modunda görünür');
         ok(s.layerH < s.areaH / 2, `katman yalnızca alt şerit (${s.layerH}px / ${s.areaH}px) — videonun üstü kapanmıyor`);
-        ok(s.midHit === 'VIDEO', `videonun üst kısmı tıklanabilir (${s.midHit})`);
+        ok(s.midHit === 'VIDEO', `videonun üst kısmı tıklanabilir (${s.midHit} ${s.midInfo})`);
         ok(s.events.includes('start:preroll:false'), `hp:adstart linear:false (${s.events.join(', ')})`);
 
         await page.evaluate(() => window.__mockIma.adsManagerInstances.at(-1).dispatch('userClose', new window.google.ima.AdEvent('userClose')));
@@ -1451,7 +1456,7 @@ async function testContinuousPlaybackSignal(browser) {
 }
 
 (async () => {
-    const browser = await chromium.launch();
+    const browser = await launchBrowser();
     try {
         await testPreroll(browser);
         await testImaSdkSettings(browser);

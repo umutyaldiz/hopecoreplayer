@@ -96,11 +96,17 @@ export class QrResume {
         if (raw === null || !/^\d+$/.test(raw)) return;
 
         const seconds = Number(raw);
+        const v = this.ctx.videoEl;
+        // WebKit (Safari) readyState'i loadedmetadata'dan ÖNCE yükseltiyor; o arada yapılan sarmayı meta veriyi
+        // işlerken sıfırlıyor (seeked → 0. sn). Sarmanın sonucu (seeked) doğrulanır, kaydıysa bir kez daha uygulanır.
+        let retries = 2;
         const seekOnceReady = () => {
-            this.ctx.videoEl.currentTime = seconds;
+            if (Math.abs(v.currentTime - seconds) <= 0.5 || retries-- <= 0) return;
+            v.addEventListener('seeked', seekOnceReady, { once: true });
+            v.currentTime = seconds;
         };
-        if (this.ctx.videoEl.readyState >= 1) seekOnceReady();
-        else this.ctx.videoEl.addEventListener('loadedmetadata', seekOnceReady, { once: true });
+        if (v.readyState >= 1) seekOnceReady();
+        else v.addEventListener('loadedmetadata', seekOnceReady, { once: true });
 
         url.searchParams.delete(this.paramName);
         window.history.replaceState(window.history.state, '', url.toString());

@@ -50,11 +50,15 @@ Every change needs a test. The suite is plain Playwright scripts against the pla
 
 ```bash
 npm run dev            # in one terminal
-npm test               # in another — the full suite
+npm test               # in another — the full suite (Chromium)
 npm run test:cast      # or a single area (see package.json "scripts")
+npm run test:firefox   # the full suite in Firefox (or test:webkit; first: npx playwright install firefox webkit)
+node apps/playground/test/run.mjs --browser webkit audio cast   # chosen suites in one engine
 ```
 
-To add a test, add a scenario to `apps/playground/src/main.ts` (a `?feature=...` branch) and a function to the matching `apps/playground/test/*.e2e.mjs` file. External services (IMA, Prebid, GPT, Cast SDK) are mocked in the tests — never depend on the real network.
+To add a test, add a scenario to `apps/playground/src/main.ts` (a `?feature=...` branch) and a function to the matching `apps/playground/test/*.e2e.mjs` file. External services (IMA, Prebid, GPT, Cast SDK) are mocked in the tests — never depend on the real network. A new `*.e2e.mjs` file is picked up by `npm test` and CI automatically. If a check only makes sense in some engines (it needs CDP, or HLS that Playwright's WebKit lacks), guard it with `only(['chromium', 'firefox'], 'reason')` from `_browser.mjs` instead of letting it fail elsewhere.
+
+CI runs Chromium on every push and pull request (4 parallel shards); Firefox and WebKit run nightly, on demand and before every release (`cross-browser.yml`).
 
 ## Pull requests
 

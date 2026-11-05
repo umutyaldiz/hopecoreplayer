@@ -16,7 +16,7 @@
 // çağrılıyor. Tooltip popup'ı `title` DEĞİL bu `aria-label`'ı okuyor —
 // `.title` KASITLI OLARAK hiçbir yerde set edilmiyor (iki tooltip'in üst
 // üste binmesini önlemek için).
-import { chromium } from 'playwright';
+import { launchBrowser } from './_browser.mjs';
 
 const BASE = `http://localhost:${process.env.HOPE_TEST_PORT ?? 5183}`;
 let failures = 0;
@@ -223,7 +223,7 @@ async function testCustomTooltipPopup(browser) {
 }
 
 (async () => {
-    const browser = await chromium.launch();
+    const browser = await launchBrowser();
     try {
         await testDefaultAriaLabelsExist(browser);
         await testLocaleSwitchUpdatesCoreLive(browser);

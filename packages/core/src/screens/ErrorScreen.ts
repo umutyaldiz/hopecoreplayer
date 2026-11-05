@@ -18,6 +18,8 @@ export class ErrorScreen {
     private readonly retryBtn: HTMLButtonElement;
     private readonly retryText: HTMLSpanElement;
     private onRetry: (() => void) | null = null;
+    /** Ekran gerçekten açıldı (hp:error için) — kurtarılan hatalarda (yedek kaynak, native → hls.js) çağrılmaz. */
+    private onShown: ((info: { code: number; message: string }) => void) | null = null;
     private shouldShow: () => boolean = () => true;
 
     constructor(video: HTMLVideoElement, labels: HopeLocaleStrings) {
@@ -66,6 +68,17 @@ export class ErrorScreen {
         this.onRetry = fn;
     }
 
+    setOnShown(fn: (info: { code: number; message: string }) => void): void {
+        this.onShown = fn;
+    }
+
+    private open(): void {
+        const wasVisible = this.visible;
+        this.render();
+        this.el.setAttribute('data-visible', '');
+        if (!wasVisible) this.onShown?.({ code: this.video.error?.code ?? this.streamErrorCode, message: this.messageEl.textContent ?? '' });
+    }
+
     /** false dönerse hata gösterilmez (ör. SourceManager native HLS'ten hls.js'e geçerken). */
     setShouldShow(fn: () => boolean): void {
         this.shouldShow = fn;
@@ -78,8 +91,7 @@ export class ErrorScreen {
     showStreamError(code: 2 | 3): void {
         if (!this.shouldShow()) return;
         this.streamErrorCode = code;
-        this.render();
-        this.el.setAttribute('data-visible', '');
+        this.open();
     }
 
     /** Yeni kaynak yüklenirken önceki hatayı kapat. */
@@ -105,8 +117,7 @@ export class ErrorScreen {
         // Safari/iOS bu durumda kod 4 üretebiliyor.
         if (!this.video.getAttribute('src') && !this.video.querySelector('source')) return;
         if (!this.shouldShow()) return;
-        this.render();
-        this.el.setAttribute('data-visible', '');
+        this.open();
     };
 
     private render(): void {

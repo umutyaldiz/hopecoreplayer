@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, onBeforeUnmount, ref } from 'vue';
 import { HopePlayer } from '@hopeplayer/vue';
 import type { HopePlayerOptions } from '@hopeplayer/core';
 
@@ -25,12 +25,46 @@ const log = ref<string[]>([]);
 const add = (line: string) => {
     log.value = [`${new Date().toLocaleTimeString()}  ${line}`, ...log.value].slice(0, 8);
 };
+
+/** Bitime 5 sn kala "Sıradaki" kartı (1.0.17) — MP4 örneği 10 sn, kart 5. saniyede çıkar. */
+const REDIRECT: HopePlayerOptions['redirectScreen'] = {
+    mode: 'card',
+    showBefore: 5,
+    time: 5,
+    url: 'https://www.umutyaldiz.com/hopecoreplayer/plugins/redirect-screen',
+    title: 'Yönlendirme kartı nasıl çalışır?',
+    subtitle: 'HopeCorePlayer · Docs',
+    image: POSTER,
+};
+
+// hp:redirect iptal edilebilir bir olay — preventDefault için element üzerinden dinlenir.
+const onRedirect = (e: Event) => {
+    const d = (e as CustomEvent<{ state: string; reason?: string }>).detail;
+    // Örnek sayfadan çıkmasın: yönlendirme iptal edilip kayda yazılır. Gerçek sitede bu satıra gerek yok.
+    if (d.state === 'redirect') e.preventDefault();
+    add(`redirect: ${d.state}${d.reason ? ` (${d.reason})` : ''}`);
+};
+const onCast = (e: Event) => {
+    const d = (e as CustomEvent<{ via: string; state: string; device?: string }>).detail;
+    add(`cast: ${d.via} ${d.state}${d.device ? ` (${d.device})` : ''}`);
+};
+onMounted(() => {
+    const el = player.value?.getElement();
+    el?.addEventListener('hp:redirect', onRedirect);
+    el?.addEventListener('hp:cast', onCast);
+});
+onBeforeUnmount(() => {
+    const el = player.value?.getElement();
+    el?.removeEventListener('hp:redirect', onRedirect);
+    el?.removeEventListener('hp:cast', onCast);
+});
 </script>
 
 <template>
     <main>
         <h1>HopeCorePlayer — Vue</h1>
         <p>@hopeplayer/vue ile prop ve emit kullanımı.</p>
+        <p class="hint">MP4 örneğinde bitime 5 sn kala köşede "Sıradaki" kartı çıkar (örnek sayfadan çıkmasın diye yönlendirme olay kaydına yazılır). Chromecast / AirPlay butonu yakında cihaz varken görünür.</p>
 
         <HopePlayer
             ref="player"
@@ -42,6 +76,8 @@ const add = (line: string) => {
             :skip-buttons="{ back: 10, forward: 10 }"
             tap-gestures
             :context-menu="{ stats: true }"
+            :redirect-screen="REDIRECT"
+            :cast="{ chromecast: true, airplay: true }"
             @ready="add('ready')"
             @play="add('play')"
             @pause="add('pause')"

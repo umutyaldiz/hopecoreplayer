@@ -65,3 +65,8 @@ button.active {
     color: #9a9aa6;
     font: 12px/1.6 ui-monospace, Menlo, Consolas, monospace;
 }
+
+.hint {
+    font-size: 13px;
+    opacity: 0.75;
+}

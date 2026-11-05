@@ -3,7 +3,7 @@
 // ağ SDK'sına bağımlı değil (yalnızca IntersectionObserver/pointer/scroll gibi
 // gerçek tarayıcı API'leri), bu yüzden ads/prebid testlerinin aksine mock
 // gerektirmiyor — gerçek DOM etkileşimleri ve gerçek scroll ile sürülüyor.
-import { chromium } from 'playwright';
+import { launchBrowser } from './_browser.mjs';
 
 const BASE = `http://localhost:${process.env.HOPE_TEST_PORT ?? 5183}`;
 let failures = 0;
@@ -707,11 +707,16 @@ async function testContextMenu(browser) {
         ok(m.items.length === 2 && m.items[1] === 'İstatistikler', `stats: true → "İstatistikler" satırı ${JSON.stringify(m.items)}`);
         await page.evaluate(() => document.getElementById('player').shadowRoot.querySelectorAll('[part="context-menu"] button')[0].click());
         await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('[part="stats-panel"]'), { timeout: 5000 });
+        // Panel tarayıcının bildirdiği çözünürlüğü yazar (WebKit aynı dosya için farklı değer bildirebiliyor).
+        const videoSize = await page.evaluate(() => {
+            const v = document.getElementById('player').shadowRoot.querySelector('video');
+            return `${v.videoWidth}×${v.videoHeight}`;
+        });
         const stats = await page.evaluate(() => {
             const p = document.getElementById('player').shadowRoot.querySelector('[part="stats-panel"]');
             return Array.from(p.querySelectorAll('dt')).map((dt) => `${dt.textContent}=${dt.nextElementSibling.textContent}`);
         });
-        ok((await menu()).open === false && stats.some((s) => s === 'Motor=native') && stats.some((s) => s === `Sürüm=HopeCorePlayer ${version}`) && stats.some((s) => s.startsWith('Video / ekran=1280×720')), `istatistik paneli açıldı, menü kapandı ${JSON.stringify(stats.slice(0, 3))}`);
+        ok((await menu()).open === false && stats.some((s) => s === 'Motor=native') && stats.some((s) => s === `Sürüm=HopeCorePlayer ${version}`) && stats.some((s) => s.startsWith(`Video / ekran=${videoSize}`)), `istatistik paneli açıldı, menü kapandı ${JSON.stringify(stats.slice(0, 3))}`);
         await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-stats-close').click());
         ok(!(await page.evaluate(() => !!document.getElementById('player').shadowRoot.querySelector('[part="stats-panel"]'))), 'kapat butonu paneli kaldırdı');
 
@@ -728,6 +733,40 @@ async function testContextMenu(browser) {
     }
 }
 
+async function testCoreEvents(browser) {
+    console.log('\n[olaylar] hp:ended / hp:ratechange / hp:error gönderiliyor (React onEnded/onRateChange/onError, Vue @ended… bunlara bağlı)');
+    const page = await openFeature(browser, 'default');
+    await page.evaluate(async () => {
+        window.__ev = [];
+        const el = document.getElementById('player');
+        for (const t of ['hp:ended', 'hp:ratechange', 'hp:error']) el.addEventListener(t, (e) => window.__ev.push({ t, d: e.detail ?? null }));
+        const v = el.shadowRoot.querySelector('video');
+        v.playbackRate = 1.5;
+        // Sona yakın sarılır ve sarmanın tuttuğu doğrulanır — WebKit sarmayı 0'a düşürebiliyor (bkz. QrResume). Bitişe
+        // 2 sn: Playwright WebKit'i bitişin dibine (≤0.5 sn) sarılan videoyu oynatmıyor, takılı kalıyor.
+        const target = v.duration - 2;
+        for (let i = 0; i < 3 && Math.abs(v.currentTime - target) > 0.5; i++) {
+            await new Promise((res) => {
+                v.addEventListener('seeked', res, { once: true });
+                v.currentTime = target;
+            });
+        }
+        void el.play();
+    });
+    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'hp:ended'), null, { timeout: 12000 }).catch(() => {});
+    let ev = await page.evaluate(() => window.__ev.slice());
+    ok(ev.some((e) => e.t === 'hp:ratechange' && e.d?.rate === 1.5), `hp:ratechange { rate: 1.5 } (${JSON.stringify(ev.filter((e) => e.t === 'hp:ratechange'))})`);
+    ok(ev.some((e) => e.t === 'hp:ended'), 'video bitince hp:ended');
+    await page.evaluate(() => {
+        const el = document.getElementById('player');
+        el.options = { ...el.options, sources: undefined, src: '/does-not-exist.mp4' };
+    });
+    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'hp:error'), null, { timeout: 5000 }).catch(() => {});
+    ev = await page.evaluate(() => window.__ev.filter((e) => e.t === 'hp:error'));
+    ok(ev.length === 1 && ev[0].d?.code === 4 && typeof ev[0].d.message === 'string' && ev[0].d.message.length > 0, `hata ekranı açılınca tek bir hp:error { message, code } (${JSON.stringify(ev)})`);
+    await page.close();
+}
+
 async function testThumbAfterScaledMount(browser) {
     console.log('\n[THUMB] Player ölçekli (transform) iken boyutlanınca seek bar noktası dolu kısmın gerisinde kalmıyor; ölçekliyken hover zamanı doğru');
     const page = await openFeature(browser, 'default');
@@ -738,11 +777,16 @@ async function testThumbAfterScaledMount(browser) {
             const played = root.querySelector('[part="seek-bar"] .hp\\:bg-accent').getBoundingClientRect();
             return { thumbCenter: thumb.left + thumb.width / 2, playedRight: played.right };
         });
-    await page.evaluate(() => new Promise((r) => {
+    // 8. saniyeye sar ve tuttuğunu doğrula — WebKit erken yapılan sarmayı 0'a düşürebiliyor (bkz. QrResume).
+    await page.evaluate(async () => {
         const v = document.getElementById('player').shadowRoot.querySelector('video');
-        v.addEventListener('seeked', r, { once: true });
-        v.currentTime = 8;
-    }));
+        for (let i = 0; i < 3 && Math.abs(v.currentTime - 8) > 0.5; i++) {
+            await new Promise((r) => {
+                v.addEventListener('seeked', r, { once: true });
+                v.currentTime = 8;
+            });
+        }
+    });
     // Giriş animasyonu benzetimi: ölçekliyken genişlik değişsin (ResizeObserver ölçsün), sonra ölçek kalksın.
     await page.evaluate(() => {
         const el = document.getElementById('player');
@@ -774,7 +818,7 @@ async function testThumbAfterScaledMount(browser) {
 }
 
 (async () => {
-    const browser = await chromium.launch();
+    const browser = await launchBrowser();
     try {
         await testPluginIsolation(browser);
         await testGesture(browser);
@@ -792,6 +836,7 @@ async function testThumbAfterScaledMount(browser) {
         await testSeekFeedback(browser);
         await testContextMenu(browser);
         await testThumbAfterScaledMount(browser);
+        await testCoreEvents(browser);
     } finally {
         await browser.close();
     }

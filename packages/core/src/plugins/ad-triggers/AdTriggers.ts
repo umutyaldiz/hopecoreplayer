@@ -1,5 +1,6 @@
 import type { AdTrigger, AdTriggerLayout, AdTriggerRule, AdTriggersConfig, AdTriggersOptions } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
+import { firePixels as fire } from '../shared/trackingPixel';
 import { loadGpt, type GoogleTag, type GptSlot, type GptSlotRenderEndedEvent } from '../pause-ad/loadGpt';
 
 export interface AdTriggersContext {
@@ -147,13 +148,6 @@ export function normalizeAdTriggers(raw: unknown): AdTriggersConfig | null {
     };
 }
 
-function fire(urls: string[] | undefined): void {
-    for (const u of urls ?? []) {
-        const img = new Image();
-        img.referrerPolicy = 'no-referrer-when-downgrade';
-        img.src = u;
-    }
-}
 
 type TriggerType = AdTrigger['type'];
 type CloseReason = 'user' | 'timeout' | 'mode' | 'ad' | 'content' | 'replaced';

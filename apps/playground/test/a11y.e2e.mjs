@@ -1,7 +1,7 @@
 // HopeCorePlayer — erişilebilirlik (WCAG 2.1 A/AA): axe-core taraması (player'ın açık / etkileşimli durumları dahil),
 // klavyeyle Tab sırası ve odak göstergesi.
 // Playground çalışıyor olmalı (npm run dev --workspace=apps/playground, port HOPE_TEST_PORT ya da 5183).
-import { chromium } from 'playwright';
+import { launchBrowser } from './_browser.mjs';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -112,7 +112,7 @@ async function testHostTabindex(browser) {
 }
 
 (async () => {
-    const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+    const browser = await launchBrowser({ autoplay: true });
     try {
         await testStates(browser);
         await testKeyboard(browser);

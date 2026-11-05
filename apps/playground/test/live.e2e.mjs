@@ -6,7 +6,7 @@
 // Live wall clock, gerçek bir canlı stream'e ihtiyaç duymadan
 // `video.duration`/`video.seekable`'ı Object.defineProperty ile override
 // ederek test ediliyor.
-import { chromium } from 'playwright';
+import { launchBrowser, only } from './_browser.mjs';
 import { readFileSync } from 'fs';
 
 const BASE = `http://localhost:${process.env.HOPE_TEST_PORT ?? 5183}`;
@@ -243,6 +243,7 @@ async function qualityMenu(page) {
 
 async function testHlsQualityMenuInChrome(browser) {
     console.log('\n[4e] Chrome native HLS "maybe" dese bile hls.js kullanılıyor ve kalite menüsünde seviyeler var mı?');
+    if (!only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok (MSE de Apple yerel HLS oynatıcısı da yok); gerçek Safari ayrıca doğrulanır')) return;
     const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
     await page.route('https://hls-q.example.test/**', (route) => {
         const u = route.request().url();
@@ -271,6 +272,7 @@ async function testHlsQualityMenuInChrome(browser) {
 
 async function testHlsCorsFallsBackToNative(browser) {
     console.log('\n[4f] CORS izni olmayan HLS: hls.js indiremeyince native HLS\'e düşüyor, oynuyor ve eski kalite listesi kalmıyor mu?');
+    if (!only(['chromium'], 'yalnızca hem hls.js hem tarayıcının yerel HLS oynatıcısı olan motorda anlamlı (Firefox yerel HLS içermez)')) return;
     const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
     let jsFetch = 0;
     // hls.js (fetch/XHR) isteğine CORS başlığı yok → engellenir; native medya isteği (CORS'a tabi değil) geçer.
@@ -352,6 +354,7 @@ async function settingsSubmenu(page, row, pick) {
 
 async function testHlsAudioAndSubtitleMenus(browser) {
     console.log('\n[4g] HLS: alternatif ses izleri "Ses" menüsünde, manifest altyazıları altyazı menüsünde (<track> olmadan), seçim hls.js\'e gidiyor');
+    if (!only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok (MSE de Apple yerel HLS oynatıcısı da yok); gerçek Safari ayrıca doğrulanır')) return;
     const { page } = await openHlsMock(browser, {});
     try {
         const audio = await settingsSubmenu(page, 'Ses');
@@ -385,6 +388,7 @@ async function testHlsAudioAndSubtitleMenus(browser) {
 
 async function testHlsOptions(browser) {
     console.log('\n[4h] options.hls: config hls.js\'e aynen geçiyor, withCredentials, engine: "native"');
+    if (!only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok (MSE de Apple yerel HLS oynatıcısı da yok); gerçek Safari ayrıca doğrulanır')) return;
     let { page } = await openHlsMock(browser, { hls: { config: { maxBufferLength: 12, backBufferLength: 30, capLevelToPlayerSize: true }, withCredentials: true } });
     try {
         const cfg = await page.evaluate(() => {
@@ -476,6 +480,7 @@ async function testLiveDvrSeekBar(browser) {
 
 async function testHlsFatalErrorScreen(browser) {
     console.log('\n[4j] hls.js kurtarılamayan ağ hatası (kalite listesi 404) → hata ekranı açılıyor (video.error oluşmasa da)');
+    if (!only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok (MSE de Apple yerel HLS oynatıcısı da yok); gerçek Safari ayrıca doğrulanır')) return;
     const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
     try {
         await page.route('https://hls-dead.example.test/**', (route) => {
@@ -507,6 +512,7 @@ async function testHlsFatalErrorScreen(browser) {
 
 async function testNativeHlsFallsBackToHlsJs(browser) {
     console.log('\n[4d] Kod 4 (Safari): native HLS "oynatırım" deyip oynatamazsa hata ekranı açılmadan hls.js\'e geçiliyor mu?');
+    if (!only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok (MSE de Apple yerel HLS oynatıcısı da yok); gerçek Safari ayrıca doğrulanır')) return;
     // Native-önce yolu yalnızca Safari/iOS'ta — Safari tarayıcı kimliğiyle.
     const page = await browser.newPage({
         viewport: { width: 800, height: 600 },
@@ -605,7 +611,7 @@ async function testDai(browser) {
 }
 
 (async () => {
-    const browser = await chromium.launch();
+    const browser = await launchBrowser();
     try {
         await testPluginIsolation(browser);
         await testScte35(browser);

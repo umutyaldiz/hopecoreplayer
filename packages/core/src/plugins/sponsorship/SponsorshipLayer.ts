@@ -1,5 +1,6 @@
 import type { SponsorshipConfig, SponsorshipOptions } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
+import { firePixels as fire } from '../shared/trackingPixel';
 
 export interface SponsorshipContext {
     hostEl: HTMLElement;
@@ -83,14 +84,6 @@ export function normalizeSponsorship(raw: unknown): SponsorshipConfig | null {
     };
 }
 
-/** Takip pikseli: yanıtı beklenmeyen GET (img beacon). */
-function fire(urls: string[] | undefined): void {
-    for (const u of urls ?? []) {
-        const img = new Image();
-        img.referrerPolicy = 'no-referrer-when-downgrade';
-        img.src = u;
-    }
-}
 
 /**
  * Sponsorluk katmanı: `endpoint`'ten JSON çeker (SponsorshipConfig), player renklerini değiştirir, köşeye logo koyar,

@@ -3,7 +3,7 @@
 // (theme alanı OLMADAN) çağrısıyla sessizce sıfırlanmamalı — bu gerçek bir
 // bug'dı (HopePlayerElement.options setter'ı attribute'larla hiç
 // birleşmiyordu), tema seçici ilk kullanımda yakalandı.
-import { chromium } from 'playwright';
+import { launchBrowser, only } from './_browser.mjs';
 
 const BASE = `http://localhost:${process.env.HOPE_TEST_PORT ?? 5183}`;
 let failures = 0;
@@ -376,7 +376,9 @@ async function testLoadingRing(browser) {
         const ringOn = () => page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-group-left').hasAttribute('data-loading'));
         ok(!(await ringOn()), 'başlangıçta (duraklatılmış) halka yok');
 
-        // Video isteklerini geciktir → oynat'a basınca buffer beklenir.
+        // Video isteklerini geciktir → oynat'a basınca buffer beklenir. WebKit medyayı kendi ağ katmanından indirir,
+        // route gecikmesi ona işlemez (video hemen yüklenir) — bu kontrol orada anlamlı değil.
+        if (!only(['chromium', 'firefox'], 'route ile yavaşlatılmış medya yüklemesi')) return;
         await page.route('**/sample.mp4*', async (route) => {
             await new Promise((r) => setTimeout(r, 1500));
             await route.continue();
@@ -678,7 +680,7 @@ async function testFullscreenEnlargesControls(browser) {
 }
 
 (async () => {
-    const browser = await chromium.launch();
+    const browser = await launchBrowser();
     try {
         await testPresetsApplyDataTheme(browser);
         await testSeekBarHoverTime(browser);

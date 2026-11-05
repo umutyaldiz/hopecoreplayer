@@ -3,7 +3,7 @@
 // akışı (direkt VAST + GAM modu, retry'da auction tekrarlanmaması) ve generic
 // consentAware (TCF/USP) non-personalized ads zorlaması network'ten bağımsız,
 // deterministik olarak doğrulanıyor.
-import { chromium } from 'playwright';
+import { launchBrowser } from './_browser.mjs';
 import { readFileSync } from 'fs';
 
 const BASE = `http://localhost:${process.env.HOPE_TEST_PORT ?? 5183}`;
@@ -219,7 +219,7 @@ async function testPrebidChunkIsolation(browser) {
 }
 
 (async () => {
-    const browser = await chromium.launch();
+    const browser = await launchBrowser();
     try {
         await testPrebidDirectVast(browser);
         await testPrebidGam(browser);

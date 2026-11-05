@@ -14,6 +14,18 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+### Fixed
+- `hp:ended`, `hp:error` and `hp:ratechange` were declared and documented but never dispatched, so React `onEnded` / `onError` / `onRateChange` and Vue `@ended` / `@error` / `@ratechange` never fired. `hp:error` is sent once when the error screen opens (`{ message, code }`) — not for errors the player recovers from (fallback sources, native HLS → hls.js).
+- **Firefox fullscreen:** the fullscreen layout and the larger fullscreen controls / seek bar / captions were never applied in Firefox — the rules used the selector list `:host(:fullscreen), :host(:-webkit-full-screen)`, and Firefox drops the whole rule for the prefixed selector it does not know. They now use the forgiving `:host(:is(:fullscreen, :-webkit-full-screen))`.
+- **Tracking pixels** (sponsorship, ad triggers) now get a cache-buster (`[CACHEBUSTING]` / `[timestamp]` macros are filled, otherwise `hp_cb` is added): a repeated impression of the same URL — e.g. the sponsor intro every N minutes — could be served from the browser's memory cache and never reach the server (Firefox).
+- **Safari / iOS early seeks:** WebKit raises `readyState` before `loadedmetadata` and then resets a seek made in between back to 0. The QR resume `?vtime=` jump and the React Native `seek()` sent before the player is ready now verify the position on `seeked` and re-apply it.
+
+### Project
+- Docs: release notes page generated from this file; CDN install, browser support and accessibility sections on the install page; full event list.
+- Examples (web component, React, Vue) updated to 1.0.17 with the redirect card and Cast.
+- CI checks that every event declared in `HopePlayerEventMap` is actually dispatched.
+- **Cross-browser tests:** the end-to-end suite now runs in Firefox and WebKit too (`npm run test:firefox` / `test:webkit`) — nightly, on demand and before every release (`cross-browser.yml`; publishing waits for it). Chromium runs on every push in 4 parallel shards (`run.mjs --shard`); CI skips documentation-only changes and cancels superseded runs. Engine-specific checks are guarded with `only()` (Playwright's WebKit has no HLS, Web Audio or Media Session, and stops a looping video at its end).
+
 ## [1.0.17] — 2026-11-05
 
 ### Added

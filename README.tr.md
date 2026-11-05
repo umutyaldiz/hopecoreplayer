@@ -20,7 +20,7 @@ CDN'de tam `…/dist/hope-player.js` yolunu kullanın — player eklentilerini b
 
 npm ile: `npm install @hopeplayer/core` (React: `@hopeplayer/react`, Vue: `@hopeplayer/vue`, React Native: `@hopeplayer/react-native`).
 
-**Tarayıcı desteği:** Chrome / Edge 111+, Firefox 128+, Safari 16.4+ (macOS, iOS / iPadOS), Samsung Internet 22+ (stiller Tailwind CSS v4 ile derleniyor, [alt sınırları](https://tailwindcss.com/docs/compatibility) bunlar). Chromium'da her değişiklikte uçtan uca test, erişilebilirlik taraması (axe-core, WCAG 2.1 A/AA) ve boyut bütçesi (ilk yükleme ~68 KB gzip) çalışır. iPhone'da elle doğrulandı; Chromecast / Apple TV sahte SDK'larla test edildi, gerçek cihazda henüz doğrulanmadı. Ayrıntılı tablo: [README.md → Browser support](./README.md#browser-support).
+**Tarayıcı desteği:** Chrome / Edge 111+, Firefox 128+, Safari 16.4+ (macOS, iOS / iPadOS), Samsung Internet 22+ (stiller Tailwind CSS v4 ile derleniyor, [alt sınırları](https://tailwindcss.com/docs/compatibility) bunlar). Chromium'da her değişiklikte uçtan uca test, erişilebilirlik taraması (axe-core, WCAG 2.1 A/AA) ve boyut bütçesi (ilk yükleme ~68 KB gzip) çalışır; Firefox ve WebKit testleri her gece ve her sürümden önce. iPhone'da elle doğrulandı; Chromecast / Apple TV sahte SDK'larla test edildi, gerçek cihazda henüz doğrulanmadı. Ayrıntılı tablo: [README.md → Browser support](./README.md#browser-support).
 
 Sürüm notları: [CHANGELOG.md](./CHANGELOG.md) · Katkı: [CONTRIBUTING.md](./CONTRIBUTING.md) (Türkçe issue / PR olur) · Güvenlik: [SECURITY.md](./SECURITY.md)
 
