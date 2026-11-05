@@ -310,7 +310,9 @@ async function testCustParams(browser) {
         minGapSeconds: 0,
         rules: [
             rule({ id: 'json', triggers: [{ type: 'start' }], custParams: { sezon: 2026, canli: true, etiket: ['mac', 'ozet'], kanal: 'kural', 'bad key!': 'x' } }),
-            rule({ id: 'text', triggers: [{ type: 'time', at: [1.5] }], cust_params: 'kategori=spor&etiket=gol,video' }),
+            // pause: ilk reklam yerleştikten SONRA tetiklenir. Eskiden time at 1.5 idi — yavaş makinede (Linux WebKit)
+            // ilk istek 1.5 sn'de hâlâ sürüyordu, ikinci kural doğru biçimde atlanıyor ("another ad is showing") ve test düşüyordu.
+            rule({ id: 'text', triggers: [{ type: 'pause' }], cust_params: 'kategori=spor&etiket=gol,video' }),
         ],
     });
     await page.evaluate(() => {
@@ -319,6 +321,8 @@ async function testCustParams(browser) {
     });
     await page.waitForTimeout(200);
     await play(page);
+    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggershow'), null, { timeout: 6000 }).catch(() => {});
+    await page.evaluate(() => document.getElementById('player').pause());
     await page.waitForFunction(() => window.__gpt?.requests.length >= 2, null, { timeout: 6000 }).catch(() => {});
     const s = await state(page);
     const [a, b] = s.requests.map((r) => r.targeting);

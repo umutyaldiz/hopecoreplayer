@@ -230,11 +230,22 @@ async function testCastFlow(browser) {
         c.emit('isPaused', false);
     });
     await page.waitForTimeout(100);
+    // Teşhis (Linux WebKit'te 15 sn'ye sarma tutmuyordu): yerel videonun olay sırası FAIL satırında görünsün.
+    await page.evaluate(() => {
+        const v = document.getElementById('player').shadowRoot.querySelector('video');
+        const t = () => Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime').get.call(v).toFixed(2);
+        const ranges = () => Array.from({ length: v.seekable.length }, (_, i) => `${v.seekable.start(i).toFixed(1)}-${v.seekable.end(i).toFixed(1)}`).join(',');
+        window.__vlog = [`başla t=${t()} rs=${v.readyState} ns=${v.networkState} seekable=${ranges()} src=${(v.currentSrc || '').split('/').pop()}`];
+        for (const e of ['seeking', 'seeked', 'play', 'playing', 'pause', 'emptied', 'loadstart', 'loadedmetadata', 'waiting', 'stalled', 'error'])
+            v.addEventListener(e, () => window.__vlog.push(`${e}@${t()}`));
+    });
     await page.evaluate(() => window.__cast.end());
     await page.waitForTimeout(600);
     s = await state(page);
     ok(!s.casting && !s.proxied && !s.overlay && s.icon === 'cast' && s.ev.includes('chromecast:disconnected'), 'bağlantı bitti → kumanda kalktı, katman kapandı');
-    ok(Math.abs(s.nativeTime - 15) < 1 && !s.nativePaused, `yerelde TV'deki saniyeden devam (${s.nativeTime.toFixed(1)} sn, oynuyor)`);
+    const resumed = Math.abs(s.nativeTime - 15) < 1 && !s.nativePaused;
+    const vlog = resumed ? '' : ` — olaylar: ${await page.evaluate(() => window.__vlog.join(' '))}`;
+    ok(resumed, `yerelde TV'deki saniyeden devam (${s.nativeTime.toFixed(1)} sn, oynuyor)${vlog}`);
     await context.close();
 }
 

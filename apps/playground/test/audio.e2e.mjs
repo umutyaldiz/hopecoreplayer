@@ -460,6 +460,8 @@ async function testScratchSound(browser) {
     await page.waitForTimeout(400);
     const g = await vinylGeometry(page);
     await page.evaluate(() => (window.__scratchMsgs.length = 0));
+    // Video bu arada oynamaya devam ediyor — beklenen başlangıç 30 değil, tutma anındaki konum (yavaş makinede 30.4+).
+    const grabAt = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').currentTime);
     // Saat yönünde bir tur, bırakmadan.
     await dragArc(page, g, -60, 300, { release: false });
     await page.waitForTimeout(250);
@@ -469,7 +471,7 @@ async function testScratchSound(browser) {
         const targets = msgs.filter((m) => m.type === 'target').map((m) => m.position);
         return { start: start?.position, lastTarget: targets.at(-1), count: targets.length, pos: window.__scratchPos, video: document.getElementById('player').shadowRoot.querySelector('video').paused };
     });
-    ok(mid.start !== undefined && Math.abs(mid.start - 30) < 0.4, `tutunca işlemci ${mid.start?.toFixed(2)} sn'den başladı`);
+    ok(mid.start !== undefined && Math.abs(mid.start - grabAt) < 0.4 && Math.abs(mid.start - 30) < 1.5, `tutunca işlemci tutulan yerden başladı (${mid.start?.toFixed(2)} sn, video ${grabAt.toFixed(2)} sn)`);
     ok(mid.count > 5 && mid.lastTarget > mid.start + 1.5, `çevirdikçe hedef ilerledi: ${mid.count} güncelleme, son hedef ${mid.lastTarget?.toFixed(2)} sn`);
     ok(mid.pos !== undefined && Math.abs(mid.pos - mid.lastTarget) < 0.1, `işlemcinin okuma kafası hedefte (${mid.pos?.toFixed(2)} ≈ ${mid.lastTarget?.toFixed(2)}) — ses parmağı takip ediyor`);
     ok(mid.video, 'scratch sırasında player sustu (yalnızca scratch sesi)');

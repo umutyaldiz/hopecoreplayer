@@ -586,9 +586,18 @@ async function testSkipButtons(browser) {
         await click('skip-back-button');
         ok((await time()) === 0, `başta geri sarma 0'ın altına inmiyor (${await time()})`);
         await seekTo(9);
+        // Teşhis (Linux WebKit'te süre sonuna sarma 0 okunuyordu): olay sırası FAIL satırında görünsün.
+        await page.evaluate(() => {
+            const v = document.getElementById('player').shadowRoot.querySelector('video');
+            window.__vlog = [`başla t=${v.currentTime.toFixed(2)} rs=${v.readyState} paused=${v.paused} loop=${v.loop}`];
+            for (const t of ['seeking', 'seeked', 'ended', 'play', 'pause', 'emptied', 'loadstart', 'durationchange'])
+                v.addEventListener(t, () => window.__vlog.push(`${t}@${v.currentTime.toFixed(2)}`));
+        });
         await click('skip-forward-button');
+        await page.waitForTimeout(300);
         const dur = await page.evaluate(() => Math.round(document.getElementById('player').shadowRoot.querySelector('video').duration * 10) / 10);
-        ok((await time()) === dur, `sonda ileri sarma süreyi aşmıyor (${await time()} / ${dur})`);
+        const vlog = await page.evaluate(() => window.__vlog.join(' '));
+        ok((await time()) === dur, `sonda ileri sarma süreyi aşmıyor (${await time()} / ${dur})${(await time()) === dur ? '' : ` — olaylar: ${vlog}`}`);
 
         await setOptions({ skipButtons: { back: false, forward: 30 } });
         b = await buttons();

@@ -1,7 +1,7 @@
 // Takımları sırayla koşturur ve sürelerini raporlar: node apps/playground/test/run.mjs [--browser firefox] [--shard 2/4 | ads cast …]
 // Ad verilmezse hepsi. Bir takım başarısız olsa da diğerleri çalışır; sonunda biri bile kırmızıysa çıkış kodu 1.
 // Tarayıcı: HOPE_BROWSER=chromium | firefox | webkit (bkz. _browser.mjs).
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -80,11 +80,46 @@ const results = [];
 for (const name of names) {
     console.log(`\n━━━ ${name} (${process.env.HOPE_BROWSER ?? 'chromium'}) ━━━`);
     const start = Date.now();
-    const r = spawnSync(process.execPath, [path(name)], { stdio: 'inherit', cwd: root, env: process.env });
-    results.push({ name, ok: r.status === 0, secs: Math.round((Date.now() - start) / 1000) });
+    const { code, problems } = await runSuite(name);
+    results.push({ name, ok: code === 0, secs: Math.round((Date.now() - start) / 1000), problems });
 }
 
 console.log('\n━━━ Özet ━━━');
-for (const r of results) console.log(`${r.ok ? '✓' : '✗'} ${r.name.padEnd(16)} ${String(r.secs).padStart(4)} sn`);
+for (const r of results) {
+    console.log(`${r.ok ? '✓' : '✗'} ${r.name.padEnd(16)} ${String(r.secs).padStart(4)} sn`);
+    // CI loglarında hata satırları uzun çıktının ortasında kayboluyor — başarısız takımın FAIL / hata satırlarını burada tekrarla.
+    if (!r.ok) for (const line of r.problems.slice(0, 15)) console.log(`    ${line}`);
+}
 const failed = results.filter((r) => !r.ok);
 process.exit(failed.length ? 1 : 0);
+
+/** Takımı çalıştırır, çıktısını canlı aktarır; FAIL satırlarını ve hata mesajlarını (stderr + yakalanmamış hata) toplar. */
+function runSuite(name) {
+    return new Promise((done) => {
+        const child = spawn(process.execPath, [path(name)], { cwd: root, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+        const problems = [];
+        let section = '';
+        const collect = (stream, out, isErr) => {
+            let buf = '';
+            stream.on('data', (chunk) => {
+                out.write(chunk);
+                buf += chunk.toString();
+                const lines = buf.split('\n');
+                buf = lines.pop() ?? '';
+                for (const raw of lines) {
+                    const line = raw.trimEnd();
+                    if (/^\[[^\]]+\]/.test(line.trim())) section = line.trim().slice(0, 90);
+                    if (/^\s*FAIL\b/.test(line)) problems.push(`${section} → ${line.trim()}`);
+                    else if (isErr && line.trim() && !/^\s*at\s|node:internal|triggerUncaughtException|^\s*\^\s*$|^Node\.js v/.test(line))
+                        problems.push(`${section} → ${line.trim()}`);
+                }
+            });
+        };
+        collect(child.stdout, process.stdout, false);
+        collect(child.stderr, process.stderr, true);
+        child.on('close', (code, signal) => {
+            if (code !== 0 && !problems.length) problems.push(`${section} → çıkış kodu ${code ?? signal} (çıktıda FAIL / hata satırı yok)`);
+            done({ code: code ?? 1, problems });
+        });
+    });
+}
