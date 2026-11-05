@@ -52,7 +52,14 @@ if (!capabilities['appium:udid']) delete capabilities['appium:udid'];
 // Başka bir W3C sürücüsüyle denemek için (ör. istemciyi Linux'ta chromedriver'la sınamak): WEBDRIVER_CAPS='{"browserName":"chrome",…}'
 const caps = process.env.WEBDRIVER_CAPS ? JSON.parse(process.env.WEBDRIVER_CAPS) : capabilities;
 
-const s = await Session.create(WD, caps);
+let s;
+try {
+    s = await Session.create(WD, caps);
+} catch (e) {
+    console.log(`FAIL WebDriver oturumu açılamadı (${WD}): ${e.code ?? ''} ${e.message}`);
+    console.log('     iOS için ayrıntı appium.log\'da (Actions → artifact "apple-ios" ya da "Appium log" adımı).');
+    process.exit(1);
+}
 const shot = async (name) => {
     try {
         mkdirSync(OUT, { recursive: true });

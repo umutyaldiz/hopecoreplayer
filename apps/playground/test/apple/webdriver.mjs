@@ -14,9 +14,21 @@ export class Session {
     }
 
     // İlk iOS oturumu WebDriverAgent'ı derleyip simülatöre kuruyor — 10 dakikayı aşabiliyor.
-    static async create(base, capabilities, { timeoutMs = 900_000 } = {}) {
-        const res = await call(base, 'POST', '/session', { capabilities: { alwaysMatch: capabilities } }, timeoutMs);
-        return new Session(base, res.sessionId ?? res.value?.sessionId);
+    // Bağlantı koparsa (Appium uzun WDA kurulumunda soketi kapatabiliyor: "socket hang up") yeniden dener — ikinci
+    // denemede WebDriverAgent zaten derlenmiş olduğundan oturum çabuk açılır. Appium `--session-override` ile
+    // çalıştığından yarım kalan önceki oturum yenisini engellemez.
+    static async create(base, capabilities, { timeoutMs = 900_000, attempts = 3 } = {}) {
+        for (let i = 1; ; i++) {
+            try {
+                const res = await call(base, 'POST', '/session', { capabilities: { alwaysMatch: capabilities } }, timeoutMs);
+                return new Session(base, res.sessionId ?? res.value?.sessionId);
+            } catch (e) {
+                // Yalnızca bağlantı hataları (ECONNRESET vb.) — sürücünün döndürdüğü hata ya da 15 dk'lık zaman aşımı tekrarlanmaz.
+                if (e instanceof WebDriverError || i >= attempts) throw e;
+                console.log(`  oturum açılamadı (${e.code ?? ''} ${e.message}) — yeniden deneniyor (${i + 1}/${attempts})`);
+                await sleep(10_000);
+            }
+        }
     }
 
     cmd(method, path, body) {
@@ -107,7 +119,9 @@ function call(base, method, path, body, timeoutMs = 120_000) {
     return new Promise((resolve, reject) => {
         const req = request(
             url,
-            { method, headers: payload ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } : {} },
+            // agent: false — her istek yeni soket; Node 24'ün varsayılan keep-alive havuzu sunucunun kapattığı bayat
+            // soketi yeniden kullanıp "socket hang up" verebiliyor.
+            { method, agent: false, headers: payload ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } : {} },
             (res) => {
                 let data = '';
                 res.setEncoding('utf8');

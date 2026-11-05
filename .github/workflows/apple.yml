@@ -70,7 +70,8 @@ jobs:
           appium driver install xcuitest
           # WebDriverAgent'ı önceden derle: ilk oturum açılışı (yoksa 5-10 dk) kısalır. Olmazsa test yine çalışır, yalnızca yavaş açılır.
           appium driver run xcuitest build-wda || echo "build-wda atlandı — WebDriverAgent ilk oturumda derlenecek"
-          appium --port 4723 --log-level warn > appium.log 2>&1 &
+          # --session-override: bağlantı kopup test oturumu yeniden isterse yarım kalan önceki oturum engel olmasın.
+          appium --port 4723 --log-level info --session-override > appium.log 2>&1 &
           for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:4723/status && exit 0; sleep 1; done
           echo "appium did not start"; cat appium.log; exit 1
 
@@ -79,6 +80,10 @@ jobs:
         env:
           APPLE_TARGET: ${{ matrix.target }}
           HOPE_TEST_PORT: '5183'
+
+      - name: Appium log
+        if: failure() && matrix.target == 'ios'
+        run: tail -n 200 appium.log || true
 
       - name: Upload screenshots and logs
         if: always()
