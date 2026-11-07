@@ -77,9 +77,29 @@ const MENU_EDGE_PX = 8;
 const MENU_MIN_HEIGHT_PX = 100;
 const MENU_MAX_HEIGHT_PX = 256;
 
+/**
+ * Çözünürlükten rozet metni: kısa kenara göre 720+ → HD, 1440+ → 2K, 2160+ → 4K, 4320+ → 8K; altı → null (rozet yok).
+ * Eşikler biraz aşağıda — kırpılmış kaynaklar (ör. 3840×1600 sinema oranı → kısa kenar 1600) bir alt sınıfa düşmesin
+ * diye uzun kenar da sayılır.
+ */
+export function qualityBadgeText(width: number, height: number): string | null {
+    if (!width || !height) return null;
+    const short = Math.min(width, height);
+    const long = Math.max(width, height);
+    if (short >= 4000 || long >= 7600) return '8K';
+    if (short >= 2000 || long >= 3800) return '4K';
+    if (short >= 1400 || long >= 2500) return '2K';
+    if (short >= 700 || long >= 1260) return 'HD';
+    // HD altı: en yakın standart yükseklik ("480", "360", "240", "144") — "p" yok, rozet dar kalsın.
+    return String(LOW_HEIGHTS.reduce((best, h) => (Math.abs(h - short) < Math.abs(best - short) ? h : best)));
+}
+const LOW_HEIGHTS = [144, 240, 360, 480, 540, 576];
+
 export class SettingsMenu {
     readonly el: HTMLDivElement;
     private readonly button: HTMLButtonElement;
+    private readonly badge: HTMLSpanElement;
+    private badgeEnabled = true;
     private readonly panel: HTMLDivElement;
     private readonly video: HTMLVideoElement;
     private readonly playbackRates: number[];
@@ -114,6 +134,13 @@ export class SettingsMenu {
         this.button.className =
             'hp-chip hp:flex hp:items-center hp:justify-center hp:w-[var(--hp-ctrl-btn-size)] hp:h-[var(--hp-ctrl-btn-size)] hp:cursor-pointer';
         this.button.appendChild(createIcon('settings', 'hp:text-[length:var(--hp-ctrl-icon-size)]'));
+        // Oynayan görüntünün çözünürlüğüne göre "HD" / "2K" / "4K" / "8K" rozeti — ayarlar ikonunun sağ üstünde.
+        this.badge = document.createElement('span');
+        this.badge.className = 'hp-quality-badge';
+        this.badge.setAttribute('part', 'quality-badge');
+        this.badge.setAttribute('aria-hidden', 'true');
+        this.badge.hidden = true;
+        for (const ev of ['resize', 'loadedmetadata', 'emptied']) video.addEventListener(ev, this.updateBadge);
 
         this.panel = document.createElement('div');
         this.panel.className =
@@ -123,6 +150,9 @@ export class SettingsMenu {
         this.panelObserver.observe(this.panel, { childList: true });
 
         this.el.appendChild(this.button);
+        // Rozet butonun DIŞINDA (kardeş, aynı konumlanmış kapsayıcıda): içinde olsaydı görünen "HD" metni butonun adıyla
+        // ("Ayarlar") çelişirdi (WCAG 2.5.3, axe label-content-name-mismatch). pointer-events: none — tık butona geçer.
+        this.el.appendChild(this.badge);
         this.el.appendChild(this.panel);
 
         this.button.addEventListener('click', (e) => {
@@ -133,6 +163,26 @@ export class SettingsMenu {
 
         this.renderMain();
     }
+
+    /** `options.qualityBadge` — false ise rozet hiç gösterilmez. */
+    setQualityBadgeEnabled(enabled: boolean): void {
+        this.badgeEnabled = enabled;
+        this.updateBadge();
+    }
+
+    /**
+     * Rozet gerçekten oynayan görüntüden okunur (`videoWidth` / `videoHeight`): menüde "Otomatik" seçiliyken de ABR'nin
+     * o an indirdiği kaliteyi gösterir; MP4, hls.js ve Safari'nin kendi HLS oynatıcısında aynı çalışır. Dikey videoda
+     * kısa kenar sayılır (1080×1920 → HD). Ses modu / görüntüsüz kaynakta rozet yok.
+     */
+    private readonly updateBadge = (): void => {
+        const text = this.badgeEnabled ? qualityBadgeText(this.video.videoWidth, this.video.videoHeight) : null;
+        this.badge.textContent = text ?? '';
+        this.badge.hidden = !text;
+        if (text) this.badge.setAttribute('data-quality', text);
+        else this.badge.removeAttribute('data-quality');
+        this.badge.toggleAttribute('data-low', !!text && /^\d+$/.test(text));
+    };
 
     setQualities(options: SettingsQualityOption[], activeLabel: string): void {
         this.qualities = options;
@@ -516,6 +566,7 @@ export class SettingsMenu {
 
     destroy(): void {
         document.removeEventListener('click', this.onDocumentClick, true);
+        for (const ev of ['resize', 'loadedmetadata', 'emptied']) this.video.removeEventListener(ev, this.updateBadge);
         this.panelObserver.disconnect();
     }
 }

@@ -924,6 +924,12 @@ export interface HopePlayerOptions {
     theme?: HopeThemePreset | (string & {});
     subtitles?: HopeSubtitleOption[];
     playbackRates?: number[];
+    /**
+     * Ayarlar ikonunun köşesinde oynayan görüntünün kalite rozeti: "HD" (720p+), "2K" (1440p), "4K" (2160p), "8K".
+     * Gerçekten oynayan çözünürlükten okunur ("Otomatik"te de ABR'nin o anki kalitesi). 720p altında rozet yok.
+     * Varsayılan true; `false` gizler.
+     */
+    qualityBadge?: boolean;
     /** Fare video üzerinden ayrılınca kontrol çubuğunun/merkez play butonunun kaybolmadan önce beklediği süre (ms). Varsayılan 1200. */
     autoHideDelayMs?: number;
     /** Video oynarken fare bu süre (ms) kıpırdamazsa imleç gizlenir; `false` = hiç gizleme. Varsayılan 5000. */

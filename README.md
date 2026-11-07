@@ -3,7 +3,22 @@
 [Türkçe](./README.tr.md)
 
 [![CI](https://github.com/umutyaldiz/hopecoreplayer/actions/workflows/ci.yml/badge.svg)](https://github.com/umutyaldiz/hopecoreplayer/actions/workflows/ci.yml)
+[![Firefox + WebKit](https://img.shields.io/github/actions/workflow/status/umutyaldiz/hopecoreplayer/cross-browser.yml?label=Firefox%20%2B%20WebKit)](https://github.com/umutyaldiz/hopecoreplayer/actions/workflows/cross-browser.yml)
+[![Safari (macOS + iOS)](https://img.shields.io/github/actions/workflow/status/umutyaldiz/hopecoreplayer/apple.yml?label=Safari%20%28macOS%20%2B%20iOS%29)](https://github.com/umutyaldiz/hopecoreplayer/actions/workflows/apple.yml)
+
 [![npm @hopeplayer/core](https://img.shields.io/npm/v/%40hopeplayer%2Fcore.svg?label=%40hopeplayer%2Fcore)](https://www.npmjs.com/package/@hopeplayer/core)
+[![npm @hopeplayer/react](https://img.shields.io/npm/v/%40hopeplayer%2Freact.svg?label=%40hopeplayer%2Freact)](https://www.npmjs.com/package/@hopeplayer/react)
+[![npm @hopeplayer/vue](https://img.shields.io/npm/v/%40hopeplayer%2Fvue.svg?label=%40hopeplayer%2Fvue)](https://www.npmjs.com/package/@hopeplayer/vue)
+[![npm @hopeplayer/react-native](https://img.shields.io/npm/v/%40hopeplayer%2Freact-native.svg?label=%40hopeplayer%2Freact-native)](https://www.npmjs.com/package/@hopeplayer/react-native)
+[![npm downloads](https://img.shields.io/npm/dm/%40hopeplayer%2Fcore.svg)](https://www.npmjs.com/package/@hopeplayer/core)
+[![jsDelivr](https://img.shields.io/jsdelivr/npm/hm/%40hopeplayer%2Fcore.svg)](https://www.jsdelivr.com/package/npm/@hopeplayer/core)
+
+[![TypeScript types](https://img.shields.io/npm/types/%40hopeplayer%2Fcore.svg)](./packages/core/src/types/index.ts)
+[![hls.js](https://img.shields.io/npm/dependency-version/%40hopeplayer%2Fcore/hls.js.svg)](https://github.com/video-dev/hls.js)
+[![Tailwind CSS](https://img.shields.io/npm/dependency-version/%40hopeplayer%2Fcore/dev/tailwindcss.svg?label=Tailwind%20CSS)](https://tailwindcss.com)
+[![Web Component](https://img.shields.io/badge/Web%20Component-Custom%20Element-29abe2.svg)](https://developer.mozilla.org/docs/Web/API/Web_components)
+[![first load](https://img.shields.io/badge/first%20load-~68%20KB%20gzip-brightgreen.svg)](./packages/core/scripts/check-size.mjs)
+[![a11y](https://img.shields.io/badge/a11y-WCAG%202.1%20AA%20%28axe%29-blue.svg)](./apps/playground/test/a11y.e2e.mjs)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 **An open-source, monetization-first video player.** `<hope-player>` is a framework-agnostic Custom Element (Shadow DOM, TypeScript) with Google IMA, Prebid, rewarded ads, sponsorships, out-of-page ad triggers and Chromecast with TV ads built in — every feature is its own lazy-loaded chunk, so you only download what you configure. It works the same in plain HTML, React, Vue, Next.js and React Native.

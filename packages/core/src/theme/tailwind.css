@@ -2705,3 +2705,29 @@ button.hp-context-menu-item:focus-visible {
         animation: none;
     }
 }
+/* ── Ayarlar ikonundaki kalite rozeti (HD / 2K / 4K / 8K) ── */
+.hp-quality-badge {
+    position: absolute;
+    top: 1px;
+    right: -5px;
+    padding: 0 2px;
+    border-radius: 3px;
+    background: var(--hp-quality-badge-bg, var(--hp-color-accent, #fff));
+    color: var(--hp-quality-badge-color, var(--hp-color-on-accent, #0a0a0a));
+    font: 800 8px/1.3 system-ui, -apple-system, sans-serif;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+.hp-quality-badge[hidden] {
+    display: none;
+}
+.video-area[data-compact] .hp-quality-badge {
+    top: 0;
+    font-size: 7px;
+}
+/* HD altı (240 / 360 / 480): sönük — yüksek kalite rozeti öne çıksın. */
+.hp-quality-badge[data-low] {
+    background: rgba(255, 255, 255, 0.7);
+    color: #0a0a0a;
+}

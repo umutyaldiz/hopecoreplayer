@@ -679,6 +679,37 @@ async function testFullscreenEnlargesControls(browser) {
     await page.close();
 }
 
+async function testQualityBadge(browser) {
+    console.log('\n[Q] Kalite rozeti: ayarlar ikonunda oynayan çözünürlük (720p → HD, 240p → 240), qualityBadge: false gizler');
+    const page = await browser.newPage({ viewport: { width: 900, height: 520 } });
+    try {
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+        const badge = (src, extra = {}) =>
+            page.evaluate(
+                async ({ src, extra }) => {
+                    const el = document.getElementById('player');
+                    const v = el.shadowRoot.querySelector('video');
+                    el.options = { src, muted: true, ...extra };
+                    const end = Date.now() + 8000;
+                    while (Date.now() < end && !(v.videoWidth > 0 && v.currentSrc.includes(src))) await new Promise((r) => setTimeout(r, 50));
+                    await new Promise((r) => setTimeout(r, 100));
+                    const b = el.shadowRoot.querySelector('[part="quality-badge"]');
+                    return { size: `${v.videoWidth}x${v.videoHeight}`, text: b?.textContent ?? null, hidden: b ? b.hidden : true, low: !!b?.hasAttribute('data-low') };
+                },
+                { src, extra }
+            );
+        let r = await badge('/sample.mp4');
+        ok(r.text === 'HD' && !r.hidden && !r.low, `720p → "HD" ${JSON.stringify(r)}`);
+        r = await badge('/sample-240p.mp4');
+        ok(r.text === '240' && !r.hidden && r.low, `240p → "240" (sönük) ${JSON.stringify(r)}`);
+        r = await badge('/sample.mp4', { qualityBadge: false });
+        ok(r.hidden, `qualityBadge: false → rozet yok ${JSON.stringify(r)}`);
+    } finally {
+        await page.close();
+    }
+}
+
 (async () => {
     const browser = await launchBrowser();
     try {
@@ -703,6 +734,7 @@ async function testFullscreenEnlargesControls(browser) {
         await testVolumeSliderAlignsWithSettingsPanel(browser);
         await testFullscreenEnlargesControls(browser);
         await testFullscreenContainCentered(browser);
+        await testQualityBadge(browser);
     } finally {
         await browser.close();
     }
