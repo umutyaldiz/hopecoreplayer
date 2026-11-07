@@ -102,6 +102,40 @@ export interface HopeLocaleStrings {
     skipRecap: string;
     skipCredits: string;
     skipSegment: string;
+    /** `accessibility` alt menüsü. */
+    a11yMenu: string;
+    a11yZoom: string;
+    a11yFilter: string;
+    a11yFilterNone: string;
+    a11yFilterGrayscale: string;
+    a11yFilterDaylight: string;
+    a11yFilterNight: string;
+    a11yFilterContrast: string;
+    a11yFilterProtanopia: string;
+    a11yFilterDeuteranopia: string;
+    a11yFilterTritanopia: string;
+    a11yMono: string;
+    a11yBoost: string;
+    a11yLargeControls: string;
+    a11yShortcuts: string;
+    a11yOn: string;
+    a11yOff: string;
+    /** Kaynak başka alan adından ve CORS izni yok — Web Audio satırları kullanılamaz. */
+    a11yUnavailable: string;
+    a11yZoomReset: string;
+    a11yClose: string;
+    /** Kısayol panelindeki açıklamalar. */
+    a11yKeyPlay: string;
+    a11yKeySeek: (seconds: number) => string;
+    a11yKeyVolume: string;
+    a11yKeyMute: string;
+    a11yKeyFullscreen: string;
+    a11yKeyZoom: string;
+    a11yKeyPan: string;
+    a11yKeyShortcuts: string;
+    /** `history` bildirimi. */
+    historyResumed: (time: string) => string;
+    historyRestart: string;
     qrResumeTitle: string;
     qrResumeDontShowAgain: string;
     qrResumeContinue: string;

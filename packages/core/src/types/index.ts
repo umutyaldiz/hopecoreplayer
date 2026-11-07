@@ -665,6 +665,65 @@ export interface SegmentItem {
     color?: string;
 }
 
+/** Erişilebilirlik görüntü filtresi. `none` = doğal (filtre yok). */
+export type AccessibilityFilter = 'none' | 'grayscale' | 'daylight' | 'night' | 'contrast' | 'protanopia' | 'deuteranopia' | 'tritanopia';
+
+/** İzleyicinin erişilebilirlik tercihleri (`hp:accessibility` olayının detayı). */
+export interface AccessibilityState {
+    /** Yakınlaştırma çarpanı (1 = yok). */
+    zoom: number;
+    filter: AccessibilityFilter;
+    /** İki kanal tek kanala karıştırılır (tek kulakla duyanlar için). */
+    mono: boolean;
+    /** Ses güçlendirme çarpanı (1 = yok). */
+    boost: number;
+    largeControls: boolean;
+}
+
+/**
+ * `options.accessibility` — ayarlar menüsünde "Erişilebilirlik" alt menüsü. `true` hepsini açar; nesneyle tek tek
+ * kapatılabilir / listeler değiştirilebilir. İzleyicinin seçimleri bu sitede hatırlanır (`remember`).
+ */
+export interface AccessibilityOptions {
+    /** Yakınlaştırma seviyeleri ya da false. Varsayılan [1, 1.25, 1.5, 2, 3]. Sürükle / Shift+ok ile kaydır, iki parmakla büyüt. */
+    zoom?: boolean | number[];
+    /** Sunulan filtreler ya da false. Varsayılan hepsi. */
+    filters?: boolean | AccessibilityFilter[];
+    /**
+     * Mono ses ve ses güçlendirme (Web Audio). Varsayılan true. Başka alan adından gelen ve CORS izni olmayan kaynakta
+     * Web Audio sesi kısardı — orada satırlar "kullanılamaz" görünür.
+     */
+    audio?: boolean;
+    /** Ses güçlendirme seviyeleri. Varsayılan [1, 1.5, 2, 3]. */
+    boostLevels?: number[];
+    /** "Büyük kontroller". Varsayılan true. */
+    largeControls?: boolean;
+    /** "Klavye kısayolları" paneli (menü satırı ve `?` tuşu). Varsayılan true. */
+    shortcuts?: boolean;
+    /** Seçimler tarayıcıda (localStorage) hatırlansın. Varsayılan true. */
+    remember?: boolean;
+}
+
+/** `options.history` — zaman ve ses geçmişi (tarayıcıda, localStorage). */
+export interface HistoryOptions {
+    /** Kaldığı yerden devam. Varsayılan true. */
+    position?: boolean;
+    /** Ses seviyesi ve sessiz durumu sitede hatırlanır. Varsayılan true. `muted: true` (sessiz otomatik oynatma) her zaman kazanır. */
+    volume?: boolean;
+    /** Videonun kimliği — verilmezse kaynak adresi. Aynı video farklı adreslerden (imzalı URL, CDN) geliyorsa verin. */
+    id?: string;
+    /** "Kaldığınız yerden devam: 0:42 · Baştan başla" bildirimi. Varsayılan true. */
+    notice?: boolean;
+    /** Bu kadar saniye izlenmeden konum kaydedilmez. Varsayılan 10. */
+    minWatched?: number;
+    /** Sona bu kadar saniye kala izlenmiş sayılır, kayıt silinir. Varsayılan 15. */
+    endMargin?: number;
+    /** En fazla kaç videonun konumu tutulsun (en yeniler). Varsayılan 50. */
+    maxEntries?: number;
+    /** Bu kadar gün açılmayan videonun kaydı silinir. Varsayılan 30. */
+    ttlDays?: number;
+}
+
 /** Atlanabilir bölüm türü — butonun varsayılan metnini belirler ("İntroyu atla", "Özeti atla", "Jeneriği atla", "Atla"). */
 export type SkipSegmentType = 'intro' | 'recap' | 'credits' | 'custom';
 
@@ -1011,6 +1070,16 @@ export interface HopePlayerOptions {
     segments?: SegmentItem[];
     /** "İntroyu atla" / "Özeti atla" / "Jeneriği atla" butonları — bölüm oynarken görünür, basınca sonuna atlar. */
     skipSegments?: SkipSegment[];
+    /**
+     * Ayarlar menüsünde "Erişilebilirlik": yakınlaştırma, görüntü filtreleri (siyah-beyaz, gün / gece ışığı, yüksek
+     * kontrast, renk körlüğü), mono ses, ses güçlendirme, büyük kontroller, klavye kısayolları listesi. Varsayılan kapalı.
+     */
+    accessibility?: boolean | AccessibilityOptions;
+    /**
+     * Zaman ve ses geçmişi: yarıda bırakılan video kaldığı yerden başlar (bildirimle, "Baştan başla" ile geri alınır);
+     * ses seviyesi / sessiz durumu hatırlanır. Kayıtlar izleyicinin tarayıcısında. Varsayılan kapalı.
+     */
+    history?: boolean | HistoryOptions;
     /** Seekbar üzerinde hover-scrub sprite sheet önizlemesi. */
     spriteThumbnails?: SpriteThumbnailsOptions;
     /** Oynatıcı yüklenmeden önce hedef tarihe kadar geri sayım ekranı. */
@@ -1106,5 +1175,9 @@ export type HopePlayerEventMap = {
      * `skipSegments` butonu: `shown` (bölüm başladı, buton göründü) ve `skip` (`reason`: click | auto). `skip` iptal
      * edilebilir — `preventDefault()` ile atlanmaz (ör. jenerikte sıradaki bölüme kendiniz geçin).
      */
+    /** `history`: kayıtlı konumdan devam edildi (`resumed`) ya da izleyici "Baştan başla"ya bastı (`restart`). */
+    'hp:history': CustomEvent<{ state: 'resumed' | 'restart'; time: number; id: string | null }>;
+    /** İzleyici bir erişilebilirlik ayarını değiştirdi (`changed`: hangi alan) — tüm güncel durumla. */
+    'hp:accessibility': CustomEvent<AccessibilityState & { changed: keyof AccessibilityState }>;
     'hp:skip': CustomEvent<{ state: 'shown' | 'skip'; type: SkipSegmentType; start: number; end: number; reason?: 'click' | 'auto' }>;
 };

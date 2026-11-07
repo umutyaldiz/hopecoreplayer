@@ -45,6 +45,8 @@ import type { CountdownScreen } from './plugins/countdown-screen';
 import type { GeoChecker } from './plugins/geo-checker';
 import type { RedirectScreen } from './plugins/redirect-screen';
 import type { SkipSegments } from './plugins/skip-segments';
+import type { Accessibility } from './plugins/accessibility';
+import type { PlaybackHistory } from './plugins/history';
 import type { QrResume } from './plugins/qr-resume';
 import type { PauseAd } from './plugins/pause-ad';
 import type { AdTriggers } from './plugins/ad-triggers';
@@ -196,6 +198,10 @@ export class HopePlayerElement extends HTMLElement {
     private redirectKey = '';
     private skipSegments: SkipSegments | null = null;
     private skipSegmentsKey = '';
+    private accessibility: Accessibility | null = null;
+    private accessibilityKey = '';
+    private playbackHistory: PlaybackHistory | null = null;
+    private historyKey = '';
     private qrResume: QrResume | null = null;
     private pauseAd: PauseAd | null = null;
     private adTriggers: AdTriggers | null = null;
@@ -545,6 +551,12 @@ export class HopePlayerElement extends HTMLElement {
         this.skipSegments?.destroy();
         this.skipSegments = null;
         this.skipSegmentsKey = '';
+        this.accessibility?.destroy();
+        this.accessibility = null;
+        this.accessibilityKey = '';
+        this.playbackHistory?.destroy();
+        this.playbackHistory = null;
+        this.historyKey = '';
         this.qrResume?.destroy();
         this.pauseAd?.destroy();
         this.pauseAd = null;
@@ -799,6 +811,8 @@ export class HopePlayerElement extends HTMLElement {
         this.geoChecker?.refreshLabels();
         this.redirectScreen?.refreshLabels();
         this.skipSegments?.refreshLabels();
+        this.accessibility?.refreshLabels();
+        this.playbackHistory?.refreshLabels();
         this.qrResume?.refreshLabels();
         this.pauseAd?.refreshLabels();
         this.castController?.refreshLabels();
@@ -1041,6 +1055,31 @@ export class HopePlayerElement extends HTMLElement {
             }
         }
 
+        // Erişilebilirlik alt menüsü — ayar değişince yeniden kurulur (izleyicinin seçimleri localStorage'dan geri gelir).
+        const a11yKey = options.accessibility ? JSON.stringify(options.accessibility) : '';
+        if (a11yKey !== this.accessibilityKey) {
+            this.accessibilityKey = a11yKey;
+            this.accessibility?.destroy();
+            this.accessibility = null;
+            if (options.accessibility) {
+                const { installAccessibility } = await import('./plugins/accessibility');
+                if (this.accessibilityKey === a11yKey) {
+                    this.accessibility = installAccessibility(
+                        {
+                            hostEl: this,
+                            videoEl: this.videoEl,
+                            videoAreaEl: this.videoArea,
+                            i18n: this.i18n,
+                            registerSubmenu: (def) => this.controlBar.settingsMenu.registerSubmenu(def),
+                            unregisterSubmenu: (key) => this.controlBar.settingsMenu.unregisterSubmenu(key),
+                            addQuickButton: (btn, getDef, getParents) => this.controlBar.settingsMenu.addQuickButton(btn, getDef, getParents),
+                            seekStep: () => this.keyboard.seekStep,
+                        },
+                        options.accessibility === true ? {} : options.accessibility
+                    );
+                }
+            }
+        }
         // Bölümler her içerikte farklı (playlist'te sıradaki bölüm) — değişince yeniden kurulur.
         const skipKey = options.skipSegments?.length ? JSON.stringify(options.skipSegments) : '';
         if (skipKey !== this.skipSegmentsKey) {
@@ -1058,6 +1097,34 @@ export class HopePlayerElement extends HTMLElement {
             }
         }
 
+        // Zaman ve ses geçmişi — QR ile devamdan (?vtime=) ÖNCE kurulur: o parametreyi uygulayıp adresten siliyor; link
+        // ile gelen konum bu açılışta kayıtlı konumu ezer.
+        const historyKey = options.history ? JSON.stringify(options.history) : '';
+        if (historyKey !== this.historyKey) {
+            this.historyKey = historyKey;
+            this.playbackHistory?.destroy();
+            this.playbackHistory = null;
+            if (options.history) {
+                const qrParam = options.qrResume ? (options.qrResume.paramName ?? 'vtime') : null;
+                const linkTimePresent = !!qrParam && new URL(location.href).searchParams.has(qrParam);
+                const { installHistory } = await import('./plugins/history');
+                if (this.historyKey === historyKey) {
+                    this.playbackHistory = installHistory(
+                        {
+                            hostEl: this,
+                            videoEl: this.videoEl,
+                            overlayContainerEl: this.videoArea,
+                            i18n: this.i18n,
+                            currentSrc: () => this.sourceManager.currentSrc,
+                            isAdActive: () => this.isAdPlaying(),
+                            mutedRequested: () => !!this._options.muted,
+                            linkTimePresent,
+                        },
+                        options.history === true ? {} : options.history
+                    );
+                }
+            }
+        }
         if (options.qrResume && !this.qrResume) {
             const { installQrResume } = await import('./plugins/qr-resume');
             this.qrResume = installQrResume({ videoEl: this.videoEl, overlayContainerEl: this.videoArea, i18n: this.i18n }, options.qrResume);

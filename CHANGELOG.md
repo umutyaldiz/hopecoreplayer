@@ -14,6 +14,20 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-11-07
+
+### Added
+- **Playback history (`history`, off by default):** a video left halfway starts where the viewer stopped, with a "Resumed at 0:42 · Start over" notice (Start over goes back to 0 and forgets the position). Volume and mute are remembered on the site; `muted: true` (muted autoplay) always wins. Stored in the viewer's browser (localStorage): positions are saved after `minWatched` seconds (10), a video within `endMargin` seconds (15) of its end counts as watched and is forgotten, at most `maxEntries` (50) videos for `ttlDays` (30). Not saved for live streams or during ads. A QR resume link (`?vtime=`) wins over the saved position. `id` identifies the video when its address changes (signed URLs). New `hp:history` event (`resumed` / `restart`). Loaded only when enabled (~2 KB gzip).
+- **Accessibility menu (`accessibility`, off by default):** an "Accessibility" submenu in the settings menu.
+  - **Zoom** (100–300%): from the menu, with `+` / `−` / `0`, two-finger pinch on touch screens; move around the zoomed picture by dragging or with Shift + arrow keys (plain arrows still seek / change the volume).
+  - **Picture filters:** natural, black and white, daylight (brighter, more contrast for bright rooms), night light (warm, less blue light), high contrast, and red- / green- / blue-blind modes (daltonization — colors the viewer cannot tell apart are shifted to ones they can).
+  - **Mono audio** and **volume boost** (up to 300%) through Web Audio. Shown as "Unavailable" for a cross-origin source loaded without CORS, where Web Audio would mute it.
+  - **Large controls:** bigger buttons, seek bar, touch targets and captions.
+  - **Keyboard shortcuts** list (menu row or `?`): a dialog, closed with Esc.
+  - **Quick access:** each feature that is on gets its own button right of the settings button (zoom, filter, mono audio, volume boost, large controls). Pressing it opens that feature's settings directly; turning the feature off removes the button.
+  - The viewer's choices (except zoom) are remembered on the site (`remember`). Each part can be turned off (`zoom`, `filters`, `audio`, `largeControls`, `shortcuts`) and the zoom / boost levels and the filter list can be set. New `hp:accessibility` event. Loaded only when enabled (~5 KB gzip).
+  - Settings menu: submenus can now nest, and quick-access buttons next to the settings button can open a submenu directly.
+
 ## [1.1.0] — 2026-11-06
 
 ### Added

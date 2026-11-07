@@ -51,7 +51,7 @@ That's it: HLS, the quality menu, captions and keyboard shortcuts work out of th
 
 > Use the full `…/dist/hope-player.js` path on CDNs — the player loads its plugins as relative chunks next to that file. unpkg (`https://unpkg.com/@hopeplayer/core@1/dist/hope-player.js`) and esm.sh work the same way.
 >
-> **In production, pin an exact version** (`@hopeplayer/core@1.0.18/dist/hope-player.js`): CDNs cache version ranges like `@1` for a while, so a new release can take time to show up, while an exact version URL never changes and is cached for good. Plugin chunks have content hashes in their names (`ads-DPL7m9PV.js`), so a new release never serves a stale chunk.
+> **In production, pin an exact version** (`@hopeplayer/core@1.2.0/dist/hope-player.js`): CDNs cache version ranges like `@1` for a while, so a new release can take time to show up, while an exact version URL never changes and is cached for good. Plugin chunks have content hashes in their names (`ads-DPL7m9PV.js`), so a new release never serves a stale chunk.
 
 ## Install with npm
 
@@ -123,7 +123,7 @@ npm run test:linux -- webkit cast   # one engine, chosen suites
 
 Found a problem on a browser or device? Please [open an issue](https://github.com/umutyaldiz/hopecoreplayer/issues/new?template=bug_report.yml) with the browser and version.
 
-**Accessibility:** controls are reachable and operable with the keyboard, have visible focus indicators and accessible names, and the player is scanned with axe-core (WCAG 2.1 A / AA) in CI — including menus, dialogs and overlays.
+**Accessibility:** controls are reachable and operable with the keyboard, have visible focus indicators and accessible names, and the player is scanned with axe-core (WCAG 2.1 A / AA) in CI — including menus, dialogs and overlays. With `accessibility: true` viewers also get an Accessibility menu: zoom (with keyboard and pinch), picture filters (black and white, daylight, night light, high contrast, red- / green- / blue-blind modes), mono audio, volume boost, large controls and a keyboard shortcut list (`?`).
 
 ## How it compares
 

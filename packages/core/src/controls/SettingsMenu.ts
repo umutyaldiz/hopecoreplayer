@@ -21,6 +21,12 @@ export interface SettingsSubmenuItem {
     label: string;
     active: boolean;
     onSelect: () => void;
+    /** Sağdaki değer metni (ör. "150%") — verilirse onay işareti yerine gösterilir. */
+    value?: string;
+    /** Verilirse satır bir alt menü açar (`onSelect` çağrılmaz) — iç içe menüler için (ör. Erişilebilirlik → Filtre). */
+    children?: () => SettingsSubmenuDef;
+    /** Seçince menü kapanmasın, aynı alt menü yeniden çizilsin (aç/kapa satırları). */
+    keepOpen?: boolean;
 }
 
 /** Bir renk paleti satırındaki tek bir swatch — `value` hem swatch'ın KENDİ arkaplanı hem de uygulanacak CSS rengi. */
@@ -82,6 +88,10 @@ const MENU_MAX_HEIGHT_PX = 256;
  * Eşikler biraz aşağıda — kırpılmış kaynaklar (ör. 3840×1600 sinema oranı → kısa kenar 1600) bir alt sınıfa düşmesin
  * diye uzun kenar da sayılır.
  */
+function escapeHtml(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
 export function qualityBadgeText(width: number, height: number): string | null {
     if (!width || !height) return null;
     const short = Math.min(width, height);
@@ -99,6 +109,10 @@ export class SettingsMenu {
     readonly el: HTMLDivElement;
     private readonly button: HTMLButtonElement;
     private readonly badge: HTMLSpanElement;
+    private readonly quickSlot: HTMLSpanElement;
+    /** Paneli en son açan hızlı erişim butonu — aynı butona tekrar basınca kapatmak için. */
+    private quickOwner: HTMLButtonElement | null = null;
+    private readonly quickObserver: MutationObserver;
     private badgeEnabled = true;
     private readonly panel: HTMLDivElement;
     private readonly video: HTMLVideoElement;
@@ -149,11 +163,27 @@ export class SettingsMenu {
         this.panelObserver = new MutationObserver(this.fitToPlayer);
         this.panelObserver.observe(this.panel, { childList: true });
 
-        this.el.appendChild(this.button);
+        // Buton + rozet kendi konumlanmış kutusunda (rozet ona göre köşeye oturur); yanında hızlı erişim butonları,
+        // panel ise hepsinin üstünde (sağa hizalı) açılır.
+        const buttonWrap = document.createElement('span');
+        buttonWrap.className = 'hp:relative hp:flex';
+        buttonWrap.appendChild(this.button);
         // Rozet butonun DIŞINDA (kardeş, aynı konumlanmış kapsayıcıda): içinde olsaydı görünen "HD" metni butonun adıyla
         // ("Ayarlar") çelişirdi (WCAG 2.5.3, axe label-content-name-mismatch). pointer-events: none — tık butona geçer.
-        this.el.appendChild(this.badge);
-        this.el.appendChild(this.panel);
+        buttonWrap.appendChild(this.badge);
+        // Hızlı erişim butonları (ör. açık erişilebilirlik özellikleri) ayarlar butonunun sağında — panel bunların üstünde
+        // açılır; aynı kapsayıcıda oldukları için tıklamaları "menü dışına tıklama" sayılmaz.
+        this.quickSlot = document.createElement('span');
+        this.quickSlot.className = 'hp-quick-slot hp:flex hp:items-center hp:gap-1';
+        this.quickSlot.hidden = true;
+        // Boşken yer kaplamasın (grup aralığı) — buton eklenip çıkarıldıkça.
+        this.quickObserver = new MutationObserver(() => {
+            this.quickSlot.hidden = this.quickSlot.childElementCount === 0;
+            if (this.quickOwner && !this.quickOwner.isConnected) this.quickOwner = null;
+        });
+        this.quickObserver.observe(this.quickSlot, { childList: true });
+        this.el.className = 'hp:relative hp:flex hp:items-center hp:gap-1';
+        this.el.append(buttonWrap, this.quickSlot, this.panel);
 
         this.button.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -162,6 +192,36 @@ export class SettingsMenu {
         document.addEventListener('click', this.onDocumentClick, true);
 
         this.renderMain();
+    }
+
+    /**
+     * Ayarlar butonunun sağına hızlı erişim butonu ekler; `def` verilen alt menüyü doğrudan açar (aynı butona tekrar
+     * basınca kapanır). `parents`: alt menüdeki "geri" satırının döneceği üst menüler. Kaldırmak için `btn.remove()`.
+     */
+    addQuickButton(btn: HTMLButtonElement, getDef: () => SettingsSubmenuDef, getParents: () => SettingsSubmenuDef[] = () => []): void {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const def = getDef();
+            if (this.open && this.currentPanel === `custom:${def.key}` && this.quickOwner === btn) {
+                this.close();
+                return;
+            }
+            this.openSubmenu(def, getParents());
+            this.quickOwner = btn;
+        });
+        this.quickSlot.appendChild(btn);
+    }
+
+    /** Menüyü doğrudan bir alt menüde açar (hızlı erişim butonları için). */
+    openSubmenu(def: SettingsSubmenuDef, parents: SettingsSubmenuDef[] = []): void {
+        if (!this.open) {
+            this.open = true;
+            this.panel.classList.remove('hp:hidden');
+            this.onOpenChange?.(true);
+        }
+        this.currentPanel = `custom:${def.key}`;
+        this.renderSubmenu(def, parents);
+        this.fitToPlayer();
     }
 
     /** `options.qualityBadge` — false ise rozet hiç gösterilmez. */
@@ -308,6 +368,7 @@ export class SettingsMenu {
 
     private close(): void {
         this.open = false;
+        this.quickOwner = null;
         this.panel.classList.add('hp:hidden');
         this.onOpenChange?.(false);
     }
@@ -402,16 +463,31 @@ export class SettingsMenu {
         }
     }
 
-    private renderSubmenu(def: SettingsSubmenuDef): void {
+    /** İç içe alt menüde geri dönülecek üst menüler (en üstteki = açık olanın bir üstü). */
+    private submenuStack: SettingsSubmenuDef[] = [];
+
+    private renderSubmenu(def: SettingsSubmenuDef, parents: SettingsSubmenuDef[] = []): void {
+        this.submenuStack = parents;
         this.panel.innerHTML = '';
-        this.panel.appendChild(this.backRow(def.title, () => this.renderMain()));
+        this.panel.appendChild(
+            this.backRow(def.title, () => {
+                const parent = parents[parents.length - 1];
+                if (parent) this.renderSubmenu(parent, parents.slice(0, -1));
+                else this.renderMain();
+            })
+        );
         for (const item of def.getItems()) {
-            this.panel.appendChild(
-                this.row(item.label, item.active ? '<i class="hp-icon hp-icon-check"></i>' : '', () => {
-                    item.onSelect();
-                    this.close();
-                })
-            );
+            const value = item.children ? '<i class="hp-icon hp-icon-chevron-left hp-chevron-forward"></i>' : item.active ? '<i class="hp-icon hp-icon-check"></i>' : '';
+            const row = this.row(item.label, item.value !== undefined ? escapeHtml(item.value) + (item.children ? value : '') : value, () => {
+                if (item.children) {
+                    this.renderSubmenu(item.children(), [...parents, def]);
+                    return;
+                }
+                item.onSelect();
+                if (item.keepOpen) this.renderSubmenu(def, parents);
+                else this.close();
+            });
+            this.panel.appendChild(row);
         }
     }
 
@@ -568,5 +644,6 @@ export class SettingsMenu {
         document.removeEventListener('click', this.onDocumentClick, true);
         for (const ev of ['resize', 'loadedmetadata', 'emptied']) this.video.removeEventListener(ev, this.updateBadge);
         this.panelObserver.disconnect();
+        this.quickObserver.disconnect();
     }
 }
