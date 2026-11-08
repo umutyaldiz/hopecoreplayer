@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="tr">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Vue sarmalayıcı testi</title>
+    </head>
+    <body>
+        <!-- vue-wrapper.e2e.mjs: @hopeplayer/vue'nun prop'ları .options'a nasıl geçirdiğini gerçek Vue ile sınar. -->
+        <div id="app"></div>
+        <script type="module">
+            import { createApp, h, reactive } from 'vue';
+            import { HopePlayer } from '@hopeplayer/vue';
+
+            // Test sayfası props'u değiştirebilsin: window.__vueProps.qualityBadge = false …
+            const props = reactive({ src: '/sample.mp4', muted: true });
+            window.__vueProps = props;
+            createApp({ render: () => h(HopePlayer, { ...props, style: 'display:block;width:640px' }) }).mount('#app');
+        </script>
+    </body>
+</html>

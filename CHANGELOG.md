@@ -14,6 +14,11 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.2.1] — 2026-11-08
+
+### Fixed
+- **Vue: options that were not passed were sent to the player as `false`.** Vue turns an absent `boolean` prop into `false` (boolean casting), and `@hopeplayer/vue` passed every prop through. In Vue apps clicking the video did not play / pause (`tapToPlay: false`), the cursor never hid (`cursorHideDelayMs: false`) and the quality badge never showed (`qualityBadge: false`). Only the props you pass now reach the player. Covered by a new end-to-end test with real Vue (`vue-wrapper`).
+
 ## [1.2.0] — 2026-11-07
 
 ### Added

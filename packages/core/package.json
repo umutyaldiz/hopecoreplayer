@@ -1,6 +1,6 @@
 {
   "name": "@hopeplayer/core",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "HopePlayer core — dependency-free <hope-player> custom element (Shadow DOM + Tailwind)",
   "keywords": ["video-player", "video", "player", "html5-video", "hls", "m3u8", "web-component", "custom-element", "ima", "vast", "vmap", "prebid", "ads", "monetization", "chromecast", "airplay", "subtitles", "shadow-dom", "audio-player", "live-streaming", "scte-35", "dai", "om-sdk", "rewarded-ads", "sprite-thumbnails", "typescript", "hopeplayer"],
   "repository": {

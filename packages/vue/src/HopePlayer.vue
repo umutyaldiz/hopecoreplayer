@@ -2,7 +2,7 @@
 // <hope-player> için ince Vue sarmalayıcı: prop'ları `.options`'a yazar, `hp:*` event'lerini emit'lere çevirir.
 // class/style Vue'nun fallthrough attribute'larıyla köke geçer. Core `onMounted` içinde dinamik import edilir —
 // statik import `HTMLElement` olmayan SSR'da (Nuxt) çöker.
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, onMounted, onBeforeUnmount, onUpdated, watch, getCurrentInstance, camelize } from 'vue';
 import type { HopePlayerElement as HopePlayerEl, HopePlayerEventMap, HopePlayerOptions, StickyCorner } from '@hopeplayer/core';
 
 const props = defineProps<HopePlayerOptions>();
@@ -22,6 +22,20 @@ const emit = defineEmits<{
     sticky: [sticky: boolean, corner: StickyCorner | undefined];
     sourcefallback: [detail: HopePlayerEventMap['hp:sourcefallback']['detail']];
 }>();
+
+const instance = getCurrentInstance();
+
+/**
+ * Yalnızca gerçekten verilen prop'lar `.options`'a geçer. Vue, `boolean` tipli bir prop verilmediğinde onu `undefined`
+ * değil `false` yapar (boolean casting) — `{ ...props }` doğrudan yazılsaydı varsayılanı açık / 'auto' olan seçenekler
+ * kapanırdı: `tapToPlay: false` (videoya tıklamak oynatmıyordu), `cursorHideDelayMs: false` (imleç hiç gizlenmiyordu),
+ * `qualityBadge: false`.
+ */
+function passedOptions(): HopePlayerOptions {
+    const raw = instance?.vnode.props ?? {};
+    const passed = new Set(Object.keys(raw).map(camelize));
+    return Object.fromEntries(Object.entries(props).filter(([key, value]) => passed.has(key) && value !== undefined)) as HopePlayerOptions;
+}
 
 const elRef = ref<HopePlayerEl | null>(null);
 let cancelled = false;
@@ -65,17 +79,29 @@ onMounted(() => {
     // .options için import'u bekle: element upgrade olmadan yazmak prototip accessor'ını kalıcı olarak maskeler.
     import('@hopeplayer/core').then(() => {
         if (cancelled || !elRef.value) return;
-        elRef.value.options = { ...props } as HopePlayerOptions;
+        coreReady = true;
+        sync();
     });
 });
 
-// Tüm prop'lar tek bir string olarak izlenir (prop başına ayrı watcher gerekmez).
-watch(
-    () => JSON.stringify(props),
-    () => {
-        if (elRef.value) elRef.value.options = { ...props } as HopePlayerOptions;
-    }
-);
+let coreReady = false;
+let lastOptions = '';
+
+/** Verilen prop'lar değiştiyse `.options`'a yazar (aynıysa yazmaz — player gereksiz yere yeniden kurulmasın). */
+function sync(): void {
+    if (!coreReady || !elRef.value) return;
+    const options = passedOptions();
+    const json = JSON.stringify(options);
+    if (json === lastOptions) return;
+    lastOptions = json;
+    elRef.value.options = options;
+}
+
+// Değer değişimi: tüm prop'lar tek bir string olarak izlenir (prop başına ayrı watcher gerekmez).
+watch(() => JSON.stringify(props), sync);
+// Prop'un verilip verilmemesi: boolean casting yüzünden değer aynı kalabilir (yokken de false) — Vue yine de bileşeni
+// günceller (verilen prop'ların listesi değişti), o an tekrar bakılır.
+onUpdated(sync);
 
 onBeforeUnmount(() => {
     cancelled = true;
