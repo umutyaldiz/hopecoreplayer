@@ -84,6 +84,8 @@ jobs:
         run: |
           npm run build:core
           npm run build:react-native
+          # vue-wrapper.e2e: playground'daki Vue sayfası @hopeplayer/vue'yu dist'ten yükler.
+          npm run build:vue
 
       - name: Start playground
         run: |

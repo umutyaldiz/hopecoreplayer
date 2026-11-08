@@ -19,7 +19,7 @@ if [ ! -f node_modules/.hp-stamp ] || [ package-lock.json -nt node_modules/.hp-s
     touch node_modules/.hp-stamp
 fi
 echo "Derleniyor…"
-{ npm run build:core && npm run build:react-native; } >/tmp/build.log 2>&1 || { tail -40 /tmp/build.log; exit 1; }
+{ npm run build:core && npm run build:react-native && npm run build:vue; } >/tmp/build.log 2>&1 || { tail -40 /tmp/build.log; exit 1; }
 
 npm run dev --workspace=apps/playground -- --port 5183 --strictPort >/tmp/playground.log 2>&1 &
 for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:5183/ && break; sleep 1; done
