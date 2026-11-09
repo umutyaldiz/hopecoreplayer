@@ -27,6 +27,11 @@ interface ChapterState extends SeekBarChapterRange {
 const MIN_LIVE_WINDOW_SEC = 10;
 /** Canlıda seek bar'ın en sağına tıklanınca canlı ucun bu kadar gerisine gidilir (sn). */
 const LIVE_EDGE_SAFETY_SEC = 1;
+/**
+ * Canlı hedef konumdan bu kadar (sn) gerideyse izleyici hâlâ "canlıda" sayılır: thumb sağ uçta, rozet kırmızı. Ağ
+ * dalgalanmasıyla oynatma hedefin birkaç saniye gerisine düşebilir — her seferinde "geride" görünmesin.
+ */
+export const LIVE_EDGE_TOLERANCE_SEC = 15;
 
 export class SeekBar {
     readonly el: HTMLDivElement;
@@ -124,10 +129,15 @@ export class SeekBar {
 
     /** Canlıda hover zamanını başka bir bileşen gösteriyor mu (live-wall-clock tooltip'i) — üst üste binmesin. */
     liveHoverHandled = false;
+    /**
+     * Canlıda oynatıcının hedef konumu (hls.js `liveSyncPosition` — yayını bilerek uçtan ~3 segment geride oynatır).
+     * Seek bar'ın sağ ucu burasıdır; verilmezse seekable sonu.
+     */
+    liveTarget: (() => number | null) | null = null;
 
     /**
      * Seek bar'ın temsil ettiği zaman aralığı: VOD'da 0 → süre; canlıda (duration Infinity) yayının izin verdiği
-     * geri sarma penceresi (seekable başı → canlı uç). Pencere çok kısaysa (DVR yok) ya da süre bilinmiyorsa null.
+     * geri sarma penceresi (seekable başı → canlı hedef konum). Pencere çok kısaysa (DVR yok) ya da süre bilinmiyorsa null.
      */
     private timeline(): { start: number; end: number; live: boolean } | null {
         const duration = this.video.duration;
@@ -136,8 +146,17 @@ export class SeekBar {
         const { seekable } = this.video;
         if (!seekable.length) return null;
         const start = seekable.start(0);
-        const end = seekable.end(seekable.length - 1);
+        const seekableEnd = seekable.end(seekable.length - 1);
+        // Sağ uç = oynatıcının canlı hedefi: tam uç (seekable sonu) kullanılsaydı canlıda izlerken bile thumb hep
+        // birkaç segment geride dururdu.
+        const target = this.liveTarget?.();
+        const end = target != null && target > start && target <= seekableEnd ? target : seekableEnd;
         return end - start >= MIN_LIVE_WINDOW_SEC ? { start, end, live: true } : null;
+    }
+
+    /** Canlıda izleyici canlı konumda mı — kontrol çubuğundaki "● CANLI" rozetiyle aynı ölçü. */
+    private atLiveEdge(tl: { end: number }): boolean {
+        return tl.end - this.video.currentTime <= LIVE_EDGE_TOLERANCE_SEC;
     }
 
     /** Kendi zamanını gösteren plugin'ler (sprite/segments) varsayılan hover zamanını gizler — keyed set. */
@@ -362,7 +381,8 @@ export class SeekBar {
         const span = tl.end - tl.start;
         const toRatio = (t: number): number => Math.min(1, Math.max(0, (t - tl.start) / span));
 
-        const playedRatio = toRatio(this.video.currentTime);
+        // Canlıda, canlı konumdayken thumb sağ uçta — rozet "canlı" derken seek bar "geride" göstermesin.
+        const playedRatio = tl.live && this.atLiveEdge(tl) ? 1 : toRatio(this.video.currentTime);
         // `translate` (transform DEĞİL): CSS'teki `scale` transform'u da ölçekleyip konumu kaydırırdı.
         this.thumbEl.style.translate = `calc(${this.xAtRatio(playedRatio)}px - 50%) 0`;
 

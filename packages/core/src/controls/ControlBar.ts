@@ -1,4 +1,4 @@
-import { SeekBar } from './SeekBar';
+import { SeekBar, LIVE_EDGE_TOLERANCE_SEC } from './SeekBar';
 import { VolumePanel, type VolumePanelAdHooks } from './VolumePanel';
 import { SettingsMenu, type SettingsCaptionOption, type SettingsQualityOption } from './SettingsMenu';
 import { formatTime } from '../utils/format-time';
@@ -7,8 +7,6 @@ import { createIcon, setIconName } from '../icons/Icon';
 import type { HopeLocaleStrings } from '../i18n/types';
 
 /** `title` bilerek set edilmiyor — tooltip'i Tooltip.ts gösteriyor, native tooltip üstüne binmesin. */
-/** Canlı uçtan bu kadar saniyeden fazla gerideyse rozet "geride" (gri) sayılır — HLS'in doğal gecikmesi (birkaç segment) bunun altında kalır. */
-const LIVE_EDGE_TOLERANCE_SEC = 15;
 /** Player bu genişliğin (px) altındaysa kompakt (mobil) düzen: sağ grup üst sağa, tam ekran altta. */
 const COMPACT_MAX_WIDTH = 480;
 /** Bundan kısa beklemelerde (ms) yükleme halkası hiç görünmez — kısa takılmalarda yanıp sönmesin. */
@@ -114,6 +112,7 @@ export class ControlBar {
     private readonly liveBadge: HTMLButtonElement;
     private readonly liveText: HTMLSpanElement;
     private adMode = false;
+    private hideLiveSeekBar = false;
     /** Ses modu: tam ekran / PiP yok — dar düzende tam ekran kutusu da boş kalmasın. */
     private audioMode = false;
     private readonly callbacks: ControlBarCallbacks;
@@ -135,6 +134,8 @@ export class ControlBar {
 
         this.seekBar = new SeekBar(video, labels);
         this.seekBar.el.classList.add('hp:pointer-events-auto');
+        // Canlıda seek bar'ın sağ ucu = canlı rozetinin ölçtüğü hedef (hls.js'in canlı konumu).
+        this.seekBar.liveTarget = () => this.callbacks.liveSyncPosition?.() ?? null;
         this.el.appendChild(this.seekBar.el);
 
         const row = document.createElement('div');
@@ -377,7 +378,7 @@ export class ControlBar {
         const display = active ? 'none' : '';
         this.adMode = active;
         this.renderSkipButtons();
-        this.seekBar.el.style.display = display;
+        this.applySeekBarVisibility();
         this.row.style.display = display;
         if (this.compact) this.fullscreenSlot.style.display = active || this.audioMode ? 'none' : 'flex';
         // Süre etiketi / canlı rozeti hangisinin görüneceğine renderTime karar veriyor (ad modunda ikisi de gizli).
@@ -522,8 +523,21 @@ export class ControlBar {
         return null;
     }
 
+    /** `options.liveSeekBar: false` — canlı yayında ilerleme çubuğu gizlenir. */
+    setLiveSeekBar(show: boolean): void {
+        this.hideLiveSeekBar = !show;
+        this.applySeekBarVisibility();
+    }
+
+    /** Reklamda ve (istenirse) canlı yayında seek bar gizli. */
+    private applySeekBarVisibility(): void {
+        const hidden = this.adMode || (this.hideLiveSeekBar && this.video.duration === Infinity);
+        this.seekBar.el.style.display = hidden ? 'none' : '';
+    }
+
     private readonly renderTime = (): void => {
         const isLive = this.video.duration === Infinity;
+        this.applySeekBarVisibility();
         this.timeLabel.style.display = this.adMode || isLive ? 'none' : '';
         this.liveBadge.style.display = !this.adMode && isLive ? '' : 'none';
 

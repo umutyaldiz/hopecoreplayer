@@ -14,6 +14,14 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-11-09
+
+### Added
+- **`liveSeekBar: false`** hides the progress (DVR) bar on live streams. The `● LIVE` badge and keyboard seeking stay; VOD is unaffected. Default `true`.
+
+### Fixed
+- **Live: the seek bar thumb sat short of the right end while watching live.** The bar ended at the very end of the seekable window, but hls.js deliberately plays a few segments behind it, so even at live the thumb looked behind — while the `● LIVE` badge said live. The bar now ends at the player's live target (hls.js `liveSyncPosition`), and while the viewer counts as live (the same 15 s tolerance as the badge) the thumb sits at the right end.
+
 ## [1.2.1] — 2026-11-08
 
 ### Fixed

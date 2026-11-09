@@ -474,7 +474,7 @@ async function testHlsOptions(browser) {
 }
 
 async function testLiveDvrSeekBar(browser) {
-    console.log('\n[4i] Canlı DVR: seek bar yayının geri sarma penceresinde çalışıyor (tıklama, hover "-0:45"), pencere kısaysa pasif');
+    console.log('\n[4l] Canlı DVR: seek bar geri sarma penceresinde çalışıyor (tıklama, hover "-0:45"), canlıdayken thumb en sağda, pencere kısaysa pasif, liveSeekBar: false gizliyor');
     const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
     try {
         await page.goto(`${BASE}/`);
@@ -499,6 +499,13 @@ async function testLiveDvrSeekBar(browser) {
                     t: Math.round(root.querySelector('video').currentTime * 10) / 10,
                     hover: root.querySelector('[part="seek-time"]')?.hasAttribute('data-visible') ? root.querySelector('[part="seek-time"]').textContent : null,
                     behind: root.querySelector('[part="live-badge"]').hasAttribute('data-behind'),
+                    // Thumb'ın seek bar üzerindeki yeri (0 = sol, 1 = sağ uç).
+                    thumb: (() => {
+                        const r = bar.getBoundingClientRect();
+                        const t = root.querySelector('[part="seek-thumb"]').getBoundingClientRect();
+                        return Math.round(((t.left + t.width / 2 - r.left) / r.width) * 100) / 100;
+                    })(),
+                    hidden: getComputedStyle(bar).display === 'none',
                 };
             });
         const box = await page.evaluate(() => { const r = document.getElementById('player').shadowRoot.querySelector('[part="seek-bar"]').getBoundingClientRect(); return { x: r.left, w: r.width, y: r.top + r.height / 2 }; });
@@ -506,6 +513,8 @@ async function testLiveDvrSeekBar(browser) {
         await setWindow(100, 160, 158);
         let s = await state();
         ok(s.active && !s.behind, `60 sn'lik pencere → seek bar aktif, uçta "canlı" ${JSON.stringify(s)}`);
+        // Canlıyı izlerken (uçtan 2 sn geride — HLS'in doğal gecikmesi) thumb sağ uçta: rozet "canlı" derken seek bar "geride" göstermesin.
+        ok(s.thumb >= 0.98, `canlıdayken thumb en sağda (${s.thumb})`);
         await page.mouse.move(box.x + box.w * 0.25, box.y);
         await page.waitForTimeout(150);
         s = await state();
@@ -516,6 +525,7 @@ async function testLiveDvrSeekBar(browser) {
         await page.waitForTimeout(150);
         s = await state();
         ok(Math.abs(s.t - 115) < 1 && s.behind, `%25'e tıklayınca pencere içinde 115. saniyeye gidildi, rozet "geride" ${JSON.stringify(s)}`);
+        ok(Math.abs(s.thumb - 0.25) < 0.04, `geride → thumb pencerede doğru yerde (${s.thumb})`);
         await page.mouse.click(box.x + box.w - 1, box.y);
         await page.waitForTimeout(150);
         s = await state();
@@ -524,6 +534,24 @@ async function testLiveDvrSeekBar(browser) {
         await setWindow(155, 160, 159);
         s = await state();
         ok(!s.active && s.hover === null, `5 sn'lik pencere (geri sarmasız yayın) → seek bar pasif, hover zamanı gizli ${JSON.stringify(s)}`);
+
+        // liveSeekBar: false → canlıda seek bar gizli; VOD'a dönünce görünür.
+        await page.evaluate(() => {
+            const el = document.getElementById('player');
+            el.options = { ...el.options, liveSeekBar: false };
+        });
+        await page.waitForTimeout(200);
+        await setWindow(100, 160, 158);
+        s = await state();
+        ok(s.hidden && !(await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="live-badge"]').style.display === 'none')), `liveSeekBar: false → canlıda seek bar gizli, CANLI rozeti duruyor `);
+        await page.evaluate(() => {
+            const video = document.getElementById('player').shadowRoot.querySelector('video');
+            Object.defineProperty(video, 'duration', { value: 60, configurable: true });
+            video.dispatchEvent(new Event('durationchange'));
+            video.dispatchEvent(new Event('timeupdate'));
+        });
+        s = await state();
+        ok(!s.hidden, 'liveSeekBar: false VOD\'u etkilemiyor (seek bar görünür)');
     } finally {
         await page.close();
     }

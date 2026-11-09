@@ -989,6 +989,11 @@ export interface HopePlayerOptions {
      * Varsayılan true; `false` gizler.
      */
     qualityBadge?: boolean;
+    /**
+     * Canlı yayında ilerleme çubuğu (geri sarılabilir canlıda DVR çubuğu). Varsayılan true; `false` canlıda gizler —
+     * "● CANLI" rozeti ve klavyeyle sarma kalır. VOD'u etkilemez.
+     */
+    liveSeekBar?: boolean;
     /** Fare video üzerinden ayrılınca kontrol çubuğunun/merkez play butonunun kaybolmadan önce beklediği süre (ms). Varsayılan 1200. */
     autoHideDelayMs?: number;
     /** Video oynarken fare bu süre (ms) kıpırdamazsa imleç gizlenir; `false` = hiç gizleme. Varsayılan 5000. */
