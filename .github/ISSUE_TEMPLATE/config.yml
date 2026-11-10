@@ -1,8 +1,14 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Ask a question
+    url: https://github.com/umutyaldiz/hopecoreplayer/discussions/categories/q-a
+    about: How do I…? Setup, options, ads or framework help — ask in Discussions (Q&A), not as an issue.
+  - name: Show what you built
+    url: https://github.com/umutyaldiz/hopecoreplayer/discussions/categories/show-and-tell
+    about: Using HopeCorePlayer on a site or app? Share it — it may be featured in the README.
   - name: Documentation & live demos
     url: https://umutyaldiz.com/hopecoreplayer
-    about: Options, events, theming and plugin reference with live demos.
+    about: Options, events, theming and plugin reference with live demos and the playground.
   - name: Report a security vulnerability
     url: https://github.com/umutyaldiz/hopecoreplayer/security/advisories/new
     about: Please report security issues privately, not as a public issue.
