@@ -2,6 +2,10 @@
 
 **An open-source, monetization-first video player** — a framework-agnostic `<hope-player>` custom element (Shadow DOM, TypeScript) with Google IMA, Prebid, rewarded ads, sponsorships, out-of-page ad triggers and Chromecast with TV ads built in. Every feature is its own lazy-loaded chunk: nothing you don't configure is downloaded.
 
+<p align="center">
+  <a href="https://www.umutyaldiz.com/hopecoreplayer"><img src="https://raw.githubusercontent.com/umutyaldiz/hopecoreplayer/main/docs/media/demo.webp" width="720" alt="HopeCorePlayer playing a video: captions, a Skip intro button, seek bar preview thumbnails with chapter names, the HD quality badge and the Accessibility menu"></a>
+</p>
+
 Full docs, live demos and the options reference: **[umutyaldiz.com/hopecoreplayer](https://umutyaldiz.com/hopecoreplayer)**
 
 ## Quick start (CDN, no build step)

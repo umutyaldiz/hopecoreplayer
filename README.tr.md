@@ -23,6 +23,10 @@
 
 Bağımlılıksız (hls.js hariç), TypeScript + Shadow DOM + Tailwind tabanlı, framework-agnostic bir `<hope-player>` custom element'i. Düz HTML, React, Vue, Next.js — hepsinde aynı şekilde çalışır.
 
+<p align="center">
+  <a href="https://www.umutyaldiz.com/hopecoreplayer"><img src="./docs/media/demo.webp" width="720" alt="HopeCorePlayer bir video oynatırken: altyazı, İntroyu atla butonu, bölüm adlı seek bar önizlemesi, HD kalite rozeti ve Erişilebilirlik menüsü"></a>
+</p>
+
 Kurulum rehberi, canlı demolar ve tüm options/tema/plugin referansı: **[umutyaldiz.com/hopecoreplayer](https://umutyaldiz.com/hopecoreplayer)**
 
 **Reklam ve gelir odaklı açık kaynak video player:** Google IMA, Prebid, ödüllü reklam, sponsorluk, out-of-page reklam tetikleyici ve TV'de reklamlı Chromecast tek pakette. Her özellik ayrı, gerektiğinde yüklenen bir parça.
