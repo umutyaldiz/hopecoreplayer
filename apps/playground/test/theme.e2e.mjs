@@ -766,7 +766,8 @@ async function testHideButtons(browser) {
                         });
                     return { pip: shown('Resim içinde resim'), fs: shown('Tam ekran') };
                 }, options);
-            const pipSupported = await page.evaluate(() => document.pictureInPictureEnabled);
+            // !! — PiP API'si olmayan motorda (WebKitGTK) değer false değil undefined.
+            const pipSupported = await page.evaluate(() => !!document.pictureInPictureEnabled);
             let v = await visible({});
             ok(v.fs && v.pip === pipSupported, `${width}px varsayılan: tam ekran görünür, PiP ${pipSupported ? 'görünür' : 'desteklenmiyor'} ${JSON.stringify(v)}`);
             v = await visible({ pipButton: false });
