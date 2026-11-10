@@ -747,6 +747,39 @@ async function testPlaybackRates(browser) {
         await page.close();
     }
 }
+async function testHideButtons(browser) {
+    console.log('\n[B] pipButton / fullscreenButton: false butonu gizliyor; geniş ve dar (kompakt) düzende; varsayılan görünür');
+    for (const width of [900, 400]) {
+        const page = await browser.newPage({ viewport: { width, height: 560 } });
+        try {
+            await page.goto(`${BASE}/`);
+            await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+            const visible = (options) =>
+                page.evaluate(async (options) => {
+                    const el = document.getElementById('player');
+                    el.options = { src: '/sample.mp4', muted: true, ...options };
+                    await new Promise((r) => setTimeout(r, 250));
+                    const shown = (label) =>
+                        Array.from(el.shadowRoot.querySelectorAll(`[aria-label="${label}"]`)).some((b) => {
+                            const r = b.getBoundingClientRect();
+                            return r.width > 0 && r.height > 0 && getComputedStyle(b).display !== 'none';
+                        });
+                    return { pip: shown('Resim içinde resim'), fs: shown('Tam ekran') };
+                }, options);
+            const pipSupported = await page.evaluate(() => document.pictureInPictureEnabled);
+            let v = await visible({});
+            ok(v.fs && v.pip === pipSupported, `${width}px varsayılan: tam ekran görünür, PiP ${pipSupported ? 'görünür' : 'desteklenmiyor'} ${JSON.stringify(v)}`);
+            v = await visible({ pipButton: false });
+            ok(!v.pip && v.fs, `${width}px pipButton: false → PiP yok, tam ekran duruyor ${JSON.stringify(v)}`);
+            v = await visible({ fullscreenButton: false });
+            ok(!v.fs && v.pip === pipSupported, `${width}px fullscreenButton: false → tam ekran yok ${JSON.stringify(v)}`);
+            v = await visible({});
+            ok(v.fs && v.pip === pipSupported, `${width}px seçenek kaldırılınca geri geliyor ${JSON.stringify(v)}`);
+        } finally {
+            await page.close();
+        }
+    }
+}
 (async () => {
     const browser = await launchBrowser();
     try {
@@ -773,6 +806,7 @@ async function testPlaybackRates(browser) {
         await testFullscreenContainCentered(browser);
         await testQualityBadge(browser);
         await testPlaybackRates(browser);
+        await testHideButtons(browser);
     } finally {
         await browser.close();
     }

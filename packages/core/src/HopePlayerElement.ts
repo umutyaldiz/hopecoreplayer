@@ -769,6 +769,7 @@ export class HopePlayerElement extends HTMLElement {
         // Eskiden okunmuyordu — menü hep varsayılan hızlarla kuruluyordu.
         this.controlBar.settingsMenu.setPlaybackRates(options.playbackRates ?? DEFAULT_PLAYBACK_RATES);
         this.controlBar.setLiveSeekBar(options.liveSeekBar !== false);
+        this.controlBar.setButtonsVisible({ pip: options.pipButton !== false, fullscreen: options.fullscreenButton !== false });
         if (options.miniProgress && !this.miniProgress) {
             this.miniProgress = new MiniProgress(this.videoEl);
             this.videoArea.appendChild(this.miniProgress.el);

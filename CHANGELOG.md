@@ -16,6 +16,9 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [1.3.1] — 2026-11-10
 
+### Added
+- **`pipButton: false` / `fullscreenButton: false`** hide the Picture-in-Picture / fullscreen button in the control bar (both shown by default; also in the narrow layout). Only the button goes away — the `F` shortcut and `tapGestures` fullscreen keep working.
+
 ### Fixed
 - **`playbackRates` was ignored.** The option was typed and documented, but the settings menu was always built with the default speeds, so neither a custom list nor `[]` had any effect. The menu now uses your list (sorted, duplicates dropped), and `playbackRates: []` removes the "Playback speed" row.
 

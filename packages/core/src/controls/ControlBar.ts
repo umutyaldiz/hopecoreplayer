@@ -115,6 +115,8 @@ export class ControlBar {
     private hideLiveSeekBar = false;
     /** Ses modu: tam ekran / PiP yok — dar düzende tam ekran kutusu da boş kalmasın. */
     private audioMode = false;
+    private showPipButton = true;
+    private showFullscreenButton = true;
     private readonly callbacks: ControlBarCallbacks;
     private row!: HTMLDivElement;
     private extraButtonAnchor!: HTMLElement;
@@ -232,7 +234,6 @@ export class ControlBar {
         const pip = iconButton(labels.pip, 'pip');
         this.pipButton = pip.btn;
         this.pipButton.addEventListener('click', () => this.togglePip());
-        if (!document.pictureInPictureEnabled) this.pipButton.style.display = 'none';
         rightGroup.appendChild(this.pipButton);
 
         const fullscreen = iconButton(labels.fullscreenEnter, 'fullscreen-enter', 'F');
@@ -240,6 +241,8 @@ export class ControlBar {
         this.fullscreenIcon = fullscreen.icon;
         this.fullscreenButton.addEventListener('click', () => this.toggleFullscreen());
         rightGroup.appendChild(this.fullscreenButton);
+        // PiP desteklenmiyorsa baştan gizli (applyButtonVisibility).
+        if (!document.pictureInPictureEnabled) this.pipButton.style.display = 'none';
 
         this.topEl = document.createElement('div');
         this.topEl.className = 'hp-top-bar';
@@ -279,7 +282,7 @@ export class ControlBar {
         this.el.closest('.video-area')?.toggleAttribute('data-compact', compact);
         if (compact) {
             this.fullscreenSlot.appendChild(this.fullscreenButton);
-            this.fullscreenSlot.style.display = this.adMode || this.audioMode ? 'none' : 'flex';
+            this.applyButtonVisibility();
             this.topEl.appendChild(this.rightGroup);
         } else {
             this.rightGroup.appendChild(this.fullscreenButton);
@@ -319,9 +322,25 @@ export class ControlBar {
     /** Ses modu: görüntü olmadığı için tam ekran ve PiP butonları gizlenir. */
     setAudioMode(on: boolean): void {
         this.audioMode = on;
-        this.fullscreenButton.style.display = on ? 'none' : '';
-        if (this.compact) this.fullscreenSlot.style.display = on || this.adMode ? 'none' : 'flex';
-        this.pipButton.style.display = on || !document.pictureInPictureEnabled ? 'none' : '';
+        this.applyButtonVisibility();
+    }
+
+    /** `options.pipButton` / `options.fullscreenButton` — false ise buton gösterilmez. */
+    setButtonsVisible({ pip, fullscreen }: { pip: boolean; fullscreen: boolean }): void {
+        this.showPipButton = pip;
+        this.showFullscreenButton = fullscreen;
+        this.applyButtonVisibility();
+    }
+
+    /**
+     * Tam ekran ve PiP butonlarının görünürlüğü tek yerden: seçenek, ses modu (görüntü yok), reklam modu, tarayıcı
+     * desteği (PiP) ve kompakt düzende tam ekranın ayrı yuvası — hepsi birlikte değerlendirilir, biri diğerini açmasın.
+     */
+    private applyButtonVisibility(): void {
+        const fullscreen = this.showFullscreenButton && !this.audioMode;
+        this.fullscreenButton.style.display = fullscreen ? '' : 'none';
+        if (this.compact) this.fullscreenSlot.style.display = fullscreen && !this.adMode ? 'flex' : 'none';
+        this.pipButton.style.display = this.showPipButton && !this.audioMode && document.pictureInPictureEnabled ? '' : 'none';
     }
 
     setFullscreenState(isFullscreen: boolean): void {
@@ -380,7 +399,7 @@ export class ControlBar {
         this.renderSkipButtons();
         this.applySeekBarVisibility();
         this.row.style.display = display;
-        if (this.compact) this.fullscreenSlot.style.display = active || this.audioMode ? 'none' : 'flex';
+        this.applyButtonVisibility();
         // Süre etiketi / canlı rozeti hangisinin görüneceğine renderTime karar veriyor (ad modunda ikisi de gizli).
         this.renderTime();
         if (!active) this.setAdInfo(null);

@@ -995,6 +995,13 @@ export interface HopePlayerOptions {
      * "● CANLI" rozeti ve klavyeyle sarma kalır. VOD'u etkilemez.
      */
     liveSeekBar?: boolean;
+    /** Kontrol çubuğundaki Picture-in-Picture butonu. Varsayılan true (tarayıcı destekliyorsa); `false` gizler. */
+    pipButton?: boolean;
+    /**
+     * Kontrol çubuğundaki tam ekran butonu. Varsayılan true; `false` gizler. Yalnızca buton: `F` kısayolu ve
+     * `tapGestures`'taki `toggleFullscreen` çalışmaya devam eder.
+     */
+    fullscreenButton?: boolean;
     /** Fare video üzerinden ayrılınca kontrol çubuğunun/merkez play butonunun kaybolmadan önce beklediği süre (ms). Varsayılan 1200. */
     autoHideDelayMs?: number;
     /** Video oynarken fare bu süre (ms) kıpırdamazsa imleç gizlenir; `false` = hiç gizleme. Varsayılan 5000. */
