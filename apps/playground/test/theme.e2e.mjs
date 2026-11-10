@@ -710,6 +710,43 @@ async function testQualityBadge(browser) {
     }
 }
 
+async function testPlaybackRates(browser) {
+    console.log('\n[R] playbackRates: varsayılan liste, özel liste menüye yansıyor, [] "Oynatma Hızı" satırını kaldırıyor');
+    const page = await browser.newPage({ viewport: { width: 900, height: 520 } });
+    try {
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+        const menu = (options) =>
+            page.evaluate(async (options) => {
+                const el = document.getElementById('player');
+                el.options = { src: '/sample.mp4', muted: true, ...options };
+                await new Promise((r) => setTimeout(r, 200));
+                const root = el.shadowRoot;
+                const wait = () => new Promise((r) => setTimeout(r, 120));
+                root.querySelector('[aria-label="Ayarlar"]').click();
+                await wait();
+                const rows = () => Array.from(root.querySelectorAll('.hp-chip-panel button')).map((b) => b.textContent.trim());
+                const main = rows();
+                const speedRow = Array.from(root.querySelectorAll('.hp-chip-panel button')).find((b) => b.textContent.trim().startsWith('Oynatma Hızı'));
+                let speeds = null;
+                if (speedRow) {
+                    speedRow.click();
+                    await wait();
+                    speeds = rows().slice(1);
+                }
+                root.querySelector('[aria-label="Ayarlar"]').click();
+                return { main, speeds };
+            }, options);
+        let r = await menu({});
+        ok(JSON.stringify(r.speeds) === JSON.stringify(['0.5x', '0.75x', 'Normal', '1.25x', '1.5x', '2x']), `varsayılan hızlar ${JSON.stringify(r.speeds)}`);
+        r = await menu({ playbackRates: [2, 1, 1.5, 1] });
+        ok(JSON.stringify(r.speeds) === JSON.stringify(['Normal', '1.5x', '2x']), `özel liste sıralandı, tekrar atıldı ${JSON.stringify(r.speeds)}`);
+        r = await menu({ playbackRates: [] });
+        ok(r.speeds === null && !r.main.some((x) => x.startsWith('Oynatma Hızı')), `[] → hız satırı yok ${JSON.stringify(r.main)}`);
+    } finally {
+        await page.close();
+    }
+}
 (async () => {
     const browser = await launchBrowser();
     try {
@@ -735,6 +772,7 @@ async function testQualityBadge(browser) {
         await testFullscreenEnlargesControls(browser);
         await testFullscreenContainCentered(browser);
         await testQualityBadge(browser);
+        await testPlaybackRates(browser);
     } finally {
         await browser.close();
     }

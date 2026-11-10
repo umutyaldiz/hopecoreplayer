@@ -116,7 +116,7 @@ export class SettingsMenu {
     private badgeEnabled = true;
     private readonly panel: HTMLDivElement;
     private readonly video: HTMLVideoElement;
-    private readonly playbackRates: number[];
+    private playbackRates: number[];
     private readonly labels: HopeLocaleStrings;
 
     private qualities: SettingsQualityOption[] = [];
@@ -222,6 +222,17 @@ export class SettingsMenu {
         this.currentPanel = `custom:${def.key}`;
         this.renderSubmenu(def, parents);
         this.fitToPlayer();
+    }
+
+    /**
+     * `options.playbackRates` — menüdeki hızlar (sıralanır, tekrarlar atılır, geçersizler yok sayılır). Boş dizi: "Oynatma
+     * hızı" satırı kalkar. Liste o anki hızı içermiyorsa ve 1 (normal) listedeyse hız 1'e döner — menüde seçili satır
+     * olmayan bir hızda kalınmasın.
+     */
+    setPlaybackRates(rates: number[]): void {
+        this.playbackRates = [...new Set(rates.filter((r) => Number.isFinite(r) && r > 0 && r <= 16))].sort((a, b) => a - b);
+        if (this.playbackRates.length && !this.playbackRates.includes(this.video.playbackRate) && this.playbackRates.includes(1)) this.video.playbackRate = 1;
+        if (this.open && (this.currentPanel === 'main' || this.currentPanel === 'speed')) this.renderMain();
     }
 
     /** `options.qualityBadge` — false ise rozet hiç gösterilmez. */
@@ -421,12 +432,15 @@ export class SettingsMenu {
     private renderMain(): void {
         this.currentPanel = 'main';
         this.panel.innerHTML = '';
-        this.panel.appendChild(
-            this.row(this.labels.playbackSpeed, this.video.playbackRate === 1 ? this.labels.normal : `${this.video.playbackRate}x`, () => {
-                this.currentPanel = 'speed';
-                this.renderSpeed();
-            })
-        );
+        // `playbackRates: []` → hız satırı yok.
+        if (this.playbackRates.length) {
+            this.panel.appendChild(
+                this.row(this.labels.playbackSpeed, this.video.playbackRate === 1 ? this.labels.normal : `${this.video.playbackRate}x`, () => {
+                    this.currentPanel = 'speed';
+                    this.renderSpeed();
+                })
+            );
+        }
         if (this.qualities.length > 0) {
             this.panel.appendChild(
                 this.row(this.labels.quality, this.activeQualityLabel, () => {

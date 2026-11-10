@@ -982,6 +982,7 @@ export interface HopePlayerOptions {
      */
     theme?: HopeThemePreset | (string & {});
     subtitles?: HopeSubtitleOption[];
+    /** Ayarlar menüsündeki oynatma hızları. Varsayılan [0.5, 0.75, 1, 1.25, 1.5, 2]. `[]` "Oynatma hızı" satırını kaldırır. */
     playbackRates?: number[];
     /**
      * Ayarlar ikonunun köşesinde oynayan görüntünün kalite rozeti: "HD" (720p+), "2K" (1440p), "4K" (2160p), "8K".

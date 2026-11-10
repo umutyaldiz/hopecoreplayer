@@ -766,6 +766,8 @@ export class HopePlayerElement extends HTMLElement {
         this.cursorHideDelayMs = options.cursorHideDelayMs === false ? null : (options.cursorHideDelayMs ?? DEFAULT_CURSOR_HIDE_DELAY_MS);
         if (this.cursorHideDelayMs === null) this.showCursor();
         this.controlBar.settingsMenu.setQualityBadgeEnabled(options.qualityBadge !== false);
+        // Eskiden okunmuyordu — menü hep varsayılan hızlarla kuruluyordu.
+        this.controlBar.settingsMenu.setPlaybackRates(options.playbackRates ?? DEFAULT_PLAYBACK_RATES);
         this.controlBar.setLiveSeekBar(options.liveSeekBar !== false);
         if (options.miniProgress && !this.miniProgress) {
             this.miniProgress = new MiniProgress(this.videoEl);

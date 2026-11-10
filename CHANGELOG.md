@@ -14,6 +14,11 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-11-10
+
+### Fixed
+- **`playbackRates` was ignored.** The option was typed and documented, but the settings menu was always built with the default speeds, so neither a custom list nor `[]` had any effect. The menu now uses your list (sorted, duplicates dropped), and `playbackRates: []` removes the "Playback speed" row.
+
 ## [1.3.0] — 2026-11-09
 
 ### Added
