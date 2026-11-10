@@ -1,3 +1,4 @@
+import type { PluginEntry } from '../plugin-api/types';
 import type { HlsConfig } from 'hls.js';
 import type { HopeLocale, HopeLocaleStrings } from '../i18n/types';
 export type { HopeLocale, HopeLocaleStrings };
@@ -1093,6 +1094,8 @@ export interface HopePlayerOptions {
      * ses seviyesi / sessiz durumu hatırlanır. Kayıtlar izleyicinin tarayıcısında. Varsayılan kapalı.
      */
     history?: boolean | HistoryOptions;
+    /** Eklentiler: `[eklenti]`, `[[eklenti, seçenekler]]` ya da yükleyici `() => import('./x')`. Bkz. `definePlugin`. */
+    plugins?: PluginEntry[];
     /** Seekbar üzerinde hover-scrub sprite sheet önizlemesi. */
     spriteThumbnails?: SpriteThumbnailsOptions;
     /** Oynatıcı yüklenmeden önce hedef tarihe kadar geri sayım ekranı. */

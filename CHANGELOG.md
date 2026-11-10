@@ -14,6 +14,14 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-11-11
+
+### Added
+- **Public plugin API.** `definePlugin({ name, setup(player, options) })`, registered with `options.plugins`, `player.use()` or page-wide `registerPlugin()` (React / Vue: `plugins` prop); plugins can be loaded lazily (`() => import('./x')`). The `player` object offers state and playback, events (`on` / `emit`), control-bar buttons, layers over the video, settings-menu toggles / selects / submenus, keyboard shortcuts (listed in the `?` panel), i18n, namespaced storage, timers and logging. Everything a plugin adds is removed automatically with it; errors inside a plugin are logged and never break playback. Versioned as `PLUGIN_API_VERSION` 1. The runner is a separate chunk loaded only when a plugin is used. Guide: `docs/PLUGIN_API.md`.
+
+### Changed
+- "Skip intro" buttons (`skipSegments`) now run on the public plugin API.
+
 ## [1.3.1] — 2026-11-10
 
 ### Added

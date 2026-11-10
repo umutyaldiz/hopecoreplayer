@@ -14,6 +14,8 @@ export interface AccessibilityPlayerContext {
     addQuickButton(btn: HTMLButtonElement, getDef: () => SettingsSubmenuDef, getParents: () => SettingsSubmenuDef[]): void;
     /** Klavyeyle sarma adımı (sn) — kısayol listesinde gösterilir. */
     seekStep(): number;
+    /** Eklentilerin kısayolları (listeye eklenir). */
+    extraShortcuts?(): Array<{ keys: string[]; description: string }>;
 }
 
 const DEFAULT_ZOOM = [1, 1.25, 1.5, 2, 3];
@@ -549,6 +551,7 @@ export class Accessibility {
             rows.push([['+', '−', '0'], t.a11yKeyZoom]);
             rows.push([['Shift', '+', '←↑↓→'], t.a11yKeyPan]);
         }
+        for (const s of this.ctx.extraShortcuts?.() ?? []) rows.push([s.keys, s.description]);
         rows.push([['?'], t.a11yKeyShortcuts]);
 
         const list = document.createElement('dl');
