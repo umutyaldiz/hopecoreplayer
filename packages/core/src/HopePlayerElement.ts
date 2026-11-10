@@ -44,7 +44,9 @@ import type { SpriteThumbnails } from './plugins/sprite-thumbnails';
 import type { CountdownScreen } from './plugins/countdown-screen';
 import type { GeoChecker } from './plugins/geo-checker';
 import type { RedirectScreen } from './plugins/redirect-screen';
-import type { SkipSegments } from './plugins/skip-segments';
+import type { PluginHost } from './plugin-api/PluginHost';
+import type { HopePlugin, PluginEntry, PluginInstanceHandle, PluginLoader } from './plugin-api/types';
+import { globalPluginEntries, onGlobalPluginsChange, registerPlugin } from './plugin-api/registry';
 import type { Accessibility } from './plugins/accessibility';
 import type { PlaybackHistory } from './plugins/history';
 import type { QrResume } from './plugins/qr-resume';
@@ -196,8 +198,11 @@ export class HopePlayerElement extends HTMLElement {
     private geoChecker: GeoChecker | null = null;
     private redirectScreen: RedirectScreen | null = null;
     private redirectKey = '';
-    private skipSegments: SkipSegments | null = null;
-    private skipSegmentsKey = '';
+    /** Eklentileri çalıştıran taraf — yalnızca bir eklenti kullanılınca indirilir (plugin-api/PluginHost). */
+    private pluginHost: PluginHost | null = null;
+    /** `player.use()` ile çalışırken eklenenler. */
+    private readonly runtimePlugins: PluginEntry[] = [];
+    private offGlobalPlugins: (() => void) | null = null;
     private accessibility: Accessibility | null = null;
     private accessibilityKey = '';
     private playbackHistory: PlaybackHistory | null = null;
@@ -419,6 +424,7 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     connectedCallback(): void {
+        this.offGlobalPlugins ??= onGlobalPluginsChange(() => void this.syncPlugins());
         // tabIndex constructor'da değil burada: tabindex attribute'una yansır ve Custom Elements spec'i
         // constructor'da attribute eklemeyi yasaklar (createElement "must not have attributes" hatası).
         // `tabindex` verilmemişse 0 — `this.tabIndex || 0` YAZILMAMALI: attribute'suz öğede tabIndex -1 döner (truthy),
@@ -548,9 +554,10 @@ export class HopePlayerElement extends HTMLElement {
         this.countdownScreen?.destroy();
         this.geoChecker?.destroy();
         this.redirectScreen?.destroy();
-        this.skipSegments?.destroy();
-        this.skipSegments = null;
-        this.skipSegmentsKey = '';
+        this.pluginHost?.destroy();
+        this.pluginHost = null;
+        this.offGlobalPlugins?.();
+        this.offGlobalPlugins = null;
         this.accessibility?.destroy();
         this.accessibility = null;
         this.accessibilityKey = '';
@@ -696,6 +703,56 @@ export class HopePlayerElement extends HTMLElement {
         return this.sourceManager.hlsInstance;
     }
 
+    /** Eklenti ekler (sayfa yenilenene ya da `remove()` çağrılana kadar). */
+    use<O>(plugin: HopePlugin<O> | PluginLoader, options?: O): PluginInstanceHandle {
+        const entry: PluginEntry = [plugin, options];
+        this.runtimePlugins.push(entry);
+        void this.syncPlugins();
+        return {
+            name: typeof plugin === 'function' ? '' : plugin.name,
+            remove: () => {
+                const i = this.runtimePlugins.indexOf(entry);
+                if (i < 0) return;
+                this.runtimePlugins.splice(i, 1);
+                void this.syncPlugins();
+            },
+        };
+    }
+
+    /** Eklentiyi sayfadaki tüm player'lara ekler. */
+    static use<O>(plugin: HopePlugin<O> | PluginLoader, options?: O): () => void {
+        return registerPlugin(plugin, options);
+    }
+
+    private async syncPlugins(): Promise<void> {
+        const o = this._options;
+        const builtin: PluginEntry[] = o.skipSegments?.length ? [[() => import('./plugins/skip-segments').then((m) => m.skipSegmentsPlugin), o.skipSegments]] : [];
+        const user: PluginEntry[] = [...globalPluginEntries(), ...(o.plugins ?? []), ...this.runtimePlugins];
+        if (!builtin.length && !user.length && !this.pluginHost) return;
+        if (!this.pluginHost) {
+            const { PluginHost } = await import('./plugin-api/PluginHost');
+            this.pluginHost ??= new PluginHost({
+                element: this,
+                video: this.videoEl,
+                videoArea: this.videoArea,
+                chromeEl: this.chromeEl,
+                labels: this.i18n as unknown as Record<string, unknown>,
+                locale: () => this._options.locale ?? 'tr',
+                currentSrc: () => this.sourceManager.currentSrc,
+                isAdPlaying: () => this.isAdPlaying(),
+                isFullscreen: () => this.isFullscreenActive(),
+                addControlButton: (btn, position) => this.controlBar.addPluginButton(btn, position),
+                settings: {
+                    registerToggle: (row) => this.controlBar.settingsMenu.registerToggle(row.key, row),
+                    unregisterToggle: (key) => this.controlBar.settingsMenu.unregisterToggle(key),
+                    registerSubmenu: (def) => this.controlBar.settingsMenu.registerSubmenu(def),
+                    unregisterSubmenu: (key) => this.controlBar.settingsMenu.unregisterSubmenu(key),
+                },
+                log: (message, details) => this.log.add({ source: 'player', message, details }),
+            });
+        }
+        await this.pluginHost.sync(builtin, user);
+    }
     /** `options.qrResume` kuruluysa "telefonundan devam et" QR ekranını manuel göster (ör. entegratörün kendi "telefona gönder" butonu) — otomatik gösterim kuralları (minElapsed/minRemaining) burada uygulanmaz. */
     showQrResume(): void {
         this.qrResume?.show();
@@ -814,7 +871,7 @@ export class HopePlayerElement extends HTMLElement {
         this.countdownScreen?.refreshLabels();
         this.geoChecker?.refreshLabels();
         this.redirectScreen?.refreshLabels();
-        this.skipSegments?.refreshLabels();
+        this.pluginHost?.refreshLabels();
         this.accessibility?.refreshLabels();
         this.playbackHistory?.refreshLabels();
         this.qrResume?.refreshLabels();
@@ -1078,29 +1135,15 @@ export class HopePlayerElement extends HTMLElement {
                             unregisterSubmenu: (key) => this.controlBar.settingsMenu.unregisterSubmenu(key),
                             addQuickButton: (btn, getDef, getParents) => this.controlBar.settingsMenu.addQuickButton(btn, getDef, getParents),
                             seekStep: () => this.keyboard.seekStep,
+                            extraShortcuts: () => this.pluginHost?.shortcuts() ?? [],
                         },
                         options.accessibility === true ? {} : options.accessibility
                     );
                 }
             }
         }
-        // Bölümler her içerikte farklı (playlist'te sıradaki bölüm) — değişince yeniden kurulur.
-        const skipKey = options.skipSegments?.length ? JSON.stringify(options.skipSegments) : '';
-        if (skipKey !== this.skipSegmentsKey) {
-            this.skipSegmentsKey = skipKey;
-            this.skipSegments?.destroy();
-            this.skipSegments = null;
-            if (options.skipSegments?.length) {
-                const { installSkipSegments } = await import('./plugins/skip-segments');
-                if (this.skipSegmentsKey === skipKey) {
-                    this.skipSegments = installSkipSegments(
-                        { hostEl: this, videoEl: this.videoEl, overlayContainerEl: this.videoArea, isAdActive: () => this.isAdPlaying(), i18n: this.i18n },
-                        options.skipSegments
-                    );
-                }
-            }
-        }
-
+        // Eklentiler: yerleşik olanlar (API üstüne kurulu) + sayfa geneli (registerPlugin) + options.plugins + player.use().
+        await this.syncPlugins();
         // Zaman ve ses geçmişi — QR ile devamdan (?vtime=) ÖNCE kurulur: o parametreyi uygulayıp adresten siliyor; link
         // ile gelen konum bu açılışta kayıtlı konumu ezer.
         const historyKey = options.history ? JSON.stringify(options.history) : '';

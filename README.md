@@ -17,7 +17,7 @@
 [![hls.js](https://img.shields.io/npm/dependency-version/%40hopeplayer%2Fcore/hls.js.svg)](https://github.com/video-dev/hls.js)
 [![Tailwind CSS](https://img.shields.io/npm/dependency-version/%40hopeplayer%2Fcore/dev/tailwindcss.svg?label=Tailwind%20CSS)](https://tailwindcss.com)
 [![Web Component](https://img.shields.io/badge/Web%20Component-Custom%20Element-29abe2.svg)](https://developer.mozilla.org/docs/Web/API/Web_components)
-[![first load](https://img.shields.io/badge/first%20load-~68%20KB%20gzip-brightgreen.svg)](./packages/core/scripts/check-size.mjs)
+[![first load](https://img.shields.io/badge/first%20load-~74%20KB%20gzip-brightgreen.svg)](./packages/core/scripts/check-size.mjs)
 [![a11y](https://img.shields.io/badge/a11y-WCAG%202.1%20AA%20%28axe%29-blue.svg)](./apps/playground/test/a11y.e2e.mjs)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
@@ -103,7 +103,7 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 - **Theming** — 4 presets plus CSS custom properties (`--hp-color-accent`…) and `::part()` hooks.
 - **i18n** — every label and ad-UI string follows `locale` / `labels` (Turkish and English included).
 - **One event API** — namespaced DOM `CustomEvent`s (`hp:ready`, `hp:adstart`, `hp:cast`…), from any framework.
-- **Tested** — a Playwright end-to-end suite, an accessibility scan and a bundle-size budget (about 68 KB gzip on first load) run on every change in Chromium; Firefox and WebKit run nightly and before every release on Linux, and `npm run test:linux` reproduces that exact environment locally with Docker; real Safari (macOS) and Safari on the iOS Simulator run nightly on GitHub's macOS machines.
+- **Tested** — a Playwright end-to-end suite, an accessibility scan and a bundle-size budget (about 74 KB gzip on first load) run on every change in Chromium; Firefox and WebKit run nightly and before every release on Linux, and `npm run test:linux` reproduces that exact environment locally with Docker; real Safari (macOS) and Safari on the iOS Simulator run nightly on GitHub's macOS machines.
 
 ## Browser support
 

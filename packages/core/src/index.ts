@@ -5,6 +5,29 @@ if (typeof window !== 'undefined' && !customElements.get('hope-player')) {
 }
 
 export { HopePlayerElement, HOPE_PLAYER_VERSION };
+export { definePlugin, registerPlugin } from './plugin-api/registry';
+export { PLUGIN_API_VERSION } from './plugin-api/types';
+export type {
+    HopePlugin,
+    PlayerApi,
+    PluginEntry,
+    PluginLoader,
+    PluginCleanup,
+    PluginLabel,
+    PluginButtonOptions,
+    PluginButtonHandle,
+    PluginLayerOptions,
+    PluginLayerHandle,
+    PluginLayerPosition,
+    PluginUiApi,
+    PluginSettingsApi,
+    PluginSettingsHandle,
+    PluginSettingsItem,
+    PluginKeysApi,
+    PluginI18nApi,
+    PluginStorageApi,
+    PluginInstanceHandle,
+} from './plugin-api/types';
 export type { PlaybackEngineInfo } from './hls/SourceManager';
 export type {
     HopeThemePreset,

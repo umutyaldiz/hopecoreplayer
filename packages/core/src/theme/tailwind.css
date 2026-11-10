@@ -2902,3 +2902,105 @@ button.hp-context-menu-item:focus-visible {
         animation: none;
     }
 }
+/* ── Eklenti API'si: katman, buton, toast ── */
+.hp-plugin-layer {
+    position: absolute;
+    z-index: 5;
+    transition: opacity 0.2s;
+}
+.hp-plugin-layer[data-above] {
+    z-index: 30;
+}
+.hp-plugin-layer[hidden] {
+    display: none;
+}
+/* Etkileşimsiz katman: tıklama videoya geçer, içindeki kontroller tıklanır. */
+.hp-plugin-layer:not([data-interactive]) {
+    pointer-events: none;
+}
+.hp-plugin-layer:not([data-interactive]) :is(button, a, input, select, textarea, [data-interactive]) {
+    pointer-events: auto;
+}
+.hp-plugin-layer[data-position='fill'] {
+    inset: 0;
+}
+.hp-plugin-layer[data-position='top'] {
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+.hp-plugin-layer[data-position='bottom'] {
+    bottom: 76px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+.hp-plugin-layer[data-position='center'] {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+.hp-plugin-layer[data-position='top-left'] {
+    top: 12px;
+    left: 12px;
+}
+.hp-plugin-layer[data-position='top-right'] {
+    top: 12px;
+    right: 12px;
+}
+.hp-plugin-layer[data-position='bottom-left'] {
+    bottom: 76px;
+    left: 12px;
+}
+.hp-plugin-layer[data-position='bottom-right'] {
+    bottom: 76px;
+    right: 12px;
+}
+.video-area[data-chrome-hidden] .hp-plugin-layer:is([data-position='bottom'], [data-position='bottom-left'], [data-position='bottom-right']) {
+    bottom: 12px;
+}
+.video-area[data-compact] .hp-plugin-layer:is([data-position='bottom'], [data-position='bottom-left'], [data-position='bottom-right']) {
+    bottom: 56px;
+}
+.video-area[data-chrome-hidden] .hp-plugin-layer[data-autohide] {
+    opacity: 0;
+    pointer-events: none;
+}
+.video-area[data-chrome-hidden] .hp-plugin-layer[data-autohide] * {
+    pointer-events: none;
+}
+.hp-plugin-btn svg {
+    width: var(--hp-ctrl-icon-size);
+    height: var(--hp-ctrl-icon-size);
+}
+.hp-plugin-btn[aria-pressed='true'] {
+    color: var(--hp-color-accent, #fff);
+    background: color-mix(in srgb, var(--hp-color-accent, #fff) 18%, transparent);
+}
+.hp-plugin-toast {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    z-index: 35;
+    max-width: calc(100% - 32px);
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: rgba(14, 14, 18, 0.85);
+    color: #fff;
+    font: 500 13px/1.3 system-ui, -apple-system, sans-serif;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -6px);
+    transition:
+        opacity 0.2s,
+        transform 0.2s;
+}
+.hp-plugin-toast[data-visible] {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+@media (prefers-reduced-motion: reduce) {
+    .hp-plugin-layer,
+    .hp-plugin-toast {
+        transition: none;
+    }
+}

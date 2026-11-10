@@ -467,6 +467,12 @@ export class ControlBar {
         return this.showRemaining;
     }
 
+    /** Eklenti butonu: sol grubun sonu ya da ayarlardan önce. */
+    addPluginButton(btn: HTMLButtonElement, position: 'left' | 'right'): void {
+        if (position === 'left') this.leftGroup.appendChild(btn);
+        else this.row.insertBefore(btn, this.extraButtonAnchor);
+    }
+
     /** Plugin'lerin (live-wall-clock vb.) kontrol çubuğuna buton olmayan bir element (ör. saat göstergesi) eklemesi için. */
     addElement(el: HTMLElement): void {
         this.row.insertBefore(el, this.extraButtonAnchor);

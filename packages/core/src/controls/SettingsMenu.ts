@@ -131,6 +131,8 @@ export class SettingsMenu {
     private readonly panelObserver: MutationObserver;
     private currentPanel: PanelId = 'main';
     private submenus: SettingsSubmenuDef[] = [];
+    /** Eklenti aç / kapa satırları. */
+    private readonly toggles = new Map<string, SettingsToggleRow>();
 
     constructor(video: HTMLVideoElement, playbackRates: number[], labels: HopeLocaleStrings) {
         this.video = video;
@@ -301,6 +303,17 @@ export class SettingsMenu {
         if (this.currentPanel === 'main') this.renderMain();
     }
 
+    /** Aç / kapa satırı ekler (aynı anahtar yerine geçer). */
+    registerToggle(key: string, row: SettingsToggleRow): void {
+        this.toggles.set(key, row);
+        if (this.open && this.currentPanel === 'main') this.renderMain();
+    }
+
+    unregisterToggle(key: string): void {
+        if (!this.toggles.delete(key)) return;
+        if (this.open && this.currentPanel === 'main') this.renderMain();
+    }
+
     unregisterSubmenu(key: string): void {
         this.submenus = this.submenus.filter((s) => s.key !== key);
         if (this.currentPanel === 'main') this.renderMain();
@@ -462,6 +475,14 @@ export class SettingsMenu {
                 this.row(def.title, def.getValueLabel(), () => {
                     this.currentPanel = `custom:${def.key}`;
                     this.renderSubmenu(def);
+                })
+            );
+        }
+        for (const toggle of this.toggles.values()) {
+            this.panel.appendChild(
+                this.row(toggle.label, toggle.getValueLabel(), () => {
+                    toggle.onToggle();
+                    this.renderMain();
                 })
             );
         }

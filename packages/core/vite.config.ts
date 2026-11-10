@@ -19,6 +19,7 @@ const FILE_NAMES: Record<string, string> = {
     loadGpt: 'gpt',
     ScratchSound: 'audioScratchSound',
     'hls.light': 'hlsLight',
+    PluginHost: 'pluginHost',
 };
 const camel = (s: string): string => s.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
 
