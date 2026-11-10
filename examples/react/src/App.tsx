@@ -18,7 +18,7 @@ const SOURCES: Record<'hls' | 'mp4', HopePlayerOptions> = {
     },
 };
 
-/** Bitime 5 sn kala "Sıradaki" kartı (1.0.17) — MP4 örneği 10 sn, kart 5. saniyede çıkar. */
+/** Bitime 5 sn kala "Sıradaki" kartı — MP4 örneği 10 sn, kart 5. saniyede çıkar. */
 const REDIRECT: HopePlayerOptions['redirectScreen'] = {
     mode: 'card',
     showBefore: 5,
@@ -75,6 +75,8 @@ export function App() {
                 contextMenu={{ stats: true }}
                 redirectScreen={REDIRECT}
                 cast={{ chromecast: true, airplay: true }}
+                skipSegments={[{ start: 0, end: 3, showFrom: 0.5 }]}
+                accessibility
                 onReady={() => add('ready')}
                 onPlay={() => add('play')}
                 onPause={() => add('pause')}

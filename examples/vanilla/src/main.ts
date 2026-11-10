@@ -39,7 +39,7 @@ function load(source: keyof typeof SOURCES): void {
         skipButtons: { back: 10, forward: 10 },
         tapGestures: true,
         contextMenu: { stats: true },
-        // Bitime 5 sn kala "Sıradaki" kartı (1.0.17) — MP4 örneği 10 sn, kart 5. saniyede çıkar.
+        // Bitime 5 sn kala "Sıradaki" kartı — MP4 örneği 10 sn, kart 5. saniyede çıkar.
         redirectScreen: {
             mode: 'card',
             showBefore: 5,
@@ -49,8 +49,11 @@ function load(source: keyof typeof SOURCES): void {
             subtitle: 'HopeCorePlayer · Docs',
             image: POSTER,
         },
-        // TV'ye yayın (1.0.16) — buton yalnızca yakında Chromecast / Apple TV varken görünür.
+        // TV'ye yayın — buton yalnızca yakında Chromecast / Apple TV varken görünür.
         cast: { chromecast: true, airplay: true },
+    // 1.1+: "İntroyu atla" butonu, 1.2+: Erişilebilirlik menüsü (yakınlaştırma, filtreler, büyük kontroller…).
+    skipSegments: [{ start: 0, end: 3, showFrom: 0.5 }],
+    accessibility: true,
     };
     document.querySelectorAll<HTMLButtonElement>('[data-source]').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.source === source);

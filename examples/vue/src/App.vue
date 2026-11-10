@@ -26,7 +26,7 @@ const add = (line: string) => {
     log.value = [`${new Date().toLocaleTimeString()}  ${line}`, ...log.value].slice(0, 8);
 };
 
-/** Bitime 5 sn kala "Sıradaki" kartı (1.0.17) — MP4 örneği 10 sn, kart 5. saniyede çıkar. */
+/** Bitime 5 sn kala "Sıradaki" kartı — MP4 örneği 10 sn, kart 5. saniyede çıkar. */
 const REDIRECT: HopePlayerOptions['redirectScreen'] = {
     mode: 'card',
     showBefore: 5,
@@ -78,6 +78,8 @@ onBeforeUnmount(() => {
             :context-menu="{ stats: true }"
             :redirect-screen="REDIRECT"
             :cast="{ chromecast: true, airplay: true }"
+        :skipSegments="[{ start: 0, end: 3, showFrom: 0.5 }]"
+        accessibility
             @ready="add('ready')"
             @play="add('play')"
             @pause="add('pause')"
