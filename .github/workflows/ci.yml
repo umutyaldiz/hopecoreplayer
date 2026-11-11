@@ -7,6 +7,8 @@ on:
     paths-ignore: ['**/*.md', 'docs/**', 'examples/**', 'LICENSE', '.github/ISSUE_TEMPLATE/**']
   pull_request:
     paths-ignore: ['**/*.md', 'docs/**', 'examples/**', 'LICENSE', '.github/ISSUE_TEMPLATE/**']
+  # Elle başlatma (Actions → CI → Run workflow ya da `gh workflow run CI`).
+  workflow_dispatch:
 
 # Aynı dala art arda push'ta önceki (yarım kalan) çalışma iptal edilir — yalnızca son commit test edilir.
 concurrency:
