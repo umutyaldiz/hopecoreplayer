@@ -60,6 +60,7 @@ export type {
     MarkersOptions,
     SegmentItem,
     SpriteThumbnailsOptions,
+    SpriteLowResOptions,
     CountdownScreenOptions,
     GeoCheckerOptions,
     RedirectScreenSuggestion,

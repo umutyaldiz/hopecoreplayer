@@ -14,6 +14,10 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+### Added
+- **Sprite thumbnails, two-tier preview (`spriteThumbnails.lowRes`):** a tiny sheet covering the whole video (e.g. 48×27 frames, a few KB) loads on first interaction. While the full sheet under the cursor is loading, the frame for the right time is shown from the tiny sheet (scaled up), then sharpens — instead of an empty preview or the previous position's frame. It loads regardless of connection speed and is never evicted. `lowRes.interval` defaults to duration / frame count.
+- **Sprite thumbnails, `displayWidth`:** the on-screen preview width, independent of the frame size — 320×180 frames at `displayWidth: 160` are sharp on Retina screens. Works with templates, `sheets` and VTT.
+
 ## [1.4.0] — 2026-11-11
 
 ### Added
