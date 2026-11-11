@@ -34,6 +34,7 @@ const WEIGHTS = {
     cast: 17,
     live: 15,
     i18n: 8,
+    'drm-dash': 45,
     'prebid-consent': 3,
     'react-native': 3,
 };

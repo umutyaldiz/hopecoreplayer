@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import type { StyleProp, ViewStyle } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent, WebViewProps } from 'react-native-webview';
-import type { HopePlayerOptions } from '@hopeplayer/core';
+import type { HopeAnalyticsEvent, HopePlayerOptions, HopeQoeMetrics } from '@hopeplayer/core';
 import { buildPlayerHtml, commandScript, type HopeBridgeCommand, type HopeBridgeMessage, type HopeNativeOptions, type HopeNativePlugin } from './playerHtml';
 
 export interface HopePlayerTimeUpdate {
@@ -46,6 +46,8 @@ export interface HopePlayerProps extends Omit<HopePlayerOptions, 'plugins'> {
     onAdEnd?: (type: 'preroll' | 'midroll' | 'postroll') => void;
     onAdError?: (message: string) => void;
     onItemChange?: (index: number, source: 'playlist' | 'story') => void;
+    /** `analytics` açıkken her izlenme olayı ve o anki QoE ölçümleri. */
+    onAnalytics?: (detail: { event: HopeAnalyticsEvent; metrics: HopeQoeMetrics }) => void;
     /** Eklentinin `player.emit('x', data)` olayı → `('<eklenti>:x', data)`. */
     onPluginEvent?: (event: string, detail: unknown) => void;
     /** Köprüden gelen her olay (ham) — yukarıdaki callback'lerde olmayanlar için. */
@@ -84,6 +86,7 @@ const NATIVE_PROP_KEYS = [
     'onAdError',
     'onItemChange',
     'onPluginEvent',
+    'onAnalytics',
     'onEvent',
 ] as const;
 
@@ -193,6 +196,9 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
                     break;
                 case 'itemchange':
                     cb.onItemChange?.(Number(data.index), data.source as 'playlist' | 'story');
+                    break;
+                case 'analytics':
+                    cb.onAnalytics?.(data as unknown as { event: HopeAnalyticsEvent; metrics: HopeQoeMetrics });
                     break;
                 case 'plugin':
                     cb.onPluginEvent?.(String(data.event), data.detail);

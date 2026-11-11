@@ -20,6 +20,7 @@ const FILE_NAMES: Record<string, string> = {
     ScratchSound: 'audioScratchSound',
     'hls.light': 'hlsLight',
     PluginHost: 'pluginHost',
+    dashEngine: 'dash',
 };
 const camel = (s: string): string => s.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
 
@@ -30,7 +31,7 @@ function chunkName(name: string, facade: string | null): string {
 }
 
 /**
- * hls.js parçalarını küçült: Vite kütüphane modunda (es) boşlukları küçültmüyor, hls.js parçası boşluklarıyla çıkıyordu
+ * hls.js / dash.js parçalarını küçült: Vite kütüphane modunda (es) boşlukları küçültmüyor, hls.js parçası boşluklarıyla çıkıyordu
  * (~229 KB gzip). Yalnızca bu üçüncü taraf parçalar — kendi kodumuz okunur kalır (kaynak haritası zaten var).
  */
 const minifyHls = (): Plugin => ({
@@ -46,7 +47,7 @@ const minifyHls = (): Plugin => ({
         },
     },
 });
-const HLS_CHUNKS = new Set(['hls', 'hls.light']);
+const HLS_CHUNKS = new Set(['hls', 'hls.light', 'dashEngine']);
 
 export default defineConfig({
     plugins: [tailwindcss(), minifyHls()],

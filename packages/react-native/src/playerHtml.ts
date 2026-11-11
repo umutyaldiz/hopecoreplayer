@@ -58,6 +58,7 @@ const FORWARDED_EVENTS = [
     'hp:aderror',
     'hp:itemchange',
     'hp:pausead',
+    'hp:analytics',
 ];
 
 /** Satır/paragraf ayırıcı — JSON'da geçerli, JS string'inde (eski motorlarda) değil. */

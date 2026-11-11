@@ -89,7 +89,7 @@ export class ErrorScreen {
      * hls.js'in ölümcül hataları `video.error` üretmez — player donmuş görünmesin diye ekran elle açılır.
      * `code`: MediaError kodu (2 = ağ, 3 = çözümleme).
      */
-    showStreamError(code: 2 | 3): void {
+    showStreamError(code: 2 | 3 | 4 | 5): void {
         if (!this.shouldShow()) return;
         this.streamErrorCode = code;
         this.open();
@@ -124,12 +124,14 @@ export class ErrorScreen {
     };
 
     private render(): void {
-        const code = this.video.error?.code ?? this.streamErrorCode;
+        // DRM hatası video.error'dan (çoğu zaman kod 3) önce gelir.
+        const code = this.streamErrorCode === 5 ? 5 : (this.video.error?.code ?? this.streamErrorCode);
         const messages: Record<number, string> = {
             1: this.labels.errorAborted,
             2: this.labels.errorNetwork,
             3: this.labels.errorDecode,
             4: this.labels.errorSrcNotSupported,
+            5: this.labels.errorDrm,
         };
         this.messageEl.textContent = messages[code] ?? this.labels.errorGeneric;
         this.codeEl.textContent = code ? `${this.labels.errorCode} ${code}` : '';

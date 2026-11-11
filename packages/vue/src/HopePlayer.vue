@@ -21,6 +21,7 @@ const emit = defineEmits<{
     itemchange: [index: number, source: 'playlist' | 'story'];
     sticky: [sticky: boolean, corner: StickyCorner | undefined];
     sourcefallback: [detail: HopePlayerEventMap['hp:sourcefallback']['detail']];
+    analytics: [detail: HopePlayerEventMap['hp:analytics']['detail']];
 }>();
 
 const instance = getCurrentInstance();
@@ -73,6 +74,7 @@ onMounted(() => {
             },
         ],
         ['hp:sourcefallback', (e) => emit('sourcefallback', (e as HopePlayerEventMap['hp:sourcefallback']).detail)],
+        ['hp:analytics', (e) => emit('analytics', (e as HopePlayerEventMap['hp:analytics']).detail)],
     ];
     for (const [name, handler] of listeners) el.addEventListener(name, handler);
 

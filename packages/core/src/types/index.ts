@@ -1,5 +1,6 @@
 import type { PluginEntry } from '../plugin-api/types';
 import type { HlsConfig } from 'hls.js';
+import type { MediaPlayerSettingClass } from 'dashjs';
 import type { HopeLocale, HopeLocaleStrings } from '../i18n/types';
 export type { HopeLocale, HopeLocaleStrings };
 
@@ -10,8 +11,8 @@ export type HopeThemePreset =
     | 'neo-dark'
     | 'mono';
 
-/** Kaynak biçimi: `hls` (.m3u8), `mp4` ya da dosya uzantısı (`webm`, `mov`, `mp3`…) — bkz. `sourcePriority`. */
-export type HopeSourceFormat = 'hls' | 'mp4' | 'webm' | (string & {});
+/** Kaynak biçimi: `hls` (.m3u8), `dash` (.mpd), `mp4` ya da dosya uzantısı (`webm`, `mov`, `mp3`…) — bkz. `sourcePriority`. */
+export type HopeSourceFormat = 'hls' | 'dash' | 'mp4' | 'webm' | (string & {});
 
 export interface HopeSourceOption {
     src: string;
@@ -884,6 +885,129 @@ export interface HopeHlsOptions {
     withCredentials?: boolean;
 }
 
+/** DASH (.mpd) oynatma ayarları — dash.js yalnızca DASH kaynağı gelince indirilir. */
+export interface HopeDashOptions {
+    /** dash.js ayarları — olduğu gibi `player.updateSettings()`'e geçer (buffer, ABR, düşük gecikme...). */
+    settings?: MediaPlayerSettingClass;
+    /** Manifest / segment isteklerinde cookie ve kimlik bilgisi gönder. */
+    withCredentials?: boolean;
+}
+
+/** Bir DRM sisteminin lisans sunucusu. */
+export interface HopeDrmLicense {
+    licenseUrl: string;
+    /** Lisans isteğine eklenecek başlıklar (ör. yetki token'ı). */
+    headers?: Record<string, string>;
+    /** Lisans isteğinde cookie gönder. */
+    withCredentials?: boolean;
+}
+
+export interface HopeFairPlayOptions extends HopeDrmLicense {
+    /** FairPlay sertifikası (ikili `.cer`) adresi. */
+    certificateUrl: string;
+    /** SPC'den istek gövdesi üretir (sunucu base64 / JSON istiyorsa). Varsayılan: ham ikili SPC. */
+    prepareLicenseRequest?(spc: Uint8Array, initData: Uint8Array): BodyInit | Promise<BodyInit>;
+    /** Sunucu yanıtından CKC'yi çıkarır. Varsayılan: yanıtın kendisi. */
+    parseLicenseResponse?(response: ArrayBuffer): BufferSource | Promise<BufferSource>;
+}
+
+/**
+ * Şifreli içerik (EME). Yalnızca verilen sistemler denenir; tarayıcı desteklediği ilkini kullanır:
+ * Chrome / Firefox / Android → Widevine, Edge → Widevine / PlayReady, Safari → FairPlay. ClearKey test içindir.
+ */
+export interface HopeDrmOptions {
+    widevine?: HopeDrmLicense & { /** Ör. `'SW_SECURE_CRYPTO'`, `'HW_SECURE_ALL'`. */ robustness?: string };
+    playready?: HopeDrmLicense;
+    fairplay?: HopeFairPlayOptions;
+    clearkey?: HopeDrmLicense;
+}
+
+export type HopeAnalyticsEventType =
+    | 'session_start'
+    | 'start'
+    | 'pause'
+    | 'resume'
+    | 'seek'
+    | 'rebuffer'
+    | 'quality'
+    | 'progress'
+    | 'ended'
+    | 'error'
+    | 'ad_start'
+    | 'ad_end'
+    | 'heartbeat'
+    | 'session_end';
+
+/** Oturumun deneyim (QoE) ölçümleri — `player.qoe` ve her gönderimde. */
+export interface HopeQoeMetrics {
+    /** Oynatma isteğinden ilk kareye (ms, reklam hariç); başlamadıysa null. */
+    startupMs: number | null;
+    /** İzlenen içerik süresi (sn) — sarılan kısımlar sayılmaz. */
+    watchedSeconds: number;
+    rebufferCount: number;
+    rebufferMs: number;
+    /** Takılma süresi / (izleme + takılma). */
+    rebufferRatio: number;
+    seekCount: number;
+    qualitySwitches: number;
+    /** İzleme süresine göre ağırlıklı ortalama video bit hızı (bps); bilinmiyorsa null. */
+    avgBitrate: number | null;
+    /** O anki video yüksekliği ve bit hızı. */
+    height: number | null;
+    bitrate: number | null;
+    /** Ulaşılan en ileri konum (%, canlıda 0). */
+    maxProgress: number;
+    errors: number;
+    adCount: number;
+    adMs: number;
+    droppedFrames: number;
+}
+
+export interface HopeAnalyticsEvent {
+    type: HopeAnalyticsEventType;
+    /** Oturum başından beri (ms). */
+    at: number;
+    /** Video konumu (sn). */
+    position: number;
+    data?: Record<string, string | number | boolean | null>;
+}
+
+/** Uç noktaya gönderilen paket. */
+export interface HopeAnalyticsPayload {
+    v: 1;
+    sessionId: string;
+    videoId: string;
+    src: string | null;
+    /** `interval` | `end` | `pagehide` | `source` | `destroy`. */
+    reason: string;
+    sentAt: number;
+    events: HopeAnalyticsEvent[];
+    metrics: HopeQoeMetrics;
+    custom?: Record<string, string | number | boolean>;
+    engine: string;
+    live: boolean;
+    duration: number | null;
+}
+
+export interface HopeAnalyticsOptions {
+    /** Paketlerin POST edileceği adres (JSON). Verilmezse yalnızca olaylar / `onEvent` / GA4. */
+    endpoint?: string;
+    /** Toplu gönderim aralığı (ms). Varsayılan 15000. */
+    intervalMs?: number;
+    /** Video kimliği. Varsayılan `options.id`, yoksa kaynak adresi. */
+    videoId?: string;
+    /** Her pakete eklenen alanlar (ör. kullanıcı segmenti, sayfa türü). */
+    custom?: Record<string, string | number | boolean>;
+    /** Verilirse `sendBeacon` yerine `fetch` (keepalive) kullanılır. */
+    headers?: Record<string, string>;
+    /** `window.gtag` varsa GA4'e `video_start`, `video_progress`, `video_complete` gönderir. */
+    ga4?: boolean;
+    /** Her olayda. */
+    onEvent?(event: HopeAnalyticsEvent, metrics: HopeQoeMetrics): void;
+    /** Gönderim öncesi paketi değiştirir; `false` dönerse gönderilmez. */
+    beforeSend?(payload: HopeAnalyticsPayload): HopeAnalyticsPayload | false;
+}
+
 /** Çoklu dokunuş hareketi türü — ileride `'tripletap'` eklenebilir. */
 export type TapGestureType = 'doubletap';
 /** Ekranın bölgesi: sol/sağ üçte bir, orta, ya da tamamı. */
@@ -1055,6 +1179,12 @@ export interface HopePlayerOptions {
     keyboardSeekStep?: number;
     /** HLS oynatma ayarları — motor seçimi, hls.js config'i (buffer/ABR/düşük gecikme), kimlik bilgisi. */
     hls?: HopeHlsOptions;
+    /** DASH (.mpd) oynatma ayarları. */
+    dash?: HopeDashOptions;
+    /** Şifreli içerik (Widevine / PlayReady / FairPlay / ClearKey). HLS, DASH ve MP4'te çalışır. */
+    drm?: HopeDrmOptions;
+    /** Deneyim (QoE) ölçümleri ve izlenme olayları; `true` = yalnızca `hp:analytics` olayı. */
+    analytics?: boolean | HopeAnalyticsOptions;
     /** Sağ tık menüsü (player adı + sürüm). Varsayılan açık; `false` tarayıcının kendi menüsünü geri getirir. */
     contextMenu?: boolean | ContextMenuOptions;
     /** Ekranın sol/sağına çift dokunma hareketleri. `true` = solda 10 sn geri, sağda 10 sn ileri (dokunmatik). Varsayılan kapalı. */
@@ -1153,6 +1283,7 @@ export type HopePlayerEventMap = {
     'hp:ended': CustomEvent<void>;
     /** Hata ekranı açıldı (oynatılamayan kaynak, kopan yayın…). `code`: MediaError kodu (2 ağ, 3 çözümleme, 4 desteklenmiyor). */
     'hp:error': CustomEvent<{ message: string; code?: number }>;
+    'hp:analytics': CustomEvent<{ event: HopeAnalyticsEvent; metrics: HopeQoeMetrics }>;
     'hp:qualitychange': CustomEvent<{ label: string }>;
     /**
      * Kaynak grubu değişti: `from` grubu ölümcül hata verdi (ya da tarayıcı oynatamıyor) ve `to` grubuna geçildi.

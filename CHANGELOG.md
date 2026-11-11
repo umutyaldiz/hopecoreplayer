@@ -17,16 +17,21 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 ## [1.5.0] — 2026-11-11
 
 ### Added
+- **DASH (`.mpd`):** played with dash.js, a separate chunk downloaded only for DASH sources. Quality and audio menus, ABR, live DASH, quality lock, stats and QoE work as with HLS. New `dash` option: `settings` (passed to dash.js `updateSettings()`) and `withCredentials`. `sourcePriority` accepts `'dash'`. Without MediaSource the player shows "not supported" (code 4) and falls back to the next source group.
+- **DRM (`drm`):** Widevine, PlayReady, FairPlay and ClearKey with license URL, headers and credentials; the first system the browser supports is used. Works through dash.js (DASH), hls.js (HLS — the full build is used when DRM is set) and the browser's EME API on Safari's own HLS player (FairPlay: certificate, session, license; `prepareLicenseRequest` / `parseLicenseResponse` adapt vendor formats). License failures show a dedicated error (code 5, `hp:error`). The key system in use is in `player.playbackEngine.drm` and the stats panel.
+- **QoE analytics (`analytics`):** startup time, watch time, rebuffer count / time / ratio, seeks, quality switches, weighted average bitrate, max progress, errors, ad time and dropped frames. Events (`session_start`, `start`, `pause`, `resume`, `seek`, `rebuffer`, `quality`, `progress` 25/50/75, `ended`, `error`, `ad_start`, `ad_end`, `heartbeat`, `session_end`) fire as `hp:analytics` and `onEvent`; with an `endpoint` they are batched as JSON (`intervalMs`, `sendBeacon` when the page is left, `custom`, `beforeSend`). `ga4: true` sends GA4 video events. `player.qoe` returns the current metrics. React `onAnalytics`, Vue `@analytics`, React Native `onAnalytics`.
 - **React Native, plugins:** the `plugins` prop takes plugin modules as a URL or as code (`'https://…/plugin.js'`, `{ url, options }`, `{ code, options }`), loaded inside the WebView. `player.emit()` reaches the app through `onPluginEvent(event, detail)`; `ref.postToPlugin(name, data)` sends data to the plugin (`<plugin>:native`).
 - **Plugin API, ads (`player.ads`):** plugins can play their own ad formats. `requestBreak(run)` pauses the content, hides the controls, blocks seeking and media keys, sets `isAdPlaying`, fires `hp:adstart` / `hp:adend` (with `plugin`) and gives the plugin a clickable layer; the content resumes afterwards. Hooks: `beforeContent` (preroll gate), `atTime` (midroll marks, seek-aware), `onPause` (pause ads), `onEnded` (postroll — playlist and redirect screen wait for it) and `transformTag` (rewrite IMA ad tags before the request). See [docs/PLUGIN_API.md](docs/PLUGIN_API.md#ads).
 - **Sprite thumbnails, two-tier preview (`spriteThumbnails.lowRes`):** a tiny sheet covering the whole video (e.g. 48×27 frames, a few KB) loads on first interaction. While the full sheet under the cursor is loading, the frame for the right time is shown from the tiny sheet (scaled up), then sharpens — instead of an empty preview or the previous position's frame. It loads regardless of connection speed and is never evicted. `lowRes.interval` defaults to duration / frame count.
 - **Sprite thumbnails, `displayWidth`:** the on-screen preview width, independent of the frame size — 320×180 frames at `displayWidth: 160` are sharp on Retina screens. Works with templates, `sheets` and VTT.
 
 ### Changed
+- `dashjs` is a new dependency of `@hopeplayer/core` (lazy chunk; the first load grows by about 1 KB gzip for the new options).
 - Playlist: when an ad is still playing as the video ends, the next item now waits for `hp:adend`.
 
 ### Fixed
 - Plugin API: `ui.addLayer({ css })` styles were lost when the plugin set the layer's `innerHTML`.
+- Accessibility: the seek bar had no `aria-valuenow` / `aria-valuemax` until the video's duration was known (an invalid slider while loading or after a load error).
 
 ## [1.4.0] — 2026-11-11
 

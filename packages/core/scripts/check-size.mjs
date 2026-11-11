@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 /** İlk yükleme bütçesi (KB, gzip). Bilinçli olarak büyütülecekse burayı değiştirip PR'da gerekçesini yazın. */
 const INITIAL_BUDGET_KB = 80;
-/** Tek bir eklenti parçası için üst sınır (hls.js hariç — üçüncü taraf, yalnızca HLS kaynağında iner). */
+/** Tek bir eklenti parçası için üst sınır (hls.js / dash.js hariç — üçüncü taraf, yalnızca o kaynakta iner). */
 const CHUNK_BUDGET_KB = 30;
 
 const dist = resolve(dirname(fileURLToPath(import.meta.url)), '../dist');
@@ -48,7 +48,7 @@ if (initialBytes > INITIAL_BUDGET_KB * 1024) {
     console.error(`\n✗ İlk yükleme bütçeyi aştı: ${kb(initialBytes)} KB > ${INITIAL_BUDGET_KB} KB. Yeni kodu bir eklentiye (dinamik import) taşıyın.`);
     failed = true;
 }
-const big = lazy.filter((c) => !c.name.startsWith('hls') && c.bytes > CHUNK_BUDGET_KB * 1024);
+const big = lazy.filter((c) => !c.name.startsWith('hls') && !c.name.startsWith('dash-') && c.bytes > CHUNK_BUDGET_KB * 1024);
 for (const c of big) console.error(`✗ ${c.name}: ${kb(c.bytes)} KB > ${CHUNK_BUDGET_KB} KB parça bütçesi.`);
 if (big.length) failed = true;
 if (!failed) console.log('\n✓ Boyut bütçesi içinde.');

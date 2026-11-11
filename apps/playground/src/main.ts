@@ -155,6 +155,17 @@ if (player) {
             ],
             sourcePriority: priority ? priority.split(',') : undefined,
         };
+    } else if (feature === 'dash' || feature === 'dash-clearkey') {
+        // DASH (dash.js) + QoE (olaylar konsolda). ClearKey lisansı data: URL — sabit JSON, sunucu gerekmez.
+        const license = { keys: [{ kty: 'oct', k: 'OiobaN0r2bLusl6ExHdmaA', kid: 'EAAAABAAEAAQABAAAAAAAQ' }], type: 'temporary' };
+        player.addEventListener('hp:analytics', (e) => console.log('[analytics]', (e as CustomEvent).detail.event.type, (e as CustomEvent).detail));
+        player.options = {
+            muted: true,
+            src: feature === 'dash' ? '/dash/clear.mpd' : '/dash/clearkey.mpd',
+            drm: feature === 'dash' ? undefined : { clearkey: { licenseUrl: `data:application/json;base64,${btoa(JSON.stringify(license))}` } },
+            analytics: true,
+            contextMenu: { stats: true },
+        };
     } else if (feature === 'cast') {
         // TV'ye yayın: testler gerçek SDK yerine sahte cast_sender.js verir (route). ?ads=vast|vmap|off
         const ads = new URLSearchParams(location.search).get('ads');
