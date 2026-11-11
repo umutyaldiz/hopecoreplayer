@@ -24,7 +24,7 @@ const pages = new Map();
 const server = http.createServer((req, res) => {
     const url = decodeURIComponent(req.url.split('?')[0]);
     if (pages.has(url)) {
-        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.writeHead(200, { 'Content-Type': url.endsWith('.js') ? 'application/javascript' : 'text/html' });
         return res.end(pages.get(url));
     }
     const file = url.startsWith('/core/') ? path.join(CORE_DIST, url.slice(6)) : url.startsWith('/media/') ? path.join(MEDIA, url.slice(7)) : null;
@@ -121,6 +121,38 @@ try {
     const err = (await messages(broken, 'error'))[0];
     ok(err?.data?.code === 'core-load' && /could not be loaded/.test(err.data.message), `hata içeriği ${JSON.stringify(err?.data)}`);
     await broken.close();
+
+    console.log('\n[4b] Eklentiler: adresten ve koddan kuruluyor; emit → React Native, postToPlugin → eklenti; aynı kod yeniden kurulmuyor');
+    pages.set('/plugins/badge.js', `export default {
+    name: 'badge',
+    setup(player, o) {
+        player.ui.addLayer({ position: 'top-left' }).el.textContent = o.text;
+        player.on('badge:native', (e) => player.emit('echo', { got: e.detail }));
+    },
+};`);
+    const CODE = `export const plugin = { name: 'inline', setup(p) { window.__inlineSetups = (window.__inlineSetups || 0) + 1; p.ui.addLayer({ position: 'top-right' }).el.textContent = 'INLINE'; } };`;
+    const pluginOpts = { src: '/media/sample.mp4', muted: true, plugins: [{ url: '/plugins/badge.js', options: { text: 'URL' } }, { code: CODE }] };
+    pages.set('/plugins.html', buildPlayerHtml({ coreUrl: `${BASE}/core/hope-player.js`, options: pluginOpts }));
+    const pp = await browser.newPage();
+    await pp.addInitScript(MOCK_RN);
+    await pp.goto(`${BASE}/plugins.html`);
+    await waitFor(pp, 'ready');
+    await pp.waitForFunction(() => document.getElementById('hope-player').shadowRoot.querySelectorAll('.hp-plugin-layer').length >= 2, null, { timeout: 5000 }).catch(() => {});
+    const layers = await pp.evaluate(() => Array.from(document.getElementById('hope-player').shadowRoot.querySelectorAll('.hp-plugin-layer')).map((l) => `${l.dataset.plugin}:${l.textContent}`).sort());
+    ok(JSON.stringify(layers) === '["badge:URL","inline:INLINE"]', `iki eklenti kuruldu ${JSON.stringify(layers)}`);
+    await send(pp, { type: 'pluginMessage', plugin: 'badge', data: { n: 7 } });
+    ok(await waitFor(pp, 'plugin', 3000), '"plugin" olayı geldi');
+    const pe = (await messages(pp, 'plugin'))[0];
+    ok(pe?.data?.event === 'badge:echo' && pe.data.detail?.got?.n === 7, `postToPlugin → eklenti → emit → RN ${JSON.stringify(pe?.data)}`);
+    await send(pp, { type: 'options', options: { ...pluginOpts, theme: 'glass-dark' } });
+    await pp.waitForTimeout(400);
+    const setups = await pp.evaluate(() => window.__inlineSetups);
+    ok(setups === 1, `seçenek güncellemesinde aynı kodlu eklenti yeniden kurulmadı (${setups})`);
+    await send(pp, { type: 'options', options: { src: '/media/sample.mp4', muted: true } });
+    await pp.waitForTimeout(400);
+    const left = await pp.evaluate(() => document.getElementById('hope-player').shadowRoot.querySelectorAll('.hp-plugin-layer').length);
+    ok(left === 0, `plugins kaldırılınca katmanlar gitti (${left})`);
+    await pp.close();
 
     console.log('\n[5] Güvenlik: seçeneklerdeki "</script>" sayfayı bozmuyor');
     pages.set('/inject.html', buildPlayerHtml({ coreUrl: `${BASE}/core/hope-player.js`, options: { src: '/media/sample.mp4', poster: '</script><script>window.__pwned=1</script>' } }));

@@ -162,6 +162,6 @@ player.ads.transformTag((url, type) => `${url}&cust_params=${encodeURIComponent(
 
 The "Skip intro" buttons (`skipSegments`) are implemented as a plugin on this public API — a third-party plugin can do everything they do.
 
-## Coming next
+## React Native
 
-- React Native: plugins as script URLs inside the WebView.
+In `@hopeplayer/react-native` the player runs in a WebView, so `plugins` takes ES modules — a URL or the module code — instead of objects: `plugins={['https://cdn.example.com/watermark.js', { code: BADGE, options: { text: 'LIVE' } }]}`. `player.emit()` reaches the app through `onPluginEvent(event, detail)`, and `ref.postToPlugin(name, data)` arrives in the plugin as `<plugin>:native`. See the [React Native README](../packages/react-native/README.md#plugins).

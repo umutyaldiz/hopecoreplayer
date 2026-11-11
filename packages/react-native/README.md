@@ -52,7 +52,45 @@ All [`HopePlayerOptions`](https://umutyaldiz.com/hopecoreplayer/install) are acc
 | `css` | `string` | — | CSS added to the WebView page: `--hp-*` theme tokens and `hope-player::part(...)` rules that go in a global stylesheet on the web. Changing it reloads the WebView. |
 | `webViewProps` | `WebViewProps` | — | Extra props for the underlying WebView. |
 
-Callbacks: `onReady`, `onPlay`, `onPause`, `onEnded`, `onError(message)`, `onTimeUpdate({ currentTime, duration, paused })` (about every 250 ms), `onQualityChange(label)`, `onRateChange(rate)`, `onAdStart(type)`, `onAdEnd(type)`, `onAdError(message)`, `onItemChange(index, source)`, and `onEvent(type, data)` for every bridge event.
+Callbacks: `onReady`, `onPlay`, `onPause`, `onEnded`, `onError(message)`, `onTimeUpdate({ currentTime, duration, paused })` (about every 250 ms), `onQualityChange(label)`, `onRateChange(rate)`, `onAdStart(type)`, `onAdEnd(type)`, `onAdError(message)`, `onItemChange(index, source)`, `onPluginEvent(event, detail)`, and `onEvent(type, data)` for every bridge event.
+
+Ref methods: `play()`, `pause()`, `seek(time)`, `setMuted(muted)`, `toggleStats(force?)`, `postToPlugin(plugin, data)`.
+
+## Plugins
+
+[Plugins](https://github.com/umutyaldiz/hopecoreplayer/blob/main/docs/PLUGIN_API.md) run inside the WebView, so instead of plugin objects the `plugins` prop takes ES modules — a URL or the module code — that export the plugin as `default` or `plugin`:
+
+```tsx
+const BADGE = `export default {
+    name: 'badge',
+    setup(player, options) {
+        const layer = player.ui.addLayer({ position: 'top-left' });
+        layer.el.textContent = options.text;
+        player.on('badge:native', (e) => (layer.el.textContent = e.detail.text)); // from React Native
+        player.ui.addButton({ label: 'Like', icon: 'play', onClick: () => player.emit('like', { at: player.currentTime }) });
+    },
+};`;
+
+const ref = useRef<HopePlayerHandle>(null);
+
+<HopePlayer
+    ref={ref}
+    src="https://example.com/video.mp4"
+    plugins={[
+        'https://cdn.example.com/plugins/watermark.js',                 // URL
+        { url: 'https://cdn.example.com/plugins/ads.js', options: { tag: '…' } },
+        { code: BADGE, options: { text: 'LIVE' } },                     // code bundled in the app
+    ]}
+    onPluginEvent={(event, detail) => console.log(event, detail)}   // 'badge:like', { at: 12.3 }
+/>;
+
+ref.current?.postToPlugin('badge', { text: 'REPLAY' });
+```
+
+- `player.emit('x', data)` in a plugin reaches `onPluginEvent('<plugin>:x', data)`; `data` must be JSON-serializable.
+- `postToPlugin(name, data)` dispatches `<plugin>:native` on the player; listen with `player.on('<plugin>:native', (e) => e.detail)`.
+- A plugin given as `code` keeps the same module while the code string is unchanged, so prop updates do not set it up again.
+- Plugin modules cannot use bare imports (`import … from '@hopeplayer/core'`); `definePlugin` is optional — export a plain object.
 
 ## Notes
 

@@ -3,7 +3,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent, WebViewProps } from 'react-native-webview';
 import type { HopePlayerOptions } from '@hopeplayer/core';
-import { buildPlayerHtml, commandScript, type HopeBridgeCommand, type HopeBridgeMessage } from './playerHtml';
+import { buildPlayerHtml, commandScript, type HopeBridgeCommand, type HopeBridgeMessage, type HopeNativeOptions, type HopeNativePlugin } from './playerHtml';
 
 export interface HopePlayerTimeUpdate {
     currentTime: number;
@@ -16,7 +16,9 @@ export interface HopePlayerTimeUpdate {
  * `<hope-player>`'ı bir WebView içinde çalıştırır — React sarmalayıcısıyla aynı seçenekler ve callback'ler.
  * Seçenekler JSON'a çevrilebilir olmalı: fonksiyonlar (ör. `hls.config.xhrSetup`) WebView'a taşınamaz.
  */
-export interface HopePlayerProps extends HopePlayerOptions {
+export interface HopePlayerProps extends Omit<HopePlayerOptions, 'plugins'> {
+    /** WebView'da çalışan eklentiler: modül adresi ya da kodu (`{ url | code, options }`). */
+    plugins?: HopeNativePlugin[];
     /** Player kutusu — 16:9 için `{ width: '100%', aspectRatio: 16 / 9 }`. */
     style?: StyleProp<ViewStyle>;
     /** @hopeplayer/core ESM giriş dosyası. Varsayılan: jsDelivr, bu paketle aynı sürüm. Kendi sunucunuzdan sunmak için verin. */
@@ -44,6 +46,8 @@ export interface HopePlayerProps extends HopePlayerOptions {
     onAdEnd?: (type: 'preroll' | 'midroll' | 'postroll') => void;
     onAdError?: (message: string) => void;
     onItemChange?: (index: number, source: 'playlist' | 'story') => void;
+    /** Eklentinin `player.emit('x', data)` olayı → `('<eklenti>:x', data)`. */
+    onPluginEvent?: (event: string, detail: unknown) => void;
     /** Köprüden gelen her olay (ham) — yukarıdaki callback'lerde olmayanlar için. */
     onEvent?: (type: string, data: unknown) => void;
 }
@@ -56,6 +60,8 @@ export interface HopePlayerHandle {
     setMuted(muted: boolean): void;
     /** Teknik istatistik paneli (`force`: true aç, false kapat). */
     toggleStats(force?: boolean): void;
+    /** Eklentiye veri gönderir; eklentide `player.on('<eklenti>:native', (e) => e.detail)`. */
+    postToPlugin(plugin: string, data?: unknown): void;
 }
 
 const NATIVE_PROP_KEYS = [
@@ -77,13 +83,14 @@ const NATIVE_PROP_KEYS = [
     'onAdEnd',
     'onAdError',
     'onItemChange',
+    'onPluginEvent',
     'onEvent',
 ] as const;
 
-function splitProps(props: HopePlayerProps): HopePlayerOptions {
+function splitProps(props: HopePlayerProps): HopeNativeOptions {
     const options: Record<string, unknown> = { ...props };
     for (const key of NATIVE_PROP_KEYS) delete options[key];
-    return options as HopePlayerOptions;
+    return options as HopeNativeOptions;
 }
 
 export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function HopePlayer(props, ref) {
@@ -104,7 +111,7 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
         ready.current = false;
         sentOptions.current = latestOptions.current;
         return buildPlayerHtml({
-            options: JSON.parse(latestOptions.current) as HopePlayerOptions,
+            options: JSON.parse(latestOptions.current) as HopeNativeOptions,
             coreUrl: props.coreUrl,
             backgroundColor: props.backgroundColor,
             css: props.css,
@@ -118,7 +125,7 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
     const syncOptions = useCallback(() => {
         if (!ready.current || latestOptions.current === sentOptions.current) return;
         sentOptions.current = latestOptions.current;
-        send({ type: 'options', options: JSON.parse(latestOptions.current) as HopePlayerOptions });
+        send({ type: 'options', options: JSON.parse(latestOptions.current) as HopeNativeOptions });
     }, [send]);
 
     useEffect(syncOptions, [optionsJson, syncOptions]);
@@ -131,6 +138,7 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
             seek: (time) => send({ type: 'seek', time }),
             setMuted: (value) => send({ type: 'muted', value }),
             toggleStats: (force) => send({ type: 'toggleStats', force }),
+            postToPlugin: (plugin, data) => send({ type: 'pluginMessage', plugin, data }),
         }),
         [send]
     );
@@ -185,6 +193,9 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
                     break;
                 case 'itemchange':
                     cb.onItemChange?.(Number(data.index), data.source as 'playlist' | 'story');
+                    break;
+                case 'plugin':
+                    cb.onPluginEvent?.(String(data.event), data.detail);
                     break;
             }
             cb.onEvent?.(msg.type, msg.data);
