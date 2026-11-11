@@ -129,6 +129,46 @@ export interface PluginStorageApi {
     remove(key: string): void;
 }
 
+// ── Reklam ──
+
+export type PluginAdBreakType = 'preroll' | 'midroll' | 'postroll';
+
+/** `requestBreak` içinde reklamın çizildiği ve bittiğinin bildirildiği nesne. */
+export interface PluginAdBreak {
+    readonly type: PluginAdBreakType;
+    /** Video alanını kaplayan, kontrollerin üstündeki tıklanabilir katman. */
+    readonly layer: HTMLDivElement;
+    /** Arayı player bitirince (zaman aşımı, eklenti kaldırıldı) iptal olur. */
+    readonly signal: AbortSignal;
+    /** Arayı hemen bitirir (ör. "Reklamı geç"). */
+    end(): void;
+}
+
+export interface PluginAdBreakOptions {
+    /** Verilmezse durumdan çıkarılır (başta preroll, bitişte postroll, arada midroll). */
+    type?: PluginAdBreakType;
+    /** Ara en fazla bu kadar sürer. Varsayılan 60000 ms. */
+    timeoutMs?: number;
+}
+
+export interface PluginAdsApi {
+    /**
+     * Reklam arası: içerik durur, kontroller ve sarma kilitlenir, `isAdPlaying` true, `hp:adstart` / `hp:adend`.
+     * `run` bitince içerik kaldığı yerden sürer. Başka bir reklam oynuyorsa başlamaz (`false`).
+     */
+    requestBreak(run: (ad: PluginAdBreak) => void | Promise<void>, options?: PluginAdBreakOptions): Promise<boolean>;
+    /** Preroll: içerik ilk oynatmada bu bitene kadar bekler (kaynak başına bir kez). */
+    beforeContent(handler: () => void | Promise<unknown>): () => void;
+    /** Midroll: oynatma bu saniyelere doğal yoldan gelince. İleri sarılırsa varsayılan: geçilen son nokta bir kez. */
+    atTime(seconds: number | number[], handler: (seconds: number) => void | Promise<unknown>, options?: { seekPast?: 'last' | 'skip' }): () => void;
+    /** İzleyici duraklatınca (`delayMs` sonra hâlâ duraklatılmışsa). Dönen fonksiyon oynatılınca çağrılır. */
+    onPause(handler: () => void | PluginCleanup, options?: { delayMs?: number }): () => void;
+    /** Postroll: video bitince; playlist ve yönlendirme reklam arası bitene kadar bekler. */
+    onEnded(handler: () => void | Promise<unknown>): () => void;
+    /** IMA tag adresini istek öncesi değiştirir (ör. hedefleme parametresi eklemek). */
+    transformTag(transform: (url: string, type: PluginAdBreakType) => string): () => void;
+}
+
 // ── Player ──
 
 export interface PlayerApi {
@@ -172,6 +212,7 @@ export interface PlayerApi {
     readonly keys: PluginKeysApi;
     readonly i18n: PluginI18nApi;
     readonly storage: PluginStorageApi;
+    readonly ads: PluginAdsApi;
     /** Player'ın hata kaydına yazar. */
     log(message: string, details?: Record<string, string | number | boolean | undefined>): void;
 }

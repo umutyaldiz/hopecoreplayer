@@ -200,6 +200,9 @@ export class HopePlayerElement extends HTMLElement {
     private redirectKey = '';
     /** Eklentileri çalıştıran taraf — yalnızca bir eklenti kullanılınca indirilir (plugin-api/PluginHost). */
     private pluginHost: PluginHost | null = null;
+    /** Seçenekler uygulanırken eklenti senkronu bitince çözülür (reklam tag dönüşümü bekler). */
+    private settlePlugins: () => void = () => {};
+    private pluginsSettled = new Promise<void>((r) => (this.settlePlugins = r));
     /** `player.use()` ile çalışırken eklenenler. */
     private readonly runtimePlugins: PluginEntry[] = [];
     private offGlobalPlugins: (() => void) | null = null;
@@ -725,6 +728,26 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     private async syncPlugins(): Promise<void> {
+        try {
+            await this.doSyncPlugins();
+        } finally {
+            this.settlePlugins();
+        }
+    }
+
+    private markPluginsPending(): void {
+        const prev = this.settlePlugins;
+        this.pluginsSettled = new Promise<void>((r) => (this.settlePlugins = r));
+        prev();
+    }
+
+    private async adTagTransform(url: string, type: 'preroll' | 'midroll' | 'postroll'): Promise<string> {
+        const anyPlugins = !!this._options.plugins?.length || this.runtimePlugins.length > 0 || globalPluginEntries().length > 0;
+        if (anyPlugins) await Promise.race([this.pluginsSettled, new Promise((r) => setTimeout(r, 2000))]);
+        return this.pluginHost?.transformAdTag(url, type) ?? url;
+    }
+
+    private async doSyncPlugins(): Promise<void> {
         const o = this._options;
         const builtin: PluginEntry[] = o.skipSegments?.length ? [[() => import('./plugins/skip-segments').then((m) => m.skipSegmentsPlugin), o.skipSegments]] : [];
         const user: PluginEntry[] = [...globalPluginEntries(), ...(o.plugins ?? []), ...this.runtimePlugins];
@@ -740,6 +763,8 @@ export class HopePlayerElement extends HTMLElement {
                 locale: () => this._options.locale ?? 'tr',
                 currentSrc: () => this.sourceManager.currentSrc,
                 isAdPlaying: () => this.isAdPlaying(),
+                blockAds: () => this.blockChrome('ads', 'hidden'),
+                unblockAds: () => this.unblockChrome('ads'),
                 isFullscreen: () => this.isFullscreenActive(),
                 addControlButton: (btn, position) => this.controlBar.addPluginButton(btn, position),
                 settings: {
@@ -809,6 +834,7 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     private async applyOptions(options: HopePlayerOptions): Promise<void> {
+        this.markPluginsPending();
         if (options.poster) this.videoEl.poster = options.poster;
         // Cast sırasında yerel video kendiliğinden çalmasın (kaynak değişse bile) — CastController dönüşte geri yükler.
         if (!this.casting) this.videoEl.autoplay = !!options.autoplay;
@@ -1046,6 +1072,7 @@ export class HopePlayerElement extends HTMLElement {
                         this.videoEl.poster = url;
                     },
                     requestFreshAd: (tag) => this.adsController?.resetForNewItem(tag),
+                    isAdActive: () => this.isAdPlaying(),
                     i18n: this.i18n,
                 },
                 options.playlist
@@ -2262,6 +2289,7 @@ export class HopePlayerElement extends HTMLElement {
                             const a = options.audio === true ? {} : options.audio;
                             return a.adPoster ? new URL(a.adPoster, document.baseURI).href : undefined;
                         })(),
+                        transformTag: (url, type) => this.adTagTransform(url, type),
                         surface: {
                             videoEl: this.videoEl,
                             containerEl: this.videoArea,

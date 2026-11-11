@@ -31,6 +31,8 @@ export interface AdsPlayerContext {
     surface?: AdSurfaceGuardContext;
     /** Ses reklamında IMA'nın göstereceği görsel (options.audio.adPoster) — mutlak URL. Yoksa player'ın kendi sahnesi görünür. */
     audioPoster?: string;
+    /** Eklentilerin `ads.transformTag` dönüşümleri. */
+    transformTag?(url: string, type: 'preroll' | 'midroll' | 'postroll'): Promise<string>;
 }
 
 /** Bir IMA hatasının ayrıntıları — hp:aderror olayı ve hata ayıklama kaydı için. */
@@ -438,6 +440,7 @@ export class AdsController {
             }
         }
 
+        if (this.ctx.transformTag) vastUrl = await this.ctx.transformTag(vastUrl, type.toLowerCase() as 'preroll' | 'midroll' | 'postroll');
         if (!this.adsLoader || !this.ima) return; // await sırasında destroy() olmuş olabilir
 
         const request = new this.ima.AdsRequest();
