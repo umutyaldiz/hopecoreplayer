@@ -210,6 +210,95 @@ async function testAnalytics(browser) {
     }
 }
 
+async function testGtm(browser) {
+    console.log('\n[8] GA4 / GTM: gtag yoksa dataLayer.push; ga4: \'dataLayer\' gtag olsa da dataLayer');
+    for (const [mode, withGtag] of [[true, false], ['dataLayer', true]]) {
+        const { page } = await open(browser);
+        try {
+            await page.evaluate((withGtag) => {
+                window.dataLayer = [];
+                window.__gtag = [];
+                if (withGtag) window.gtag = (cmd, name) => window.__gtag.push(name);
+            }, withGtag);
+            await setOptions(page, { src: '/sample.mp4', muted: true, id: 'video-7', analytics: { ga4: mode } });
+            await page.waitForTimeout(500);
+            await page.evaluate(async () => {
+                const v = document.getElementById('player').shadowRoot.querySelector('video');
+                await v.play();
+                await new Promise((r) => setTimeout(r, 300));
+                v.currentTime = v.duration - 1;
+                await new Promise((r) => v.addEventListener('ended', r, { once: true }));
+            });
+            const r = await page.evaluate(() => ({ dl: window.dataLayer.map((e) => e.event + (e.video_percent ? `:${e.video_percent}` : '')), first: window.dataLayer[0], gtag: window.__gtag }));
+            ok(
+                r.dl[0] === 'video_start' && r.dl.includes('video_progress:75') && r.dl.at(-1) === 'video_complete' && r.first.video_title === 'video-7' && r.first.video_provider === 'hopeplayer' && r.gtag.length === 0,
+                `ga4: ${JSON.stringify(mode)}${withGtag ? ' (gtag var)' : ''} → ${JSON.stringify(r.dl)}`
+            );
+        } finally {
+            await page.close();
+        }
+    }
+}
+
+async function testInteractionEvents(browser) {
+    console.log('\n[9] Analitik: ses (toplanmış), tam ekran ve PiP olayları; GA4 / dataLayer karşılıkları');
+    const { page } = await open(browser);
+    try {
+        await page.evaluate(() => {
+            window.dataLayer = [];
+            window.__ev = [];
+            document.getElementById('player').addEventListener('hp:analytics', (e) => {
+                const { type, data } = e.detail.event;
+                if (['volume', 'fullscreen', 'pip'].includes(type)) window.__ev.push(`${type}:${JSON.stringify(data)}`);
+            });
+        });
+        await setOptions(page, { src: '/sample.mp4', muted: true, analytics: { ga4: 'dataLayer' } });
+        await page.waitForTimeout(500);
+        ok((await page.evaluate(() => window.__ev.length)) === 0, 'seçeneklerle gelen muted olay üretmedi');
+        await playFor(page, 300);
+        // Sürükleme gibi art arda değişiklik → tek olay.
+        await page.evaluate(async () => {
+            const v = document.getElementById('player').shadowRoot.querySelector('video');
+            v.muted = false;
+            for (const x of [0.9, 0.8, 0.7, 0.6, 0.5]) {
+                v.volume = x;
+                await new Promise((r) => setTimeout(r, 40));
+            }
+        });
+        await page.waitForTimeout(700);
+        const vol = await page.evaluate(() => window.__ev.filter((e) => e.startsWith('volume')));
+        ok(vol.length === 1 && vol[0] === 'volume:{"volume":0.5,"muted":false}', `ses tek olay ${JSON.stringify(vol)}`);
+
+        const btn = (label) => page.evaluate((l) => document.getElementById('player').shadowRoot.querySelector(`[aria-label="${l}"]`)?.getBoundingClientRect().toJSON(), label);
+        const click = async (label) => {
+            const r = await btn(label);
+            if (r) await page.mouse.click(r.x + r.width / 2, r.y + r.height / 2);
+        };
+        await page.mouse.move(450, 280);
+        await click('Tam ekran');
+        await page.waitForTimeout(500);
+        await page.evaluate(() => document.exitFullscreen?.().catch(() => {}));
+        await page.waitForTimeout(500);
+        const pipOk = await page.evaluate(() => document.pictureInPictureEnabled === true);
+        if (pipOk) {
+            await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').requestPictureInPicture().catch(() => {}));
+            await page.waitForTimeout(400);
+            await page.evaluate(() => document.exitPictureInPicture?.().catch(() => {}));
+            await page.waitForTimeout(400);
+        }
+        const r = await page.evaluate(() => ({ ev: window.__ev.slice(), dl: window.dataLayer.map((e) => `${e.event}:${e.active ?? e.volume}`) }));
+        const fs = r.ev.filter((e) => e.startsWith('fullscreen'));
+        ok(JSON.stringify(fs) === '["fullscreen:{\\"active\\":true}","fullscreen:{\\"active\\":false}"]', `tam ekran giriş / çıkış ${JSON.stringify(fs)}`);
+        if (pipOk) {
+            const pip = r.ev.filter((e) => e.startsWith('pip'));
+            ok(JSON.stringify(pip) === '["pip:{\\"active\\":true}","pip:{\\"active\\":false}"]', `PiP giriş / çıkış ${JSON.stringify(pip)}`);
+        } else console.log(`  (${BROWSER}: PiP yok, atlandı)`);
+        ok(r.dl.includes('video_volume:0.5') && r.dl.includes('video_fullscreen:true') && r.dl.includes('video_fullscreen:false'), `dataLayer ${JSON.stringify(r.dl)}`);
+    } finally {
+        await page.close();
+    }
+}
+
 async function testRebuffer(browser) {
     console.log('\n[6] Analitik: takılma (rebuffer) ölçülüyor — segment gecikmesiyle');
     const { page } = await open(browser);
@@ -295,6 +384,8 @@ async function testNoMse(browser) {
             await testNoMse(browser);
         }
         await testAnalytics(browser);
+        await testGtm(browser);
+        await testInteractionEvents(browser);
     } finally {
         await browser.close();
     }

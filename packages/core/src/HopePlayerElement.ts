@@ -640,6 +640,7 @@ export class HopePlayerElement extends HTMLElement {
                 isAdActive: () => this.isAdPlaying(),
                 currentLevel: () => this.sourceManager.currentLevel(),
                 engine: () => this.sourceManager.engine.engine,
+                isFullscreen: () => this.isFullscreenActive(),
                 playerId: () => this._options.id,
             },
             options.analytics === true ? {} : options.analytics

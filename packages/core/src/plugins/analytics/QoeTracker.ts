@@ -8,6 +8,7 @@ export interface AnalyticsPlayerContext {
     isAdActive(): boolean;
     currentLevel(): { height: number; bitrate: number | null } | null;
     engine(): string;
+    isFullscreen(): boolean;
     /** `options.id`. */
     playerId(): string | undefined;
 }
@@ -16,6 +17,11 @@ const DEFAULT_INTERVAL_MS = 15_000;
 const MILESTONES = [25, 50, 75];
 /** Bu kadar kısa takılmalar sayılmaz (ms). */
 const MIN_REBUFFER_MS = 250;
+/** Ses sürüklenirken tek olay. */
+const VOLUME_DEBOUNCE_MS = 500;
+const FULLSCREEN_EVENTS = ['fullscreenchange', 'webkitfullscreenchange'] as const;
+const VIDEO_FULLSCREEN_EVENTS = ['webkitbeginfullscreen', 'webkitendfullscreen'] as const;
+const PIP_EVENTS = ['enterpictureinpicture', 'leavepictureinpicture', 'webkitpresentationmodechanged'] as const;
 
 type Gtag = (cmd: 'event', name: string, params: Record<string, unknown>) => void;
 
@@ -38,6 +44,10 @@ export class QoeTracker {
     private seeking = false;
     private stallAt: number | null = null;
     private adStartAt: number | null = null;
+    private volumeTimer: ReturnType<typeof setTimeout> | null = null;
+    private lastVolumeKey = '';
+    private fullscreen = false;
+    private pip = false;
     private bitrateTime = 0;
     private bitrateSum = 0;
     private lastLevelKey = '';
@@ -60,6 +70,11 @@ export class QoeTracker {
         v.addEventListener('ended', this.onEnded);
         v.addEventListener('error', this.onError);
         v.addEventListener('loadstart', this.onLoadStart);
+        v.addEventListener('volumechange', this.onVolume);
+        for (const n of VIDEO_FULLSCREEN_EVENTS) v.addEventListener(n, this.onFullscreen);
+        for (const n of PIP_EVENTS) v.addEventListener(n, this.onPip);
+        for (const n of FULLSCREEN_EVENTS) document.addEventListener(n, this.onFullscreen);
+        this.lastVolumeKey = volumeKey(v);
         ctx.hostEl.addEventListener('hp:error', this.onPlayerError);
         ctx.hostEl.addEventListener('hp:adstart', this.onAdStart);
         ctx.hostEl.addEventListener('hp:adend', this.onAdEnd);
@@ -87,6 +102,11 @@ export class QoeTracker {
         v.removeEventListener('ended', this.onEnded);
         v.removeEventListener('error', this.onError);
         v.removeEventListener('loadstart', this.onLoadStart);
+        v.removeEventListener('volumechange', this.onVolume);
+        for (const n of VIDEO_FULLSCREEN_EVENTS) v.removeEventListener(n, this.onFullscreen);
+        for (const n of PIP_EVENTS) v.removeEventListener(n, this.onPip);
+        for (const n of FULLSCREEN_EVENTS) document.removeEventListener(n, this.onFullscreen);
+        if (this.volumeTimer) clearTimeout(this.volumeTimer);
         this.ctx.hostEl.removeEventListener('hp:error', this.onPlayerError);
         this.ctx.hostEl.removeEventListener('hp:adstart', this.onAdStart);
         this.ctx.hostEl.removeEventListener('hp:adend', this.onAdEnd);
@@ -255,6 +275,42 @@ export class QoeTracker {
         this.track('ad_start', { adType: type });
     };
 
+    private readonly onVolume = (): void => {
+        // Oynatma isteğinden önceki değişiklik (seçeneklerle `muted`) izleyicinin değil.
+        if (this.playIntentAt === null && !this.started) {
+            this.lastVolumeKey = volumeKey(this.ctx.videoEl);
+            return;
+        }
+        if (this.volumeTimer) clearTimeout(this.volumeTimer);
+        this.volumeTimer = setTimeout(() => {
+            this.volumeTimer = null;
+            const v = this.ctx.videoEl;
+            const key = volumeKey(v);
+            if (key === this.lastVolumeKey) return;
+            this.lastVolumeKey = key;
+            const data = { volume: Math.round(v.volume * 100) / 100, muted: v.muted };
+            this.track('volume', data);
+            this.ga4('video_volume', data);
+        }, VOLUME_DEBOUNCE_MS);
+    };
+
+    private readonly onFullscreen = (e: Event): void => {
+        const active = e.type === 'webkitbeginfullscreen' ? true : e.type === 'webkitendfullscreen' ? false : this.ctx.isFullscreen();
+        if (active === this.fullscreen) return;
+        this.fullscreen = active;
+        this.track('fullscreen', { active });
+        this.ga4('video_fullscreen', { active });
+    };
+
+    private readonly onPip = (e: Event): void => {
+        const v = this.ctx.videoEl as HTMLVideoElement & { webkitPresentationMode?: string };
+        const active = e.type === 'enterpictureinpicture' ? true : e.type === 'leavepictureinpicture' ? false : v.webkitPresentationMode === 'picture-in-picture';
+        if (active === this.pip) return;
+        this.pip = active;
+        this.track('pip', { active });
+        this.ga4('video_pip', { active });
+    };
+
     private readonly onAdEnd = (e: Event): void => {
         const type = (e as CustomEvent<{ type?: string }>).detail?.type ?? null;
         if (this.adStartAt !== null) this.m.adMs += Math.round(performance.now() - this.adStartAt);
@@ -330,18 +386,28 @@ export class QoeTracker {
     }
 
     private ga4(name: string, params: Record<string, unknown>): void {
-        if (!this.options.ga4) return;
-        const gtag = (window as unknown as { gtag?: Gtag }).gtag;
-        if (typeof gtag !== 'function') return;
+        const mode = this.options.ga4;
+        if (!mode) return;
+        const w = window as unknown as { gtag?: Gtag; dataLayer?: unknown[] };
         const v = this.ctx.videoEl;
-        gtag('event', name, {
+        const data = {
             video_url: this.ctx.currentSrc() ?? undefined,
             video_title: this.options.videoId ?? this.ctx.playerId(),
             video_current_time: Math.round(v.currentTime),
             video_duration: Number.isFinite(v.duration) ? Math.round(v.duration) : undefined,
             video_provider: 'hopeplayer',
             ...params,
-        });
+        };
+        // true: gtag varsa gtag, yoksa (yalnızca GTM) dataLayer.
+        const useGtag = mode === 'gtag' || (mode === true && typeof w.gtag === 'function');
+        if (useGtag) {
+            if (typeof w.gtag === 'function') w.gtag('event', name, data);
+            return;
+        }
+        if (mode === 'dataLayer' || Array.isArray(w.dataLayer)) {
+            w.dataLayer = w.dataLayer ?? [];
+            w.dataLayer.push({ event: name, ...data });
+        }
     }
 
     private snapshot(): HopeQoeMetrics {
@@ -382,3 +448,4 @@ function emptyMetrics(): HopeQoeMetrics {
 }
 
 const round = (n: number): number => Math.round(n * 100) / 100;
+const volumeKey = (v: HTMLVideoElement): string => `${Math.round(v.volume * 100)}:${v.muted}`;

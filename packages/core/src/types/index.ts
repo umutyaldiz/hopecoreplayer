@@ -935,6 +935,9 @@ export type HopeAnalyticsEventType =
     | 'error'
     | 'ad_start'
     | 'ad_end'
+    | 'volume'
+    | 'fullscreen'
+    | 'pip'
     | 'heartbeat'
     | 'session_end';
 
@@ -1000,8 +1003,11 @@ export interface HopeAnalyticsOptions {
     custom?: Record<string, string | number | boolean>;
     /** Verilirse `sendBeacon` yerine `fetch` (keepalive) kullanılır. */
     headers?: Record<string, string>;
-    /** `window.gtag` varsa GA4'e `video_start`, `video_progress`, `video_complete` gönderir. */
-    ga4?: boolean;
+    /**
+     * GA4 video olayları (`video_start`, `video_progress`, `video_complete`). `true`: `gtag` varsa onunla, yoksa
+     * `dataLayer.push({ event, … })` (Google Tag Manager). `'gtag'` / `'dataLayer'` yolu zorlar.
+     */
+    ga4?: boolean | 'gtag' | 'dataLayer';
     /** Her olayda. */
     onEvent?(event: HopeAnalyticsEvent, metrics: HopeQoeMetrics): void;
     /** Gönderim öncesi paketi değiştirir; `false` dönerse gönderilmez. */
