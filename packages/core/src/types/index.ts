@@ -1161,8 +1161,8 @@ export type HopePlayerEventMap = {
     'hp:sourcefallback': CustomEvent<{ from: HopeSourceFormat; to: HopeSourceFormat; code?: number; skipped?: boolean }>;
     'hp:ratechange': CustomEvent<{ rate: number }>;
     /** `linear: false` → overlay (non-linear) reklam: içerik durmaz, reklam içeriğin üstünde gösterilir. */
-    'hp:adstart': CustomEvent<{ type: 'preroll' | 'midroll' | 'postroll'; linear?: boolean }>;
-    'hp:adend': CustomEvent<{ type: 'preroll' | 'midroll' | 'postroll'; linear?: boolean }>;
+    'hp:adstart': CustomEvent<{ type: 'preroll' | 'midroll' | 'postroll'; linear?: boolean; /** Eklenti reklamıysa eklenti adı. */ plugin?: string }>;
+    'hp:adend': CustomEvent<{ type: 'preroll' | 'midroll' | 'postroll'; linear?: boolean; /** Eklenti reklamıysa eklenti adı. */ plugin?: string }>;
     /**
      * Reklam gösterilemedi. `code`: IMA hata kodu (ör. 1009 boş VAST, 301 zaman aşımı), `vastCode`: VAST hata numarası,
      * `errorType`: 'adLoadError' | 'adPlayError', `breakType`: hangi ara. Zaman aşımında `message` = 'preroll-timeout'.

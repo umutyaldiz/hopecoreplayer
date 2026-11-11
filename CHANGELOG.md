@@ -15,6 +15,13 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 ## [Unreleased]
 
 ### Added
+- **Plugin API, ads (`player.ads`):** plugins can play their own ad formats. `requestBreak(run)` pauses the content, hides the controls, blocks seeking and media keys, sets `isAdPlaying`, fires `hp:adstart` / `hp:adend` (with `plugin`) and gives the plugin a clickable layer; the content resumes afterwards. Hooks: `beforeContent` (preroll gate), `atTime` (midroll marks, seek-aware), `onPause` (pause ads), `onEnded` (postroll — playlist and redirect screen wait for it) and `transformTag` (rewrite IMA ad tags before the request). See [docs/PLUGIN_API.md](docs/PLUGIN_API.md#ads).
+
+### Changed
+- Playlist: when an ad is still playing as the video ends, the next item now waits for `hp:adend`.
+
+### Fixed
+- Plugin API: `ui.addLayer({ css })` styles were lost when the plugin set the layer's `innerHTML`.
 - **Sprite thumbnails, two-tier preview (`spriteThumbnails.lowRes`):** a tiny sheet covering the whole video (e.g. 48×27 frames, a few KB) loads on first interaction. While the full sheet under the cursor is loading, the frame for the right time is shown from the tiny sheet (scaled up), then sharpens — instead of an empty preview or the previous position's frame. It loads regardless of connection speed and is never evicted. `lowRes.interval` defaults to duration / frame count.
 - **Sprite thumbnails, `displayWidth`:** the on-screen preview width, independent of the frame size — 320×180 frames at `displayWidth: 160` are sharp on Retina screens. Works with templates, `sheets` and VTT.
 

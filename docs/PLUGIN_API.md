@@ -77,8 +77,82 @@ When the same name is registered twice, the player's own list wins over a page-w
 | `storage.get/set/remove` | A `localStorage` area namespaced to the plugin. |
 | `labels` | The player's built-in strings (read-only), e.g. to reuse "Close". |
 | `log(message, details)` | Writes to the player's error log (right click → Debug log with `debug: true`). |
+| `ads.*` | Custom ad formats — see [Ads](#ads). |
 
 All types are exported from `@hopeplayer/core` (`HopePlugin`, `PlayerApi`, `PluginEntry`…).
+
+## Ads
+
+`player.ads` lets a plugin play its own ad formats (a house ad, a sponsor video, a self-hosted VAST player) with the same guarantees as the built-in IMA ads, and hook into the IMA requests.
+
+### Ad breaks
+
+`requestBreak(run, options?)` starts an ad break:
+
+- the content pauses, the controls hide, and seeking and media keys (Space, K, J, L, arrows) are blocked;
+- `player.isAdPlaying` is `true`, so playlist, redirect screen, QR resume and other features treat it as a real ad;
+- `hp:adstart` / `hp:adend` fire with `{ type, linear: true, plugin }`;
+- `run(ad)` receives `ad.layer` (a clickable layer above everything), `ad.type`, `ad.signal` and `ad.end()`.
+
+The break ends when `run`'s promise settles, when `ad.end()` is called, after `timeoutMs` (default 60 s), or when the plugin is removed — then `ad.signal` aborts. The content resumes if it was playing (not after a postroll). If another ad is already playing, nothing starts and the returned promise resolves to `false`.
+
+```js
+import { definePlugin } from '@hopeplayer/core';
+
+export const houseAd = definePlugin({
+    name: 'house-ad',
+    setup(player, { src, skipAfter = 5 }) {
+        const play = () =>
+            player.ads.requestBreak((ad) => new Promise((done) => {
+                const video = document.createElement('video');
+                video.src = src;
+                video.autoplay = true;
+                video.playsInline = true;
+                video.style.cssText = 'width:100%;height:100%;object-fit:contain;background:#000';
+                video.onended = video.onerror = done;
+
+                const skip = document.createElement('button');
+                skip.textContent = 'Skip ad';
+                skip.style.cssText = 'position:absolute;right:12px;bottom:12px;display:none';
+                skip.onclick = () => ad.end();
+                setTimeout(() => (skip.style.display = ''), skipAfter * 1000);
+
+                ad.layer.append(video, skip);
+                ad.signal.addEventListener('abort', () => video.pause());
+            }));
+
+        player.ads.beforeContent(play);          // preroll
+        player.ads.atTime([300, 900], play);     // midrolls
+        player.ads.onEnded(play);                // postroll
+    },
+});
+```
+
+The type (`preroll` / `midroll` / `postroll`) is inferred from the state; pass `options.type` to set it.
+
+### Hooks
+
+| Hook | When |
+|---|---|
+| `beforeContent(fn)` | The first play of each source waits until `fn`'s promise settles (preroll). The content does not start meanwhile; the gate gives up after 15 s. |
+| `atTime(seconds, fn, { seekPast })` | Playback reaches a time naturally (midroll). When the viewer seeks past several marks, the last one fires once (`seekPast: 'last'`, default) or none (`'skip'`). Marks reset when the source changes. |
+| `onPause(fn, { delayMs })` | The viewer paused and is still paused after `delayMs` (default 300 ms; not on seeking, ended or during an ad). Return a function to remove your pause ad when playback resumes. |
+| `onEnded(fn)` | The video ended (postroll). Runs before the playlist and redirect screen; if `fn` starts a break synchronously, they wait for `hp:adend`. |
+| `transformTag(fn)` | Rewrites every IMA ad tag URL right before it is requested (after Prebid), e.g. to add targeting: `(url, type) => url + '&cust=' + type`. |
+
+Every hook returns an "off" function and is removed automatically with the plugin.
+
+```js
+// Pause ad
+player.ads.onPause(() => {
+    const layer = player.ui.addLayer({ position: 'center', interactive: true });
+    layer.el.innerHTML = '<a href="https://example.com" target="_blank"><img src="/pause-ad.png" width="300"></a>';
+    return () => layer.remove();
+});
+
+// Targeting for IMA
+player.ads.transformTag((url, type) => `${url}&cust_params=${encodeURIComponent(`plugin=1&break=${type}`)}`);
+```
 
 ## Cost
 
@@ -90,5 +164,4 @@ The "Skip intro" buttons (`skipSegments`) are implemented as a plugin on this pu
 
 ## Coming next
 
-- Ads (`player.ads`): custom ad formats with `requestBreak`, preroll / midroll / pause / postroll hooks and ad-tag transforms.
 - React Native: plugins as script URLs inside the WebView.

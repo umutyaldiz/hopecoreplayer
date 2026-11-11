@@ -1,5 +1,6 @@
 // Eklentileri kurar / kaldırır; eklenenleri izler ve temizler, hataları yakalar.
 import { createIcon } from '../icons/Icon';
+import { PluginAds } from './PluginAds';
 import type { SettingsSubmenuDef, SettingsSubmenuItem } from '../controls/SettingsMenu';
 import {
     PLUGIN_API_VERSION,
@@ -27,6 +28,9 @@ export interface PluginHostContext {
     locale(): string;
     currentSrc(): string | null;
     isAdPlaying(): boolean;
+    /** Reklam kilidi (`blockChrome('ads')`). */
+    blockAds(): void;
+    unblockAds(): void;
     isFullscreen(): boolean;
     addControlButton(button: HTMLButtonElement, position: 'left' | 'right'): void;
     settings: {
@@ -93,9 +97,16 @@ export class PluginHost {
     private toastTimer: ReturnType<typeof setTimeout> | null = null;
     /** Ayar satırı anahtarları. */
     private keySeq = 0;
+    private readonly ads: PluginAds;
 
     constructor(private readonly ctx: PluginHostContext) {
         ctx.element.addEventListener('keydown', this.onKeyDown);
+        this.ads = new PluginAds(ctx);
+    }
+
+    /** IMA tag'i eklenti dönüşümlerinden geçirir. */
+    transformAdTag(url: string, type: 'preroll' | 'midroll' | 'postroll'): string {
+        return this.ads.transformTag(url, type);
     }
 
     /** Listeye eşitler: kurar, kaldırır, günceller (aynı adlıda sonraki kazanır). */
@@ -144,6 +155,7 @@ export class PluginHost {
         ++this.syncSeq;
         for (const [name, inst] of this.instances) this.dispose(name, inst);
         this.ctx.element.removeEventListener('keydown', this.onKeyDown);
+        this.ads.destroy();
         this.toastEl?.remove();
         if (this.toastTimer) clearTimeout(this.toastTimer);
     }
@@ -200,6 +212,7 @@ export class PluginHost {
             }
         }
         inst.disposers = [];
+        this.ads.removeOwner(name);
         for (let i = this.shortcutList.length - 1; i >= 0; i--) if (this.shortcutList[i]!.owner === name) this.shortcutList.splice(i, 1);
     }
 
@@ -423,6 +436,24 @@ export class PluginHost {
                     }
                 },
             },
+            ads: (() => {
+                const raw = host.ads.api(name, guard);
+                // Dönen kaldırıcılar eklenti kaldırılınca da çağrılır.
+                const tracked = <F extends (...a: any[]) => () => void>(fn: F) =>
+                    ((...a: Parameters<F>) => {
+                        const off = fn(...a);
+                        track(off);
+                        return off;
+                    }) as F;
+                return {
+                    requestBreak: raw.requestBreak,
+                    beforeContent: tracked(raw.beforeContent),
+                    atTime: tracked(raw.atTime),
+                    onPause: tracked(raw.onPause),
+                    onEnded: tracked(raw.onEnded),
+                    transformTag: tracked(raw.transformTag),
+                };
+            })(),
             log: (message, details) => ctx.log(message, { plugin: name, ...details }),
         };
         return api;
@@ -500,21 +531,27 @@ export class PluginHost {
         el.toggleAttribute('data-autohide', !!o.autoHide);
         el.toggleAttribute('data-interactive', !!o.interactive);
         el.toggleAttribute('data-above', !!o.above);
-        if (o.css) {
-            const style = document.createElement('style');
-            style.textContent = o.css;
-            el.appendChild(style);
-        }
         let visible = o.visible !== false;
         el.hidden = !visible;
 
         if (o.above) this.ctx.videoArea.appendChild(el);
         else this.ctx.videoArea.insertBefore(el, this.ctx.chromeEl);
+        // Stil katmanın dışında: `el.innerHTML` silmesin.
+        let style: HTMLStyleElement | null = null;
+        if (o.css) {
+            style = document.createElement('style');
+            style.textContent = o.css;
+            el.before(style);
+        }
+        const removeAll = (): void => {
+            el.remove();
+            style?.remove();
+        };
         if (o.interactive) {
             // Tıklama videoya geçmesin.
             for (const ev of ['pointerdown', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'click', 'dblclick'] as const) el.addEventListener(ev, (e) => e.stopPropagation());
         }
-        track(() => el.remove());
+        track(removeAll);
         const set = (v: boolean): void => {
             visible = v;
             el.hidden = !v;
@@ -527,7 +564,7 @@ export class PluginHost {
             show: () => set(true),
             hide: () => set(false),
             toggle: (force) => set(force ?? !visible),
-            remove: () => el.remove(),
+            remove: removeAll,
         };
     }
 

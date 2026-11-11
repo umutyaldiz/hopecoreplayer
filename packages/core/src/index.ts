@@ -27,6 +27,10 @@ export type {
     PluginI18nApi,
     PluginStorageApi,
     PluginInstanceHandle,
+    PluginAdsApi,
+    PluginAdBreak,
+    PluginAdBreakOptions,
+    PluginAdBreakType,
 } from './plugin-api/types';
 export type { PlaybackEngineInfo } from './hls/SourceManager';
 export type {

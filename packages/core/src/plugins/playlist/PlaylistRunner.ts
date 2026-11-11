@@ -12,6 +12,8 @@ export interface PlaylistPlayerContext {
     setPoster(url: string): void;
     /** AdsController varsa retry/VMAP durumunu sıfırlayıp item'ın (varsa) kendi adTagPreroll'üyle yeniden reklam ister — yoksa no-op. */
     requestFreshAd(prerollTag?: string): void;
+    /** Postroll sürüyorsa sonraki öğe `hp:adend`'i bekler. */
+    isAdActive?(): boolean;
     i18n: HopeLocaleStrings;
 }
 
@@ -170,6 +172,15 @@ export class PlaylistRunner {
     };
 
     private readonly onEnded = (): void => {
+        if (this.ctx.isAdActive?.()) {
+            const host = this.ctx.hostEl;
+            const resume = (): void => {
+                host.removeEventListener('hp:adend', resume);
+                if (!this.destroyed && this.ctx.videoEl.ended) this.onEnded();
+            };
+            host.addEventListener('hp:adend', resume);
+            return;
+        }
         if (this.startPendingAfterCurrent && !this.playlistActive) {
             this.startPendingAfterCurrent = false;
             this.playlistActive = true;

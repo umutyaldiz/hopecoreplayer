@@ -1,6 +1,9 @@
-// Herkese açık eklenti API'si (aşama 1): kayıt, arayüz, otomatik temizlik, güncelleme, hata yalıtımı, kısayollar,
-// dil, depolama, tembel yükleme.
+// Herkese açık eklenti API'si: kayıt, arayüz, otomatik temizlik, güncelleme, hata yalıtımı, kısayollar, dil, depolama,
+// tembel yükleme, reklam API'si.
 import { launchBrowser } from './_browser.mjs';
+import { readFileSync } from 'fs';
+
+const MOCK_IMA = readFileSync(new URL('./_mock-ima.js', import.meta.url), 'utf8');
 
 const BASE = `http://localhost:${process.env.HOPE_TEST_PORT ?? 5183}`;
 let failures = 0;
@@ -62,7 +65,9 @@ const ui = (page) =>
         const layer = root.querySelector('.hp-plugin-layer[data-plugin="demo"]');
         return {
             button: btn ? { label: btn.getAttribute('aria-label'), pressed: btn.getAttribute('aria-pressed'), inRight: !!btn.closest('.hp-group:not(.hp-group-left)') } : null,
-            layer: layer ? { text: layer.textContent.trim(), hidden: layer.hidden, position: layer.dataset.position } : null,
+            layer: layer
+                ? { text: layer.textContent.trim(), hidden: layer.hidden, position: layer.dataset.position, styled: getComputedStyle(layer.querySelector('.demo-mark') ?? layer).backgroundColor === 'rgb(225, 29, 72)' }
+                : null,
             log: window.__log.slice(),
         };
     });
@@ -92,7 +97,7 @@ async function testInstallAndUi(browser) {
         ok(chunks.includes('pluginHost'), 'eklenti verilince pluginHost parçası indi');
         ok(s.log[0] === 'setup:{"text":"HOPE"}', `setup seçeneklerle çağrıldı ${JSON.stringify(s.log)}`);
         ok(s.button?.label === 'Logo göster' && s.button.pressed === 'true' && s.button.inRight, `buton ${JSON.stringify(s.button)}`);
-        ok(s.layer?.text === 'HOPE' && !s.layer.hidden && s.layer.position === 'top-left', `katman ${JSON.stringify(s.layer)}`);
+        ok(s.layer?.text === 'HOPE' && !s.layer.hidden && s.layer.position === 'top-left' && s.layer.styled, `katman (css, innerHTML sonrası da) ${JSON.stringify(s.layer)}`);
 
         // Buton tıklaması: aç/kapa + emit; video oynamaya başlamadı (tıklama videoya geçmedi).
         await page.evaluate(() => document.getElementById('player').addEventListener('demo:toggle', (e) => window.__log.push(`emit:${e.detail.visible}`)));
@@ -304,6 +309,193 @@ async function testLayerClicksAndShortcutList(browser) {
     }
 }
 
+/** Reklam olaylarını ve durumu kaydeder. */
+const AD_PROBE = () => {
+    window.__ads = [];
+    const el = document.getElementById('player');
+    for (const n of ['hp:adstart', 'hp:adend']) el.addEventListener(n, (e) => window.__ads.push(`${n.slice(3)}:${e.detail.type}:${e.detail.plugin ?? '-'}`));
+    window.__adState = () => {
+        const root = el.shadowRoot;
+        const v = root.querySelector('video');
+        const layer = root.querySelector('.hp-plugin-ad');
+        return { ad: el.isAdPlaying(), paused: v.paused, t: v.currentTime, layer: layer?.textContent ?? null, chrome: root.querySelector('.hp-chrome').style.opacity };
+    };
+};
+
+async function testMidrollBreak(browser) {
+    console.log('\n[5] ads.atTime + requestBreak: içerik durur, kilit, katman, olaylar, Space engelli, ikinci ara reddedilir, sonra kaldığı yerden sürer');
+    const { page } = await open(browser);
+    try {
+        await page.evaluate(() => {
+            window.__second = null;
+            document.getElementById('player').options = {
+                src: '/sample.mp4',
+                muted: true,
+                plugins: [
+                    {
+                        name: 'mid',
+                        setup(p) {
+                            p.ads.atTime(1, () =>
+                                p.ads.requestBreak((ad) => {
+                                    ad.layer.textContent = 'AD';
+                                    p.ads.requestBreak(() => {}).then((r) => (window.__second = r));
+                                    return new Promise((r) => setTimeout(r, 1200));
+                                })
+                            );
+                        },
+                    },
+                ],
+            };
+        });
+        await page.waitForTimeout(400);
+        await page.evaluate(AD_PROBE);
+        await page.evaluate(() => document.getElementById('player').play());
+        await page.waitForFunction(() => window.__ads.length > 0, null, { timeout: 5000 });
+        await page.waitForTimeout(150);
+        const during = await page.evaluate(() => window.__adState());
+        ok(during.ad && during.paused && during.layer === 'AD' && during.chrome === '0', `arada: isAdPlaying, durdu, katman, kontroller gizli ${JSON.stringify(during)}`);
+        ok((await page.evaluate(() => window.__second)) === false, 'süren ara varken ikinci istek false');
+        await page.evaluate(() => document.getElementById('player').focus());
+        await page.keyboard.press('Space');
+        await page.waitForTimeout(150);
+        ok((await page.evaluate(() => window.__adState())).paused, 'Space içeriği oynatmadı');
+        await page.waitForFunction(() => window.__ads.length >= 2, null, { timeout: 4000 });
+        await page.waitForTimeout(500);
+        const after = await page.evaluate(() => window.__adState());
+        const log = await page.evaluate(() => window.__ads);
+        ok(JSON.stringify(log) === '["adstart:midroll:mid","adend:midroll:mid"]', `olaylar ${JSON.stringify(log)}`);
+        ok(!after.ad && !after.paused && after.layer === null && after.t > during.t, `sonra: oynuyor, katman yok ${JSON.stringify(after)}`);
+    } finally {
+        await page.close();
+    }
+}
+
+async function testPrerollGateAndPause(browser) {
+    console.log('\n[6] ads.beforeContent: ilk oynatma arayı bekler (preroll); ads.onPause: gecikmeli, oynatınca temizlik; kaldırınca kancalar gider');
+    const { page } = await open(browser);
+    try {
+        await page.evaluate(() => {
+            window.__pause = [];
+            document.getElementById('player').options = {
+                src: '/sample.mp4',
+                muted: true,
+                plugins: [
+                    {
+                        name: 'pre',
+                        setup(p) {
+                            p.ads.beforeContent(() =>
+                                p.ads.requestBreak((ad) => {
+                                    ad.layer.textContent = 'PRE';
+                                    return new Promise((r) => setTimeout(r, 900));
+                                })
+                            );
+                            p.ads.onPause(
+                                () => {
+                                    window.__pause.push('show');
+                                    return () => window.__pause.push('hide');
+                                },
+                                { delayMs: 200 }
+                            );
+                        },
+                    },
+                ],
+            };
+        });
+        await page.waitForTimeout(400);
+        await page.evaluate(AD_PROBE);
+        await page.evaluate(() => document.getElementById('player').play().catch(() => {}));
+        await page.waitForTimeout(400);
+        const during = await page.evaluate(() => window.__adState());
+        ok(during.ad && during.paused && during.t < 0.1 && during.layer === 'PRE', `preroll sürerken içerik başlamadı ${JSON.stringify(during)}`);
+        await page.waitForFunction(() => window.__ads.length >= 2, null, { timeout: 4000 });
+        await page.waitForTimeout(600);
+        const after = await page.evaluate(() => window.__adState());
+        ok(!after.paused && after.t > 0, `preroll sonrası içerik oynuyor ${JSON.stringify(after)}`);
+        ok((await page.evaluate(() => window.__ads[0])) === 'adstart:preroll:pre', 'tür preroll');
+
+        await page.evaluate(() => document.getElementById('player').pause());
+        await page.waitForTimeout(80);
+        ok((await page.evaluate(() => window.__pause.length)) === 0, 'onPause gecikmeden önce çalışmadı');
+        await page.waitForTimeout(300);
+        await page.evaluate(() => document.getElementById('player').play());
+        await page.waitForTimeout(200);
+        const seq = await page.evaluate(() => window.__pause.join(','));
+        ok(seq === 'show,hide', `onPause gösterildi, oynatınca temizlendi (${seq})`);
+
+        await page.evaluate(() => {
+            const el = document.getElementById('player');
+            el.options = { ...el.options, plugins: [] };
+        });
+        await page.waitForTimeout(300);
+        await page.evaluate(() => document.getElementById('player').pause());
+        await page.waitForTimeout(400);
+        ok((await page.evaluate(() => window.__pause.length)) === 2, 'eklenti kalkınca onPause gitti');
+    } finally {
+        await page.close();
+    }
+}
+
+async function testPostrollWithPlaylist(browser) {
+    console.log('\n[7] ads.onEnded: postroll arası; playlist sonraki öğeye ara bitince geçer');
+    const { page } = await open(browser);
+    try {
+        await page.evaluate(() => {
+            document.getElementById('player').options = {
+                muted: true,
+                playlist: {
+                    items: [
+                        { title: 'A', mp4: [{ src: '/sample.mp4', label: 'Oto', selected: true }] },
+                        { title: 'B', mp4: [{ src: '/sample-240p.mp4', label: 'Oto', selected: true }] },
+                    ],
+                },
+                plugins: [{ name: 'post', setup(p) { p.ads.onEnded(() => p.ads.requestBreak(() => new Promise((r) => setTimeout(r, 1000)))); } }],
+            };
+        });
+        await page.waitForTimeout(600);
+        await page.evaluate(AD_PROBE);
+        await page.evaluate(async () => {
+            const v = document.getElementById('player').shadowRoot.querySelector('video');
+            v.addEventListener('loadstart', () => window.__ads.push('loadstart'));
+            await v.play();
+            await new Promise((r) => setTimeout(r, 200));
+            v.currentTime = Math.max(0, v.duration - 0.4);
+        });
+        await page.waitForFunction(() => window.__ads.length > 0, null, { timeout: 6000 }).catch(() => {});
+        await page.waitForTimeout(300);
+        const during = await page.evaluate(() => ({ ...window.__adState(), log: window.__ads.slice() }));
+        ok(during.ad && !during.log.includes('loadstart'), `postroll sürerken playlist geçmedi ${JSON.stringify(during)}`);
+        ok(during.log[0] === 'adstart:postroll:post', `tür postroll (${during.log[0]})`);
+        await page.waitForFunction(() => window.__ads.includes('loadstart'), null, { timeout: 5000 }).catch(() => {});
+        const log = await page.evaluate(() => window.__ads);
+        ok(JSON.stringify(log) === '["adstart:postroll:post","adend:postroll:post","loadstart"]', `ara bitince sonraki öğe yüklendi ${JSON.stringify(log)}`);
+    } finally {
+        await page.close();
+    }
+}
+
+async function testTransformTag(browser) {
+    console.log('\n[8] ads.transformTag: IMA isteğinden önce tag adresi değişiyor (tür bilgisiyle)');
+    const page = await browser.newPage();
+    try {
+        await page.addInitScript(MOCK_IMA);
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+        await page.evaluate(() => {
+            document.getElementById('player').options = {
+                src: '/sample.mp4',
+                muted: true,
+                ads: { adTagPreroll: 'https://example.com/vast/preroll', requestWhen: 'load' },
+                plugins: [{ name: 'tag', setup(p) { p.ads.transformTag((url, type) => `${url}&plug=${type}`); } }],
+            };
+        });
+        await page.waitForFunction(() => window.__adsLog?.some((e) => e.ev === 'requestAds'), null, { timeout: 6000 }).catch(() => {});
+        const url = await page.evaluate(() => window.__adsLog?.filter((e) => e.ev === 'requestAds').at(-1)?.adTagUrl ?? '');
+        ok(url.startsWith('https://example.com/vast/preroll') && url.endsWith('&plug=preroll'), `tag dönüştürüldü (…${url.slice(-30)})`);
+    } finally {
+        await page.close();
+    }
+}
+
 (async () => {
     const browser = await launchBrowser();
     try {
@@ -311,6 +503,10 @@ async function testLayerClicksAndShortcutList(browser) {
         await testCleanupAndUpdate(browser);
         await testErrorsAndRegistration(browser);
         await testLayerClicksAndShortcutList(browser);
+        await testMidrollBreak(browser);
+        await testPrerollGateAndPause(browser);
+        await testPostrollWithPlaylist(browser);
+        await testTransformTag(browser);
     } finally {
         await browser.close();
     }
