@@ -122,6 +122,7 @@ export const tr: HopeLocaleStrings = {
     a11yKeyVolume: 'Sesi aç / kıs',
     a11yKeyMute: 'Sesi kapat / aç',
     a11yKeyFullscreen: 'Tam ekran',
+    a11yKeyFrame: 'Bir kare geri / ileri',
     a11yKeyZoom: 'Yakınlaştır / uzaklaştır, sıfırla',
     a11yKeyPan: 'Yakınlaştırılmış görüntüde gezin',
     a11yKeyShortcuts: 'Bu listeyi aç / kapat',

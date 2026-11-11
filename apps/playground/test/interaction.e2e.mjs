@@ -3,7 +3,7 @@
 // ağ SDK'sına bağımlı değil (yalnızca IntersectionObserver/pointer/scroll gibi
 // gerçek tarayıcı API'leri), bu yüzden ads/prebid testlerinin aksine mock
 // gerektirmiyor — gerçek DOM etkileşimleri ve gerçek scroll ile sürülüyor.
-import { launchBrowser } from './_browser.mjs';
+import { launchBrowser, BROWSER } from './_browser.mjs';
 
 const BASE = `http://localhost:${process.env.HOPE_TEST_PORT ?? 5183}`;
 let failures = 0;
@@ -827,9 +827,66 @@ async function testThumbAfterScaledMount(browser) {
     await page.close();
 }
 
+async function testFrameStep(browser) {
+    console.log('\n[FS] Kare kare ilerleme: , / . (oynarken ölçülen kare süresi, frameRate seçeneği, oynarken basınca durur, ? listesinde)');
+    const page = await browser.newPage({ viewport: { width: 800, height: 500 } });
+    try {
+        await page.goto(`${BASE}/`);
+        await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+        await page.evaluate(() => (document.getElementById('player').options = { src: '/sample.mp4', muted: true, accessibility: true }));
+        await page.waitForTimeout(500);
+        const t = () => page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').currentTime);
+        const paused = () => page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').paused);
+        await page.evaluate(async () => {
+            const el = document.getElementById('player');
+            await el.play();
+            await new Promise((r) => setTimeout(r, 1500));
+            el.focus();
+        });
+        // Oynarken . → durur ve bir kare ilerler.
+        await page.keyboard.press('Period');
+        await page.waitForTimeout(200);
+        ok(await paused(), 'oynarken . → duraklatıldı');
+        const t0 = await t();
+        await page.keyboard.press('Period');
+        await page.waitForTimeout(200);
+        const t1 = await t();
+        await page.keyboard.press('Comma');
+        await page.waitForTimeout(200);
+        const t2 = await t();
+        const step = t1 - t0;
+        // rVFC yoksa varsayılan 1/30.
+        const measured = await page.evaluate(() => 'requestVideoFrameCallback' in HTMLVideoElement.prototype);
+        const expected = measured ? 1 / 24 : 1 / 30;
+        // WebKit sarmayı videonun kare sınırına yuvarlar — orada "yaklaşık bir kare" yeter.
+        const tol = BROWSER === 'webkit' ? 1 / 24 : 0.004;
+        ok(Math.abs(step - expected) < tol && step > 0 && Math.abs(t2 - t0) < tol, `bir kare ileri / geri (${step.toFixed(4)} sn, beklenen ${expected.toFixed(4)}, ${measured ? 'ölçülen' : 'varsayılan'})`);
+
+        await page.evaluate(() => {
+            const el = document.getElementById('player');
+            el.options = { ...el.options, frameRate: 10 };
+            el.focus();
+        });
+        await page.waitForTimeout(200);
+        const t3 = await t();
+        await page.keyboard.press('Period');
+        await page.waitForTimeout(200);
+        const t4 = await t();
+        ok(Math.abs(t4 - t3 - 0.1) < tol, `frameRate: 10 → 0.1 sn (${(t4 - t3).toFixed(4)})`);
+
+        await page.keyboard.press('Shift+Slash');
+        await page.waitForTimeout(200);
+        const text = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="shortcuts"]')?.textContent ?? '');
+        ok(text.includes('Bir kare geri / ileri'), '? listesinde');
+    } finally {
+        await page.close();
+    }
+}
+
 (async () => {
     const browser = await launchBrowser();
     try {
+        await testFrameStep(browser);
         await testPluginIsolation(browser);
         await testGesture(browser);
         await testTapToTogglePlayPause(browser);

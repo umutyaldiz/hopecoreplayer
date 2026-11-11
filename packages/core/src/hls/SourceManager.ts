@@ -1,5 +1,14 @@
 import type { HlsConfig } from 'hls.js';
-import type { HopeDashOptions, HopeDrmOptions, HopeHlsOptions } from '../types';
+import type { HopeCmcdOptions, HopeDashOptions, HopeDrmOptions, HopeHlsOptions, QualityLimitOptions } from '../types';
+
+/** Oturum kimliği (CMCD `sid` ve analitik oturumu). */
+function newId(): string {
+    try {
+        return crypto.randomUUID();
+    } catch {
+        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+}
 import type { DashEngine } from './dashEngine';
 import type { NativeEme } from '../drm/NativeEme';
 import { hasFatalMediaError } from '../utils/media-error';
@@ -142,6 +151,10 @@ export class SourceManager {
     private dashOptions: HopeDashOptions | undefined;
     private drm: HopeDrmOptions | undefined;
     private nativeEme: NativeEme | null = null;
+    private qualityLimit: QualityLimitOptions | undefined;
+    private cmcd: (HopeCmcdOptions & { contentId?: string }) | null = null;
+    /** Her `load()`'da yenilenir. */
+    private sid = newId();
 
     constructor(
         video: HTMLVideoElement,
@@ -151,8 +164,13 @@ export class SourceManager {
     }
 
     /** `options.hls` — sonraki `load()`'da uygulanır. */
-    configure(options: HopeHlsOptions | undefined, media?: { dash?: HopeDashOptions; drm?: HopeDrmOptions }): void {
+    configure(
+        options: HopeHlsOptions | undefined,
+        media?: { dash?: HopeDashOptions; drm?: HopeDrmOptions; qualityLimit?: QualityLimitOptions; cmcd?: HopeCmcdOptions | null }
+    ): void {
         this.hlsOptions = options ?? {};
+        this.cmcd = media?.cmcd ?? null;
+        this.qualityLimit = media?.qualityLimit;
         this.dashOptions = media?.dash;
         this.drm = media?.drm;
     }
@@ -162,8 +180,14 @@ export class SourceManager {
         return !!this.last && this.last.src === src && this.last.type === type && !hasFatalMediaError(this.video) && this.video.readyState > 0;
     }
 
+    /** O anki oynatma oturumu (CMCD `sid`). */
+    get sessionId(): string {
+        return this.sid;
+    }
+
     async load(src: string, type?: string): Promise<void> {
         this.last = { src, type };
+        this.sid = newId();
         // Önce önceki HLS instance'ını kapat (hls.js kendi blob kaynağını media'dan ayırır).
         this.destroy();
         this.video.pause();
@@ -249,11 +273,17 @@ export class SourceManager {
         const { DashEngine } = await import('./dashEngine');
         if (this.last?.src !== src) return;
         this.engineInfo = { engine: 'dash.js' };
-        this.dash = new DashEngine(this.video, src, { dash: this.dashOptions, drm: this.drm, autoplay: this.video.autoplay }, {
+        this.dash = new DashEngine(this.video, src, { dash: this.dashOptions, drm: this.drm, autoplay: this.video.autoplay, fitPlayer: !!this.qualityLimit?.fitPlayer, cmcd: this.cmcd ? { ...this.cmcd, sessionId: this.sid } : null }, {
             onLevels: (levels, active) => this.callbacks.onLevelsChanged(levels, active),
             onAudioTracks: (tracks, active) => this.callbacks.onAudioTracksChanged(tracks, active),
             onFatal: (kind) => this.callbacks.onFatalError(kind),
             onError: (e) => this.callbacks.onStreamError?.({ type: 'dash', details: `${e.code}: ${e.message}`, fatal: e.fatal, engine: 'dash.js' }),
+            onTextTracks: (tracks) => {
+                this.streamTextTracks.clear();
+                for (const t of tracks) this.streamTextTracks.set(t.id, t);
+                this.callbacks.onTextTracksFound([...this.streamTextTracks.values()]);
+            },
+            onCues: (id, cues) => this.callbacks.onCues(id, cues),
             onDrm: (keySystem) => {
                 this.engineInfo = { ...this.engineInfo, drm: keySystem };
             },
@@ -325,8 +355,8 @@ export class SourceManager {
 
     private async attachHlsJs(src: string): Promise<void> {
         // Diğer tarayıcılar: hls.js'i yalnızca gerektiğinde yükle. İki paket ayrı parçalarda — biri seçilince öbürü inmez.
-        // Hafif pakette EME yok — DRM'de tam paket.
-        const build = this.hlsOptions.build === 'light' && !hasDrm(this.drm) ? 'light' : 'full';
+        // Hafif pakette EME ve CMCD yok — o zaman tam paket.
+        const build = this.hlsOptions.build === 'light' && !hasDrm(this.drm) && !this.cmcd ? 'light' : 'full';
         const { default: Hls } = build === 'light' ? await import('hls.js/light') : await import('hls.js');
         // import sırasında başka bir kaynak yüklenmiş olabilir.
         if (this.last?.src !== src) return;
@@ -424,7 +454,11 @@ export class SourceManager {
         const user = this.hlsOptions.config ?? {};
         // liveDurationInfinity: hls.js canlıda varsayılan olarak SONLU bir duration verir (kayan pencere sonu) — player
         // canlıyı duration === Infinity ile tanıdığı için canlı rozeti/duvar saati açılmıyor, süre "0:35 / 0:54" görünüyordu.
-        const config: Partial<HlsConfig> = { enableWorker: true, renderTextTracksNatively: false, liveDurationInfinity: true, ...user, ...drmConfig };
+        const config: Partial<HlsConfig> = { enableWorker: true, renderTextTracksNatively: false, liveDurationInfinity: true, ...(this.qualityLimit?.fitPlayer ? { capLevelToPlayerSize: true } : {}),
+            ...(this.cmcd ? { cmcd: { sessionId: this.sid, contentId: this.cmcd.contentId, useHeaders: this.cmcd.mode === 'header' } } : {}),
+            ...user,
+            ...drmConfig,
+        };
         if (this.hlsOptions.withCredentials) {
             const { xhrSetup, fetchSetup } = user;
             config.xhrSetup = (xhr, url, context) => {
@@ -486,6 +520,10 @@ export class SourceManager {
      * seçili `subtitleTrack` için indirir; CEA-608 cue'ları zaten video segmentlerinden sürekli gelir.
      */
     selectTextTrack(id: string | null): void {
+        if (this.dash) {
+            this.dash.selectText(id);
+            return;
+        }
         if (!this.hls) return;
         const hlsId = id?.startsWith('sub:') ? Number(id.slice(4)) : NaN;
         this.hls.subtitleTrack = Number.isNaN(hlsId) ? -1 : this.hls.subtitleTracks.findIndex((t) => t.id === hlsId);

@@ -299,6 +299,179 @@ async function testInteractionEvents(browser) {
     }
 }
 
+async function testQualityLimit(browser) {
+    console.log('\n[11] qualityLimit: max (menü + ABR), veri tasarrufu (saveData), fitPlayer (küçük player), MP4 kalitelerinde max');
+    const width = (page) => page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').videoWidth);
+    // max: 180 → yalnızca 180p.
+    {
+        const { page } = await open(browser);
+        try {
+            await setOptions(page, { src: '/dash/clear.mpd', muted: true, qualityLimit: { max: 200 } });
+            await page.waitForTimeout(800);
+            await playFor(page, 2500);
+            const items = await qualityItems(page);
+            ok(!items.some((i) => /360/.test(i)) && items.some((i) => /180/.test(i)), `max: menüde 360p yok ${JSON.stringify(items)}`);
+            ok((await width(page)) === 320, `max: 180p oynuyor (${await width(page)} px)`);
+        } finally {
+            await page.close();
+        }
+    }
+    // dataSaver: tarayıcı tasarruf modunda → otomatik 180p; menüde 360p durur.
+    {
+        const page = await browser.newPage({ viewport: { width: 900, height: 560 } });
+        try {
+            await page.addInitScript(() => Object.defineProperty(Navigator.prototype, 'connection', { get: () => ({ saveData: true, effectiveType: '4g' }), configurable: true }));
+            await page.goto(`${BASE}/`);
+            await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+            await setOptions(page, { src: '/dash/clear.mpd', muted: true, qualityLimit: { dataSaver: 200 } });
+            await page.waitForTimeout(800);
+            await playFor(page, 2500);
+            const items = await qualityItems(page);
+            ok(items.some((i) => /360/.test(i)) && (await width(page)) === 320, `dataSaver: 180p'de, menüde 360p seçilebilir (${await width(page)} px)`);
+        } finally {
+            await page.close();
+        }
+    }
+    // fitPlayer: 200 px genişlikte player → 180p.
+    {
+        const { page } = await open(browser);
+        try {
+            await page.evaluate(() => (document.getElementById('player').style.width = '200px'));
+            await setOptions(page, { src: '/dash/clear.mpd', muted: true, qualityLimit: { fitPlayer: true } });
+            await page.waitForTimeout(800);
+            await playFor(page, 3000);
+            ok((await width(page)) === 320, `fitPlayer: küçük player'da 180p (${await width(page)} px)`);
+        } finally {
+            await page.close();
+        }
+    }
+    // HLS (hls.js): max ve veri tasarrufu aynı kurallarla.
+    for (const [limit, expectMenu360] of [[{ max: 300 }, false], [{ dataSaver: 300 }, true]]) {
+        const page = await browser.newPage({ viewport: { width: 900, height: 560 } });
+        try {
+            await page.addInitScript(() => Object.defineProperty(Navigator.prototype, 'connection', { get: () => ({ saveData: true, effectiveType: '4g' }), configurable: true }));
+            await page.goto(`${BASE}/`);
+            await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+            await setOptions(page, { src: '/hls/master.m3u8', muted: true, hls: { engine: 'hls.js' }, qualityLimit: limit });
+            await page.waitForTimeout(800);
+            await playFor(page, 3000);
+            const items = await qualityItems(page);
+            const w = await width(page);
+            ok(items.some((i) => /360/.test(i)) === expectMenu360 && w === 426, `HLS ${JSON.stringify(limit)}: 240p oynuyor (${w} px), menü ${JSON.stringify(items)}`);
+        } finally {
+            await page.close();
+        }
+    }
+    // MP4 kaliteleri: max 480 → 720p menüde yok, 240p oynuyor.
+    {
+        const { page } = await open(browser);
+        try {
+            await setOptions(page, {
+                muted: true,
+                sources: [
+                    { src: '/sample.mp4', label: '720p', selected: true },
+                    { src: '/sample-240p.mp4', label: '240p' },
+                ],
+                qualityLimit: { max: 480 },
+            });
+            await page.waitForTimeout(800);
+            const src = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').currentSrc);
+            ok(src.endsWith('/sample-240p.mp4'), `MP4: max üstü 720p atlandı (${src.split('/').pop()})`);
+        } finally {
+            await page.close();
+        }
+    }
+}
+
+async function testCmcd(browser) {
+    console.log('\n[12] CMCD: DASH ve HLS segment isteklerinde CMCD (sid = analitik oturumu, cid = options.id)');
+    for (const [src, extra, re] of [
+        ['/dash/clear.mpd', {}, /\/dash\/clear-\d-\d+\.m4s/],
+        ['/hls/master.m3u8', { hls: { engine: 'hls.js', build: 'light' } }, /\.ts|\.m4s/],
+    ]) {
+        const { page } = await open(browser);
+        try {
+            const urls = [];
+            page.on('request', (r) => re.test(r.url()) && urls.push(decodeURIComponent(r.url())));
+            await setOptions(page, { src, muted: true, id: 'film-9', cmcd: true, analytics: true, ...extra });
+            await page.waitForTimeout(800);
+            await playFor(page, 1500);
+            const sid = await page.evaluate(() => {
+                const el = document.getElementById('player');
+                return new Promise((r) => {
+                    el.addEventListener('hp:analytics', () => {}, { once: true });
+                    r(el.playbackEngine && el.qoe ? true : false);
+                });
+            });
+            const withCmcd = urls.filter((u) => /CMCD=/.test(u));
+            const m = /sid="([^"]+)"/.exec(withCmcd[0] ?? '');
+            const cid = /cid="([^"]+)"/.exec(withCmcd[0] ?? '');
+            ok(sid && withCmcd.length > 0 && withCmcd.length === urls.length && m && cid?.[1] === 'film-9', `${src}: ${withCmcd.length}/${urls.length} istekte CMCD, cid=${cid?.[1]} (${(withCmcd[0] ?? '').split('?')[1]?.slice(0, 90) ?? '—'})`);
+            // Analitik oturumu = CMCD sid.
+            const posts = [];
+            await page.route('**/collect', (route) => {
+                posts.push(JSON.parse(route.request().postData() ?? '{}'));
+                return route.fulfill({ status: 204 });
+            });
+            await page.evaluate(() => {
+                const el = document.getElementById('player');
+                el.options = { ...el.options, analytics: { endpoint: '/collect', intervalMs: 1000 } };
+            });
+            await page.waitForTimeout(1600);
+            const sids = new Set(urls.filter((u) => /CMCD=/.test(u)).map((u) => /sid="([^"]+)"/.exec(u)?.[1]));
+            ok(posts.length > 0 && sids.has(posts.at(-1).sessionId), `analitik sessionId CMCD sid ile aynı (${posts.at(-1)?.sessionId})`);
+        } finally {
+            await page.close();
+        }
+    }
+}
+
+async function testDashSubtitles(browser) {
+    console.log('\n[10] DASH altyazıları: menüde diller, player katmanında çizim, dil değişimi, kapatma');
+    const { page } = await open(browser);
+    try {
+        await setOptions(page, { src: '/dash/subs.mpd', muted: true });
+        await page.waitForTimeout(1500);
+        const menu = (label) =>
+            page.evaluate(async (label) => {
+                const root = document.getElementById('player').shadowRoot;
+                const wait = () => new Promise((r) => setTimeout(r, 200));
+                const gear = root.querySelector('[aria-label="Ayarlar"]');
+                gear.click();
+                await wait();
+                Array.from(root.querySelectorAll('.hp-chip-panel button')).find((b) => /Altyazı/.test(b.textContent))?.click();
+                await wait();
+                const items = Array.from(root.querySelectorAll('.hp-chip-panel button')).map((b) => b.textContent.trim());
+                if (label) Array.from(root.querySelectorAll('.hp-chip-panel button')).find((b) => b.textContent.trim().startsWith(label))?.click();
+                else gear.click();
+                await wait();
+                return items;
+            }, label);
+        const caption = (at) =>
+            page.evaluate(async (at) => {
+                const root = document.getElementById('player').shadowRoot;
+                const v = root.querySelector('video');
+                v.currentTime = at;
+                await new Promise((r) => setTimeout(r, 700));
+                const b = root.querySelector('.hp-caption-bubble.hp-caption-visible');
+                return b?.textContent?.trim() ?? '';
+            }, at);
+        const items = await menu('Türkçe');
+        ok(JSON.stringify(items) === '["Altyazı","Kapalı","Türkçe","İngilizce"]', `menü ${JSON.stringify(items)}`);
+        await playFor(page, 300);
+        await page.evaluate(() => document.getElementById('player').pause());
+        ok((await caption(1.5)) === 'İnce belli bardakta demli bir çay', 'Türkçe altyazı player katmanında');
+        const native = await page.evaluate(() => Array.from(document.getElementById('player').shadowRoot.querySelector('video').textTracks).filter((t) => t.mode === 'showing').length);
+        ok(native === 0, `tarayıcının kendi çizimi kapalı (showing iz: ${native})`);
+        await menu('İngilizce');
+        ok((await caption(2.8)) === 'A ferry ride on the Bosphorus, gulls in tow', 'İngilizceye geçti');
+        await menu('Kapalı');
+        ok((await caption(1.5)) === '', 'kapatılınca altyazı yok');
+    } finally {
+        await page.close();
+    }
+}
+
 async function testRebuffer(browser) {
     console.log('\n[6] Analitik: takılma (rebuffer) ölçülüyor — segment gecikmesiyle');
     const { page } = await open(browser);
@@ -379,6 +552,9 @@ async function testNoMse(browser) {
             await testDataUrlLicense(browser);
             await testDrmError(browser);
             await testRebuffer(browser);
+            await testDashSubtitles(browser);
+            await testQualityLimit(browser);
+            await testCmcd(browser);
         } else {
             console.log(`\n(${BROWSER}: MediaSource yok — DASH / DRM senaryoları atlandı)`);
             await testNoMse(browser);

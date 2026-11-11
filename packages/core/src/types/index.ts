@@ -1014,6 +1014,24 @@ export interface HopeAnalyticsOptions {
     beforeSend?(payload: HopeAnalyticsPayload): HopeAnalyticsPayload | false;
 }
 
+/** CMCD (CTA-5004): segment isteklerine oturum / buffer / bit hızı bilgisi — CDN loglarında QoE. */
+export interface HopeCmcdOptions {
+    /** İçerik kimliği (`cid`). Varsayılan `options.id`. */
+    contentId?: string;
+    /** `'query'` (varsayılan, `?CMCD=…`) ya da `'header'` (CMCD-* başlıkları; CDN'de CORS izni gerekir). */
+    mode?: 'query' | 'header';
+}
+
+/** Kalite sınırları — veri tasarrufu ve gereksiz yüksek çözünürlüğü önlemek için. */
+export interface QualityLimitOptions {
+    /** Bu yükseklikten büyük kaliteler kullanılmaz ve menüde görünmez (ör. `1080`). HLS, DASH ve MP4 kaliteleri. */
+    max?: number;
+    /** Tarayıcıda "Veri tasarrufu" açıksa ya da bağlantı yavaşsa (2G / 3G) otomatik kalite bu yükseklikte durur; menüden yine yükseği seçilebilir. `true` = 480. */
+    dataSaver?: boolean | number;
+    /** Player'ın ekrandaki boyutundan (× piksel yoğunluğu) büyük kalite indirilmez. HLS ve DASH (ABR). */
+    fitPlayer?: boolean;
+}
+
 /** Çoklu dokunuş hareketi türü — ileride `'tripletap'` eklenebilir. */
 export type TapGestureType = 'doubletap';
 /** Ekranın bölgesi: sol/sağ üçte bir, orta, ya da tamamı. */
@@ -1134,6 +1152,10 @@ export interface HopePlayerOptions {
      * Varsayılan true; `false` gizler.
      */
     qualityBadge?: boolean;
+    /** CMCD: HLS / DASH segment isteklerine CDN için oturum ve oynatma bilgisi. `analytics` açıksa aynı oturum kimliği. */
+    cmcd?: boolean | HopeCmcdOptions;
+    /** Kalite sınırları: en yüksek kalite, veri tasarrufu, player boyutuna sığdırma. Varsayılan kapalı. */
+    qualityLimit?: QualityLimitOptions;
     /**
      * Canlı yayında ilerleme çubuğu (geri sarılabilir canlıda DVR çubuğu). Varsayılan true; `false` canlıda gizler —
      * "● CANLI" rozeti ve klavyeyle sarma kalır. VOD'u etkilemez.
@@ -1183,6 +1205,8 @@ export interface HopePlayerOptions {
     skipButtons?: boolean | SkipButtonsOptions;
     /** ←/→ ve J/L klavye kısayollarıyla kaç saniye sarılır. Varsayılan 5. */
     keyboardSeekStep?: number;
+    /** `,` / `.` ile kare kare ilerlemede kare hızı (fps). Verilmezse oynarken ölçülür, ölçülemezse 30. */
+    frameRate?: number;
     /** HLS oynatma ayarları — motor seçimi, hls.js config'i (buffer/ABR/düşük gecikme), kimlik bilgisi. */
     hls?: HopeHlsOptions;
     /** DASH (.mpd) oynatma ayarları. */

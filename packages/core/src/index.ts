@@ -83,6 +83,8 @@ export type {
     HopeAnalyticsEventType,
     HopeAnalyticsPayload,
     HopeQoeMetrics,
+    QualityLimitOptions,
+    HopeCmcdOptions,
     ContextMenuOptions,
     TapGesture,
     TapGestureType,
