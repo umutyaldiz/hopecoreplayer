@@ -66,7 +66,7 @@ async function open(browser, config, { gpt = 'mock' } = {}) {
         });
     });
     await page.goto(`${BASE}/?feature=adtriggers`);
-    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggers'), null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggers'), null, { timeout: 8000, polling: 50 });
     return { page, context };
 }
 
@@ -90,6 +90,7 @@ const state = (page) =>
         };
     });
 
+// Sabit aralıklı yoklama: varsayılan rAF, Linux WebKit'te oynatma sırasında saniyelerce gecikebiliyor.
 const play = (page) => page.evaluate(() => document.getElementById('player').play());
 const rule = (r) => ({ adUnitPath: '/6355419/Travel', ...r });
 
@@ -102,7 +103,7 @@ async function testTimeTrigger(browser) {
     let s = await state(page);
     ok(s.ev[0].rules === 1 && !s.open && s.requests.length === 0, 'kurallar yüklendi, henüz istek yok');
     await play(page);
-    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggershow'), null, { timeout: 6000 }).catch(() => {});
+    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggershow'), null, { timeout: 6000, polling: 50 }).catch(() => {});
     s = await state(page);
     const req = s.requests[0];
     ok(s.open && s.layout === 'bottom' && s.frame?.w === 320 && s.frame?.h === 50, `kutu açık (${s.layout}, ${JSON.stringify(s.frame)})`);
@@ -128,7 +129,7 @@ async function testFullscreenTrigger(browser) {
     await page.waitForTimeout(500);
     let s = await state(page);
     ok(!s.open && s.requests.length === 0, 'gecikme sürerken istek yok');
-    await page.waitForTimeout(900);
+    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggershow'), null, { timeout: 5000, polling: 50 }).catch(() => {});
     s = await state(page);
     const fsNow = await page.evaluate(() => document.fullscreenElement?.id);
     ok(fsNow === 'player' && s.open && s.requests[0]?.targeting.hp_mode === 'fullscreen', `tam ekranda gösterildi (hp_mode=${s.requests[0]?.targeting.hp_mode})`);
@@ -187,10 +188,10 @@ async function testPauseContentAndEmpty(browser) {
         ],
     });
     await play(page);
-    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggerempty'), null, { timeout: 5000 }).catch(() => {});
+    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggerempty'), null, { timeout: 5000, polling: 50 }).catch(() => {});
     let s = await state(page);
     ok(s.ev.some((e) => e.t === 'adtriggerempty' && e.rule === 'empty') && !s.open && s.lightAds === 0, 'boş birim → hp:adtriggerempty, kutu yok');
-    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggershow'), null, { timeout: 5000 }).catch(() => {});
+    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggershow'), null, { timeout: 5000, polling: 50 }).catch(() => {});
     await page.waitForTimeout(300);
     s = await state(page);
     const full = await page.evaluate(() => {
@@ -231,7 +232,7 @@ async function testBlockedGpt(browser) {
     console.log('\n[6] gpt.js engelli → kutu açılmaz, takılı kalmaz (empty)');
     const { page, context } = await open(browser, { active: true, rules: [rule({ triggers: [{ type: 'start' }] })] }, { gpt: 'block' });
     await play(page);
-    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggerempty'), null, { timeout: 10000 }).catch(() => {});
+    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggerempty'), null, { timeout: 10000, polling: 50 }).catch(() => {});
     const s = await state(page);
     ok(s.ev.some((e) => e.t === 'adtriggerempty') && !s.open && s.lightAds === 0, 'engelli GPT → hp:adtriggerempty, temiz');
     await context.close();
@@ -272,7 +273,7 @@ async function testInterval(browser) {
     let s = await state(page);
     ok(s.requests.length === 0, 'oynatılmadan (duraklatılmış) 2.5 sn → istek yok');
     await play(page);
-    await page.waitForFunction(() => window.__gpt?.requests.length > 0, null, { timeout: 5000 }).catch(() => {});
+    await page.waitForFunction(() => window.__gpt?.requests.length > 0, null, { timeout: 5000, polling: 50 }).catch(() => {});
     s = await state(page);
     ok(s.requests[0]?.targeting.hp_trigger === 'interval', `izleme ~1 sn → interval reklamı (${s.requests.length})`);
     await context.close();
@@ -288,7 +289,7 @@ async function testLayoutNone(browser) {
         rules: [rule({ id: 'raw', triggers: [{ type: 'start' }] }), rule({ id: 'raw2', triggers: [{ type: 'pause' }] })],
     });
     await play(page);
-    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggershow'), null, { timeout: 5000 }).catch(() => {});
+    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggershow'), null, { timeout: 5000, polling: 50 }).catch(() => {});
     let s = await state(page);
     const bare = await page.evaluate(() => {
         const box = document.getElementById('player').shadowRoot.querySelector('[part="ad-trigger"]');
@@ -296,7 +297,7 @@ async function testLayoutNone(browser) {
     });
     ok(s.open && s.layout === 'none' && !bare.label && !bare.close && !bare.backdrop && s.lightAds === 1, `none: istek atıldı, kreatif yerleşti; etiket/X/karartma yok (${JSON.stringify(bare)})`);
     await page.evaluate(() => document.getElementById('player').pause());
-    await page.waitForFunction(() => window.__ev.filter((e) => e.t === 'adtriggershow').length >= 2, null, { timeout: 5000 }).catch(() => {});
+    await page.waitForFunction(() => window.__ev.filter((e) => e.t === 'adtriggershow').length >= 2, null, { timeout: 5000, polling: 50 }).catch(() => {});
     s = await state(page);
     ok(s.ev.some((e) => e.t === 'adtriggerclose' && e.rule === 'raw' && e.reason === 'replaced') && s.open && s.lightAds === 1, 'yeni tetikleme önceki none reklamını değiştirdi (reason: replaced)');
     await page.evaluate(() => document.getElementById('player').closeAdTrigger());
@@ -324,9 +325,9 @@ async function testCustParams(browser) {
     });
     await page.waitForTimeout(200);
     await play(page);
-    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggershow'), null, { timeout: 6000 }).catch(() => {});
+    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggershow'), null, { timeout: 6000, polling: 50 }).catch(() => {});
     await page.evaluate(() => document.getElementById('player').pause());
-    await page.waitForFunction(() => window.__gpt?.requests.length >= 2, null, { timeout: 6000 }).catch(() => {});
+    await page.waitForFunction(() => window.__gpt?.requests.length >= 2, null, { timeout: 6000, polling: 50 }).catch(() => {});
     const s = await state(page);
     const [a, b] = s.requests.map((r) => r.targeting);
     ok(a?.sezon === '2026' && a.canli === 'true' && a.etiket?.join() === 'mac,ozet' && !('bad key!' in a), `JSON: ${JSON.stringify(a)}`);
