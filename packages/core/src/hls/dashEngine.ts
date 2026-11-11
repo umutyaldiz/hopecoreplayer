@@ -42,6 +42,8 @@ const NETWORK_CODES = new Set([10, 11, 12, 15, 16, 17, 18, 19, 25, 26, 27, 28, 2
 const UNSUPPORTED_CODES = new Set([23, 35]);
 /** Ölümcül sayılmayan: altyazı ayrıştırma. */
 const NON_FATAL = new Set([33]);
+/** dash.js MediaPlayerEvents.MANAGED_MEDIA_SOURCE_START_STREAMING. */
+const E_MMS_START = 'managedMediaSourceStartStreaming';
 
 export class DashEngine {
     private readonly player: MediaPlayerClass;
@@ -161,6 +163,8 @@ export class DashEngine {
         const i = id?.startsWith('dash:') ? Number(id.slice(5)) : -1;
         this.textIndex = Number.isInteger(i) && i >= 0 ? i : -1;
         try {
+            // Safari ManagedMediaSource: tampon doluyken "endstreaming" altyazı isteğini de durdurur — izin ver.
+            if (this.textIndex >= 0 && 'ManagedMediaSource' in window) this.player.trigger(E_MMS_START as never, {}, {});
             this.player.setTextTrack(this.textIndex);
         } catch {
             /* yok say */

@@ -447,26 +447,34 @@ async function testDashSubtitles(browser) {
                 await wait();
                 return items;
             }, label);
-        const caption = (at) =>
-            page.evaluate(async (at) => {
+        // Oynarken bakılır (sarma yok): Linux WebKit (GStreamer) tamamı tamponlanmış DASH'te sarınca çözme hatasıyla sıfırlanıyor.
+        const caption = (re) =>
+            page.evaluate(async (src) => {
+                const re = new RegExp(src);
                 const root = document.getElementById('player').shadowRoot;
-                const v = root.querySelector('video');
-                v.currentTime = at;
-                await new Promise((r) => setTimeout(r, 700));
-                const b = root.querySelector('.hp-caption-bubble.hp-caption-visible');
-                return b?.textContent?.trim() ?? '';
-            }, at);
+                let text = '';
+                for (let i = 0; i < 20; i++) {
+                    text = root.querySelector('.hp-caption-bubble.hp-caption-visible')?.textContent?.trim() ?? '';
+                    if (re.test(text)) break;
+                    await new Promise((r) => setTimeout(r, 150));
+                }
+                return text;
+            }, re.source);
         const items = await menu('Türkçe');
         ok(JSON.stringify(items) === '["Altyazı","Kapalı","Türkçe","İngilizce"]', `menü ${JSON.stringify(items)}`);
-        await playFor(page, 300);
-        await page.evaluate(() => document.getElementById('player').pause());
-        ok((await caption(1.5)) === 'İnce belli bardakta demli bir çay', 'Türkçe altyazı player katmanında');
+        await page.evaluate(() => void document.getElementById('player').shadowRoot.querySelector('video').play().catch(() => {}));
+        const tr = await caption(/Galata|çay|vapur|kedisi/);
+        ok(/Galata|çay|vapur|kedisi/.test(tr), `Türkçe altyazı player katmanında (${tr})`);
         const native = await page.evaluate(() => Array.from(document.getElementById('player').shadowRoot.querySelector('video').textTracks).filter((t) => t.mode === 'showing').length);
         ok(native === 0, `tarayıcının kendi çizimi kapalı (showing iz: ${native})`);
+        // Tampon dolu: Safari'de ManagedMediaSource "endstreaming" sonrası da yeni dil inmeli.
         await menu('İngilizce');
-        ok((await caption(2.8)) === 'A ferry ride on the Bosphorus, gulls in tow', 'İngilizceye geçti');
+        const en = await caption(/tea|ferry|cat|tram|simit/);
+        ok(/tea|ferry|cat|tram|simit/.test(en), `İngilizceye geçti (${en})`);
         await menu('Kapalı');
-        ok((await caption(1.5)) === '', 'kapatılınca altyazı yok');
+        await page.waitForTimeout(400);
+        ok((await caption(/^$/)) === '', 'kapatılınca altyazı yok');
+        await page.evaluate(() => document.getElementById('player').pause());
     } finally {
         await page.close();
     }
@@ -545,11 +553,15 @@ async function testNoMse(browser) {
         const probe = await browser.newPage();
         await probe.goto(`${BASE}/`);
         const mse = await probe.evaluate(() => typeof MediaSource !== 'undefined' || typeof ManagedMediaSource !== 'undefined');
+        // Playwright'ın Linux WebKit'inde EME yok (requestMediaKeySystemAccess tanımsız).
+        const eme = await probe.evaluate(() => typeof navigator.requestMediaKeySystemAccess === 'function');
         await probe.close();
         if (mse) {
             await testDashClear(browser);
-            await testDashClearKey(browser);
-            await testDataUrlLicense(browser);
+            if (eme) {
+                await testDashClearKey(browser);
+                await testDataUrlLicense(browser);
+            } else console.log(`\n(${BROWSER}: EME yok — ClearKey oynatma senaryoları atlandı; kod 5 senaryosu yine çalışır)`);
             await testDrmError(browser);
             await testRebuffer(browser);
             await testDashSubtitles(browser);
