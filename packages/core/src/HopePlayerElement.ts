@@ -1,5 +1,5 @@
 import tailwindCss from './theme/tailwind.css?inline';
-import type { HopeSourceOption, AdsOptions, HopePlayerOptions } from './types';
+import type { HopeSourceOption, AdsOptions, HopePlayerOptions, HopeQoeMetrics } from './types';
 import type Hls from 'hls.js';
 import { SourceManager, type HlsQualityLevel, type PlaybackEngineInfo, type StreamAudioTrack, type StreamTextTrack } from './hls/SourceManager';
 import { cannotPlay, groupSources, sourceFormat, type SourceGroup } from './hls/sourceGroups';
@@ -49,6 +49,7 @@ import type { HopePlugin, PluginEntry, PluginInstanceHandle, PluginLoader } from
 import { globalPluginEntries, onGlobalPluginsChange, registerPlugin } from './plugin-api/registry';
 import type { Accessibility } from './plugins/accessibility';
 import type { PlaybackHistory } from './plugins/history';
+import type { QoeTracker } from './plugins/analytics';
 import type { QrResume } from './plugins/qr-resume';
 import type { PauseAd } from './plugins/pause-ad';
 import type { AdTriggers } from './plugins/ad-triggers';
@@ -209,6 +210,8 @@ export class HopePlayerElement extends HTMLElement {
     private accessibility: Accessibility | null = null;
     private accessibilityKey = '';
     private playbackHistory: PlaybackHistory | null = null;
+    private qoeTracker: QoeTracker | null = null;
+    private analyticsKey = '';
     private historyKey = '';
     private qrResume: QrResume | null = null;
     private pauseAd: PauseAd | null = null;
@@ -356,7 +359,7 @@ export class HopePlayerElement extends HTMLElement {
             onTextTracksFound: this.onStreamTextTracks,
             onCues: this.onStreamCues,
             onFatalError: (kind) => {
-                const code = kind === 'network' ? 2 : 3;
+                const code = kind === 'drm' ? 5 : kind === 'unsupported' ? 4 : kind === 'network' ? 2 : 3;
                 this.streamErrorCode = code;
                 this.errorScreen.showStreamError(code);
             },
@@ -365,7 +368,7 @@ export class HopePlayerElement extends HTMLElement {
                     source: 'stream',
                     message: `${e.type}: ${e.details}`,
                     fatal: e.fatal,
-                    details: { url: e.url, httpStatus: e.httpStatus, reason: e.reason, engine: 'hls.js' },
+                    details: { url: e.url, httpStatus: e.httpStatus, reason: e.reason, engine: e.engine ?? 'hls.js' },
                 }),
         });
         // Her ölümcül hata (video.error ve hls.js) buradan geçer: sıradaki biçim grubuna geçilecekse ekran açılmaz.
@@ -567,6 +570,9 @@ export class HopePlayerElement extends HTMLElement {
         this.playbackHistory?.destroy();
         this.playbackHistory = null;
         this.historyKey = '';
+        this.qoeTracker?.destroy();
+        this.qoeTracker = null;
+        this.analyticsKey = '';
         this.qrResume?.destroy();
         this.pauseAd?.destroy();
         this.pauseAd = null;
@@ -616,7 +622,36 @@ export class HopePlayerElement extends HTMLElement {
         this.videoEl.pause();
     }
 
-    /** Şu anki oynatma yolu: `native` (MP4/WebM), `native-hls` (tarayıcının HLS'i) ya da `hls.js` — teşhis için. */
+    /** Kaynak yüklenmeden önce kurulur — ilk oynatma ölçülsün. */
+    private async applyAnalytics(options: HopePlayerOptions): Promise<void> {
+        const key = options.analytics ? JSON.stringify(options.analytics) : '';
+        if (key === this.analyticsKey) return;
+        this.analyticsKey = key;
+        this.qoeTracker?.destroy();
+        this.qoeTracker = null;
+        if (!options.analytics) return;
+        const { installAnalytics } = await import('./plugins/analytics');
+        if (this.analyticsKey !== key) return;
+        this.qoeTracker = installAnalytics(
+            {
+                hostEl: this,
+                videoEl: this.videoEl,
+                currentSrc: () => this.sourceManager.currentSrc,
+                isAdActive: () => this.isAdPlaying(),
+                currentLevel: () => this.sourceManager.currentLevel(),
+                engine: () => this.sourceManager.engine.engine,
+                playerId: () => this._options.id,
+            },
+            options.analytics === true ? {} : options.analytics
+        );
+    }
+
+    /** Oturumun deneyim (QoE) ölçümleri — `options.analytics` kapalıysa null. */
+    get qoe(): HopeQoeMetrics | null {
+        return this.qoeTracker?.metrics ?? null;
+    }
+
+    /** Şu anki oynatma yolu: `native` (MP4/WebM), `native-hls` (tarayıcının HLS'i), `hls.js` ya da `dash.js` — teşhis için. */
     get playbackEngine(): PlaybackEngineInfo {
         return this.sourceManager.engine;
     }
@@ -648,7 +683,7 @@ export class HopePlayerElement extends HTMLElement {
             message: err.message || names[err.code] || `MediaError ${err.code}`,
             // Ses aygıtı yok (Firefox): video sessiz oynamaya devam ediyor — kayda düşer ama ölümcül değil.
             fatal: !isAudioOutputError(err),
-            details: { code: err.code, name: names[err.code], src: src && !src.startsWith('blob:') ? src : src ? 'MediaSource (hls.js)' : undefined },
+            details: { code: err.code, name: names[err.code], src: src && !src.startsWith('blob:') ? src : src ? `MediaSource (${this.sourceManager.engine.engine})` : undefined },
         });
     };
 
@@ -974,7 +1009,8 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     private async initPlayback(options: HopePlayerOptions): Promise<void> {
-        this.sourceManager.configure(options.hls);
+        this.sourceManager.configure(options.hls, { dash: options.dash, drm: options.drm });
+        await this.applyAnalytics(options);
         this.errorScreen.dismiss();
         await this.applyRewardedUnlock(options);
 
@@ -1634,7 +1670,7 @@ export class HopePlayerElement extends HTMLElement {
                     addButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick),
                     getMedia: () => this.castMedia(),
                     isAdPlaying: () => this.isAdPlaying(),
-                    isMse: () => this.sourceManager.engine.engine === 'hls.js',
+                    isMse: () => this.sourceManager.engine.engine === 'hls.js' || this.sourceManager.engine.engine === 'dash.js',
                     contentKey: () => this.contentKey(),
                     onRemoteChange: (remote) => {
                         this.casting = remote;

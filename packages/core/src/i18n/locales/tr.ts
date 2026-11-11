@@ -81,6 +81,7 @@ export const tr: HopeLocaleStrings = {
     errorNetwork: 'Ağ hatası — video yüklenemedi.',
     errorDecode: 'Video kodu çözülemedi.',
     errorSrcNotSupported: 'Bu video kaynağı desteklenmiyor.',
+    errorDrm: 'Bu korumalı video bu cihazda ya da tarayıcıda oynatılamıyor.',
     errorGeneric: 'Video oynatılırken bir hata oluştu.',
     errorCode: 'Hata kodu',
     countdownRemaining: 'Kalan süre',

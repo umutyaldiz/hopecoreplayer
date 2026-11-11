@@ -80,6 +80,7 @@ export const en: HopeLocaleStrings = {
     errorNetwork: 'Network error — the video could not load.',
     errorDecode: 'The video could not be decoded.',
     errorSrcNotSupported: 'This video source is not supported.',
+    errorDrm: 'This protected video cannot be played on this device or browser.',
     errorGeneric: 'An error occurred while playing the video.',
     errorCode: 'Error code',
     countdownRemaining: 'Time remaining',

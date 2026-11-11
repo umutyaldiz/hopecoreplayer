@@ -84,6 +84,8 @@ export interface HopeLocaleStrings {
     errorNetwork: string;
     errorDecode: string;
     errorSrcNotSupported: string;
+    /** Lisans alınamadı / şifreli içerik bu cihazda oynatılamıyor (kod 5). */
+    errorDrm: string;
     errorGeneric: string;
     /** Hata ekranındaki kod satırının öneki (ör. "Hata kodu 4"). */
     errorCode: string;

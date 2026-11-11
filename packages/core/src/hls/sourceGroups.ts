@@ -60,6 +60,10 @@ export function groupSources(sources: HopeSourceOption[], priority?: readonly Ho
  * atlamak yerine denenir, hata alınırsa zaten sıradaki gruba geçilir.
  */
 export function cannotPlay(group: SourceGroup, video: HTMLVideoElement): boolean {
+    if (group.format === 'dash') {
+        const w = window as unknown as { MediaSource?: unknown; ManagedMediaSource?: unknown };
+        return typeof w.MediaSource === 'undefined' && typeof w.ManagedMediaSource === 'undefined';
+    }
     if (group.format === 'hls') {
         const w = window as unknown as { MediaSource?: unknown; ManagedMediaSource?: unknown };
         const mse = typeof w.MediaSource !== 'undefined' || typeof w.ManagedMediaSource !== 'undefined';

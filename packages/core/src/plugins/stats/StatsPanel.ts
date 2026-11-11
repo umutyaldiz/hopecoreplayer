@@ -102,7 +102,7 @@ export class StatsPanel {
         }
 
         const rows: [string, string][] = [
-            [t.statsEngine, engine.engine + (engine.reason ? ` (${engine.reason})` : '')],
+            [t.statsEngine, engine.engine + (engine.drm ? ` · ${engine.drm}` : '') + (engine.reason ? ` (${engine.reason})` : '')],
             [t.statsResolution, `${v.videoWidth}×${v.videoHeight} / ${Math.round(rect.width * dpr)}×${Math.round(rect.height * dpr)}`],
             [t.statsQuality, level ? `${level.height}p · ${Math.round(level.bitrate / 1000)} kbps${hls!.autoLevelEnabled ? ' · auto' : ''}` : '—'],
             [t.statsCodecs, level ? [level.videoCodec, level.audioCodec].filter(Boolean).join(', ') || '—' : '—'],

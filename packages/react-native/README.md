@@ -52,7 +52,7 @@ All [`HopePlayerOptions`](https://umutyaldiz.com/hopecoreplayer/install) are acc
 | `css` | `string` | — | CSS added to the WebView page: `--hp-*` theme tokens and `hope-player::part(...)` rules that go in a global stylesheet on the web. Changing it reloads the WebView. |
 | `webViewProps` | `WebViewProps` | — | Extra props for the underlying WebView. |
 
-Callbacks: `onReady`, `onPlay`, `onPause`, `onEnded`, `onError(message)`, `onTimeUpdate({ currentTime, duration, paused })` (about every 250 ms), `onQualityChange(label)`, `onRateChange(rate)`, `onAdStart(type)`, `onAdEnd(type)`, `onAdError(message)`, `onItemChange(index, source)`, `onPluginEvent(event, detail)`, and `onEvent(type, data)` for every bridge event.
+Callbacks: `onReady`, `onPlay`, `onPause`, `onEnded`, `onError(message)`, `onTimeUpdate({ currentTime, duration, paused })` (about every 250 ms), `onQualityChange(label)`, `onRateChange(rate)`, `onAdStart(type)`, `onAdEnd(type)`, `onAdError(message)`, `onItemChange(index, source)`, `onPluginEvent(event, detail)`, `onAnalytics({ event, metrics })` (with `analytics`), and `onEvent(type, data)` for every bridge event.
 
 Ref methods: `play()`, `pause()`, `seek(time)`, `setMuted(muted)`, `toggleStats(force?)`, `postToPlugin(plugin, data)`.
 
@@ -96,6 +96,7 @@ ref.current?.postToPlugin('badge', { text: 'REPLAY' });
 
 - **iOS:** inline playback and muted autoplay are enabled (`allowsInlineMediaPlayback`, `mediaPlaybackRequiresUserAction={false}`). The fullscreen button opens the native iOS video player.
 - **Android:** `allowsFullscreenVideo` is enabled for the fullscreen button.
+- **DRM / DASH:** `drm` and DASH sources work inside the WebView like on the web (Widevine on Android, FairPlay on iOS). Function options such as `drm.fairplay.prepareLicenseRequest` cannot cross into the WebView — use a license server that accepts the default binary format, or a plugin.
 - **Offline / no CDN:** by default the WebView loads `@hopeplayer/core` from jsDelivr. To bundle it, serve `node_modules/@hopeplayer/core/dist/` from your own server or app assets and pass `coreUrl`.
 - **Custom WebView setups:** `@hopeplayer/react-native/player-html` exports `buildPlayerHtml()` and `commandScript()` (no React Native dependency) if you want to build your own WebView integration.
 

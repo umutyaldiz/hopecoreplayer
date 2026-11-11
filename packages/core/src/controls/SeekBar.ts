@@ -66,6 +66,9 @@ export class SeekBar {
         this.el.setAttribute('tabindex', '0');
         this.el.setAttribute('aria-label', labels.seekBar);
         this.el.setAttribute('aria-valuemin', '0');
+        // Süre bilinmeden (yükleme / hata) de geçerli slider.
+        this.el.setAttribute('aria-valuemax', '0');
+        this.el.setAttribute('aria-valuenow', '0');
 
         const track = document.createElement('div');
         track.className =

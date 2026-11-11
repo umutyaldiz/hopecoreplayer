@@ -1,5 +1,7 @@
 import type { HlsConfig } from 'hls.js';
-import type { HopeHlsOptions } from '../types';
+import type { HopeDashOptions, HopeDrmOptions, HopeHlsOptions } from '../types';
+import type { DashEngine } from './dashEngine';
+import type { NativeEme } from '../drm/NativeEme';
 import { hasFatalMediaError } from '../utils/media-error';
 
 
@@ -16,11 +18,13 @@ export interface HlsQualityLevel {
 type HlsModule = typeof import('hls.js');
 type HlsInstance = InstanceType<HlsModule['default']>;
 
-type MediaSourceType = 'hls' | 'mp4' | 'unknown';
+type MediaSourceType = 'hls' | 'dash' | 'mp4' | 'unknown';
 
 /** Hangi yoldan oynatılıyor — `reason` native'e neden düşüldüğünü açıklar (ör. CORS). */
 export interface PlaybackEngineInfo {
-    engine: 'native' | 'native-hls' | 'hls.js';
+    engine: 'native' | 'native-hls' | 'hls.js' | 'dash.js';
+    /** Şifreli içerikte kullanılan anahtar sistemi (ör. `com.widevine.alpha`). */
+    drm?: string;
     /** hls.js ile oynarken hangi paket (`options.hls.build`). */
     build?: 'full' | 'light';
     /** `option` = `options.hls.engine: 'native'` ile istendi. */
@@ -37,6 +41,11 @@ function prefersNativeHls(): boolean {
     const iOS = /iP(hone|od|ad)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const safari = /^((?!chrome|chromium|android|crios|fxios|edg|opr).)*safari/i.test(ua);
     return iOS || safari;
+}
+
+/** `options.drm`'de lisans adresi olan bir sistem var mı (DRM kodu yalnızca o zaman iner). */
+function hasDrm(drm: HopeDrmOptions | undefined): boolean {
+    return !!drm && Object.values(drm).some((k) => !!(k as { licenseUrl?: string } | undefined)?.licenseUrl);
 }
 
 function hasMse(): boolean {
@@ -61,6 +70,11 @@ export function detectSourceType(src: string, type?: string): MediaSourceType {
         /\.m3u8(?:$|[?#])/i.test(src)
     ) {
         return 'hls';
+    }
+
+    // DASH
+    if (normalizedType === 'application/dash+xml' || /\.mpd(?:$|[?#])/i.test(src)) {
+        return 'dash';
     }
 
     // MP4
@@ -98,9 +112,9 @@ export interface SourceManagerCallbacks {
     onTextTracksFound(tracks: StreamTextTrack[]): void;
     onCues(trackId: string, cues: VTTCue[]): void;
     /** hls.js kurtarılamayan bir hata verdi (video.error oluşmaz) — `network` = yayın/segment indirilemiyor, `media` = çözümlenemiyor. */
-    onFatalError(kind: 'network' | 'media'): void;
+    onFatalError(kind: 'network' | 'media' | 'drm' | 'unsupported'): void;
     /** hls.js'in her hatası (kurtarılanlar dahil) — hata ayıklama kaydı için. */
-    onStreamError?(info: { type: string; details: string; fatal: boolean; url?: string; httpStatus?: number; reason?: string }): void;
+    onStreamError?(info: { type: string; details: string; fatal: boolean; url?: string; httpStatus?: number; reason?: string; engine?: string }): void;
 }
 
 interface NativeAudioTrack {
@@ -124,6 +138,10 @@ export class SourceManager {
     private streamTextTracks = new Map<string, StreamTextTrack>();
     /** Safari native HLS ses izi dinleyicilerini kaldırır. */
     private nativeAudioCleanup: (() => void) | null = null;
+    private dash: DashEngine | null = null;
+    private dashOptions: HopeDashOptions | undefined;
+    private drm: HopeDrmOptions | undefined;
+    private nativeEme: NativeEme | null = null;
 
     constructor(
         video: HTMLVideoElement,
@@ -133,8 +151,10 @@ export class SourceManager {
     }
 
     /** `options.hls` — sonraki `load()`'da uygulanır. */
-    configure(options: HopeHlsOptions | undefined): void {
+    configure(options: HopeHlsOptions | undefined, media?: { dash?: HopeDashOptions; drm?: HopeDrmOptions }): void {
         this.hlsOptions = options ?? {};
+        this.dashOptions = media?.dash;
+        this.drm = media?.drm;
     }
 
     /** Bu kaynak zaten yüklü ve hatasız mı — aynı kaynak için yeniden yükleme (başa sarma) gerekmez. */
@@ -158,9 +178,16 @@ export class SourceManager {
         this.streamTextTracks.clear();
         this.callbacks.onTextTracksFound([]);
 
+        if (sourceType === 'dash') {
+            await this.attachDash(src);
+            return;
+        }
+
         // MP4 veya uzantısı belirlenemeyen doğrudan video kaynağı.
         if (sourceType !== 'hls') {
             this.engineInfo = { engine: 'native' };
+            await this.prepareNativeDrm();
+            if (this.last?.src !== src) return;
             this.video.src = src;
             return;
         }
@@ -168,12 +195,15 @@ export class SourceManager {
         const engine = this.hlsOptions.engine ?? 'auto';
         const canNative = this.video.canPlayType('application/vnd.apple.mpegurl') !== '';
         if (engine === 'native' && canNative) {
+            await this.prepareNativeDrm();
             this.loadNativeHls(src, 'option');
             return;
         }
         // Safari / iOS: native HLS (başarısız olursa probeNativeHls hls.js'e geçer). MSE yoksa da tek yol native.
         // `engine: 'hls.js'` bunu atlar — Safari'de de kalite/ses menüsü için hls.js (iOS 17.1+ ManagedMediaSource).
         if (engine !== 'hls.js' && canNative && (prefersNativeHls() || !hasMse())) {
+            await this.prepareNativeDrm();
+            if (this.last?.src !== src) return;
             this.loadNativeHls(src, prefersNativeHls() ? 'apple-native' : 'no-mse');
             return;
         }
@@ -189,6 +219,55 @@ export class SourceManager {
     /** hls.js ile oynatılıyorsa instance (gelişmiş kullanım: olaylar, istatistik); değilse null. */
     get hlsInstance(): HlsInstance | null {
         return this.hls;
+    }
+
+    /** Native oynatmada şifreli içerik için EME işleyicisi (kaynak atanmadan önce). */
+    private async prepareNativeDrm(): Promise<void> {
+        if (!hasDrm(this.drm)) return;
+        const { NativeEme } = await import('../drm/NativeEme');
+        this.nativeEme?.destroy();
+        this.nativeEme = new NativeEme(this.video, this.drm!, {
+            onError: (message, keySystem) => {
+                this.callbacks.onStreamError?.({ type: 'drm', details: message, fatal: true, engine: 'eme', reason: keySystem });
+                this.callbacks.onFatalError('drm');
+            },
+            onLicense: (keySystem) => {
+                this.engineInfo = { ...this.engineInfo, drm: keySystem };
+            },
+        });
+    }
+
+    private async attachDash(src: string): Promise<void> {
+        // MSE yoksa (ör. eski iOS) DASH oynatılamaz: önceki kaynak çalmaya devam etmesin.
+        if (!hasMse()) {
+            this.engineInfo = { engine: 'dash.js' };
+            this.video.removeAttribute('src');
+            this.video.load();
+            this.callbacks.onFatalError('unsupported');
+            return;
+        }
+        const { DashEngine } = await import('./dashEngine');
+        if (this.last?.src !== src) return;
+        this.engineInfo = { engine: 'dash.js' };
+        this.dash = new DashEngine(this.video, src, { dash: this.dashOptions, drm: this.drm, autoplay: this.video.autoplay }, {
+            onLevels: (levels, active) => this.callbacks.onLevelsChanged(levels, active),
+            onAudioTracks: (tracks, active) => this.callbacks.onAudioTracksChanged(tracks, active),
+            onFatal: (kind) => this.callbacks.onFatalError(kind),
+            onError: (e) => this.callbacks.onStreamError?.({ type: 'dash', details: `${e.code}: ${e.message}`, fatal: e.fatal, engine: 'dash.js' }),
+            onDrm: (keySystem) => {
+                this.engineInfo = { ...this.engineInfo, drm: keySystem };
+            },
+        });
+    }
+
+    /** O an oynayan kalite (ABR'de de gerçek seviye). */
+    currentLevel(): { height: number; bitrate: number | null } | null {
+        if (this.dash) return this.dash.currentLevel();
+        if (this.hls) {
+            const l = this.hls.levels[this.hls.currentLevel];
+            return l ? { height: l.height, bitrate: l.bitrate } : null;
+        }
+        return this.video.videoHeight ? { height: this.video.videoHeight, bitrate: null } : null;
     }
 
     private loadNativeHls(src: string, reason: PlaybackEngineInfo['reason']): void {
@@ -246,7 +325,8 @@ export class SourceManager {
 
     private async attachHlsJs(src: string): Promise<void> {
         // Diğer tarayıcılar: hls.js'i yalnızca gerektiğinde yükle. İki paket ayrı parçalarda — biri seçilince öbürü inmez.
-        const build = this.hlsOptions.build === 'light' ? 'light' : 'full';
+        // Hafif pakette EME yok — DRM'de tam paket.
+        const build = this.hlsOptions.build === 'light' && !hasDrm(this.drm) ? 'light' : 'full';
         const { default: Hls } = build === 'light' ? await import('hls.js/light') : await import('hls.js');
         // import sırasında başka bir kaynak yüklenmiş olabilir.
         if (this.last?.src !== src) return;
@@ -258,7 +338,9 @@ export class SourceManager {
             return;
         }
 
-        const hls = new Hls(this.buildHlsConfig());
+        const drmConfig = hasDrm(this.drm) ? (await import('../drm/keySystems')).hlsDrmConfig(this.drm!, this.hlsOptions.config ?? {}) : {};
+        if (this.last?.src !== src) return;
+        const hls = new Hls(this.buildHlsConfig(drmConfig));
 
         this.hls = hls;
         this.engineInfo = { engine: 'hls.js', build };
@@ -271,6 +353,7 @@ export class SourceManager {
             if (this.hls === hls) {
                 const d = data as unknown as { url?: string; frag?: { url?: string }; context?: { url?: string }; response?: { code?: number }; reason?: string; error?: Error };
                 this.callbacks.onStreamError?.({
+                    engine: 'hls.js',
                     type: String(data.type),
                     details: String(data.details),
                     fatal: !!data.fatal,
@@ -296,7 +379,8 @@ export class SourceManager {
             }
             // Ağ hataları zaten hls.js'in kendi retry ayarlarıyla denendi — kurtarılamadı.
             hls.stopLoad();
-            this.callbacks.onFatalError(data.type === Hls.ErrorTypes.NETWORK_ERROR ? 'network' : 'media');
+            const kind = data.type === Hls.ErrorTypes.KEY_SYSTEM_ERROR ? 'drm' : data.type === Hls.ErrorTypes.NETWORK_ERROR ? 'network' : 'media';
+            this.callbacks.onFatalError(kind);
         });
 
         const levels = (): HlsQualityLevel[] => hls.levels.map((level, index) => ({ index, height: level.height, bitrate: level.bitrate }));
@@ -336,11 +420,11 @@ export class SourceManager {
         hls.loadSource(src);
     }
 
-    private buildHlsConfig(): Partial<HlsConfig> {
+    private buildHlsConfig(drmConfig: Partial<HlsConfig>): Partial<HlsConfig> {
         const user = this.hlsOptions.config ?? {};
         // liveDurationInfinity: hls.js canlıda varsayılan olarak SONLU bir duration verir (kayan pencere sonu) — player
         // canlıyı duration === Infinity ile tanıdığı için canlı rozeti/duvar saati açılmıyor, süre "0:35 / 0:54" görünüyordu.
-        const config: Partial<HlsConfig> = { enableWorker: true, renderTextTracksNatively: false, liveDurationInfinity: true, ...user };
+        const config: Partial<HlsConfig> = { enableWorker: true, renderTextTracksNatively: false, liveDurationInfinity: true, ...user, ...drmConfig };
         if (this.hlsOptions.withCredentials) {
             const { xhrSetup, fetchSetup } = user;
             config.xhrSetup = (xhr, url, context) => {
@@ -367,17 +451,23 @@ export class SourceManager {
 
     /** ABR'nin çıkabileceği en yüksek seviye (kalite kilidi); -1 = sınır yok. */
     setMaxLevel(index: number): void {
+        this.dash?.setMaxLevel(index);
         if (this.hls && this.hls.autoLevelCapping !== index) this.hls.autoLevelCapping = index;
     }
 
     /** -1 = otomatik kalite (ABR). */
     setLevel(index: number): void {
+        this.dash?.setLevel(index);
         if (this.hls) {
             this.hls.currentLevel = index;
         }
     }
 
     setAudioTrack(index: number): void {
+        if (this.dash) {
+            this.dash.setAudioTrack(index);
+            return;
+        }
         if (this.hls) {
             this.hls.audioTrack = index;
             return;
@@ -408,5 +498,9 @@ export class SourceManager {
             this.hls.destroy();
             this.hls = null;
         }
+        this.dash?.destroy();
+        this.dash = null;
+        this.nativeEme?.destroy();
+        this.nativeEme = null;
     }
 }
