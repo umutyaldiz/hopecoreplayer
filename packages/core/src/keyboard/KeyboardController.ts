@@ -1,5 +1,15 @@
 import { vodSeekTarget } from '../utils/seek-by';
 
+/** Kare hızı bilinmezse. */
+const FALLBACK_FPS = 30;
+/** Ölçüm için yeterli kare aralığı. */
+const FRAME_SAMPLES = 12;
+
+type FrameVideo = HTMLVideoElement & {
+    requestVideoFrameCallback?(cb: (now: number, meta: { mediaTime: number }) => void): number;
+    cancelVideoFrameCallback?(id: number): void;
+};
+
 /** Host'a bağlı klavye kısayolları; SeekBar/VolumePanel odaktayken kendi ok tuşlarını işler. */
 export class KeyboardController {
     private readonly host: HTMLElement;
@@ -11,12 +21,61 @@ export class KeyboardController {
     onSeek: ((delta: number) => void) | null = null;
     /** Space/K'den önce sorulur — true dönerse işlenmiştir (ör. preroll beklemesini iptal). */
     interceptTogglePlay: (() => boolean) | null = null;
+    /** `options.frameRate`; verilmezse oynarken ölçülür. */
+    frameRate: number | null = null;
+    /** Oynarken ölçülen kare süresi (sn). */
+    private measuredFrame: number | null = null;
+    private frameSamples: number[] = [];
+    private lastMediaTime = -1;
+    private frameCb: number | null = null;
 
     constructor(host: HTMLElement, video: HTMLVideoElement, toggleFullscreen: () => void) {
         this.host = host;
         this.video = video;
         this.toggleFullscreen = toggleFullscreen;
         this.host.addEventListener('keydown', this.onKeyDown);
+        video.addEventListener('playing', this.measure);
+        video.addEventListener('loadstart', this.resetFrame);
+    }
+
+    /** Bir karenin süresi (sn). */
+    get frameDuration(): number {
+        if (this.frameRate && this.frameRate > 0) return 1 / this.frameRate;
+        return this.measuredFrame ?? 1 / FALLBACK_FPS;
+    }
+
+    private readonly resetFrame = (): void => {
+        this.measuredFrame = null;
+        this.frameSamples = [];
+        this.lastMediaTime = -1;
+    };
+
+    /** requestVideoFrameCallback ile ardışık karelerin mediaTime farkından kare süresi. */
+    private readonly measure = (): void => {
+        const v = this.video as FrameVideo;
+        if (this.frameRate || this.measuredFrame || !v.requestVideoFrameCallback || this.frameCb !== null) return;
+        const step = (_now: number, meta: { mediaTime: number }): void => {
+            this.frameCb = null;
+            const d = meta.mediaTime - this.lastMediaTime;
+            this.lastMediaTime = meta.mediaTime;
+            // Atlanan kare / sarma değil, makul aralık (8–120 fps).
+            if (d > 1 / 121 && d < 1 / 7) this.frameSamples.push(d);
+            if (this.frameSamples.length >= FRAME_SAMPLES) {
+                const sorted = [...this.frameSamples].sort((a, b) => a - b);
+                this.measuredFrame = sorted[0]!;
+                return;
+            }
+            if (!v.paused && !v.ended) this.frameCb = v.requestVideoFrameCallback!(step);
+        };
+        this.frameCb = v.requestVideoFrameCallback(step);
+    };
+
+    /** Bir kare ileri / geri; oynuyorsa önce durdurur. */
+    private stepFrame(direction: 1 | -1): void {
+        const v = this.video;
+        if (!v.paused) v.pause();
+        const end = Number.isFinite(v.duration) ? v.duration : Infinity;
+        v.currentTime = Math.min(end, Math.max(0, v.currentTime + direction * this.frameDuration));
     }
 
     private readonly onKeyDown = (e: KeyboardEvent): void => {
@@ -68,10 +127,19 @@ export class KeyboardController {
                 this.toggleFullscreen();
                 e.preventDefault();
                 break;
+            case ',':
+            case '.':
+                if (e.ctrlKey || e.metaKey || e.altKey || this.video.readyState < 1) break;
+                this.stepFrame(e.key === '.' ? 1 : -1);
+                e.preventDefault();
+                break;
         }
     };
 
     destroy(): void {
         this.host.removeEventListener('keydown', this.onKeyDown);
+        this.video.removeEventListener('playing', this.measure);
+        this.video.removeEventListener('loadstart', this.resetFrame);
+        if (this.frameCb !== null) (this.video as FrameVideo).cancelVideoFrameCallback?.(this.frameCb);
     }
 }

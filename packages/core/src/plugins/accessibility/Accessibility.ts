@@ -546,6 +546,7 @@ export class Accessibility {
             [['↑', '↓'], t.a11yKeyVolume],
             [['M'], t.a11yKeyMute],
             [['F'], t.a11yKeyFullscreen],
+            [[',', '.'], t.a11yKeyFrame],
         ];
         if (this.zoomLevels.length > 1) {
             rows.push([['+', '−', '0'], t.a11yKeyZoom]);

@@ -642,6 +642,7 @@ export class HopePlayerElement extends HTMLElement {
                 engine: () => this.sourceManager.engine.engine,
                 isFullscreen: () => this.isFullscreenActive(),
                 playerId: () => this._options.id,
+                sessionId: () => this.sourceManager.sessionId,
             },
             options.analytics === true ? {} : options.analytics
         );
@@ -905,6 +906,7 @@ export class HopePlayerElement extends HTMLElement {
         if (!this.contextMenuConfig) this.contextMenu.close();
         const seekStep = options.keyboardSeekStep && options.keyboardSeekStep > 0 ? options.keyboardSeekStep : DEFAULT_KEYBOARD_SEEK_STEP;
         this.keyboard.seekStep = seekStep;
+        this.keyboard.frameRate = options.frameRate && options.frameRate > 0 ? options.frameRate : null;
         this.controlBar.seekBar.keyboardStep = seekStep;
         const skip = options.skipButtons === true ? {} : options.skipButtons || null;
         this.controlBar.setSkipButtons(
@@ -1010,7 +1012,9 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     private async initPlayback(options: HopePlayerOptions): Promise<void> {
-        this.sourceManager.configure(options.hls, { dash: options.dash, drm: options.drm });
+        const cmcd = options.cmcd ? { ...(options.cmcd === true ? {} : options.cmcd) } : null;
+        if (cmcd && !cmcd.contentId && options.id) cmcd.contentId = options.id;
+        this.sourceManager.configure(options.hls, { dash: options.dash, drm: options.drm, qualityLimit: options.qualityLimit, cmcd });
         await this.applyAnalytics(options);
         this.errorScreen.dismiss();
         await this.applyRewardedUnlock(options);
@@ -1022,7 +1026,7 @@ export class HopePlayerElement extends HTMLElement {
         const isLive = (s: HopeSourceOption): boolean => this.sourceManager.isLoaded(s.src, s.type) && !this.isSourceLocked(s);
         const loadedGroup = this.sourceGroups.findIndex((g) => g.sources.some(isLive));
         this.activeGroup = loadedGroup !== -1 ? loadedGroup : this.firstPlayableGroup();
-        const sources = this.sourceGroups[this.activeGroup]?.sources ?? [];
+        const sources = this.limitSources(this.sourceGroups[this.activeGroup]?.sources ?? []);
         this.currentSources = sources;
         this.fallbackPending = false;
         const loaded = sources.find(isLive);
@@ -1437,6 +1441,8 @@ export class HopePlayerElement extends HTMLElement {
 
     /** Tarayıcının kendi (native HLS) altyazı izleri — bizim havuz izlerimiz ve metadata izleri hariç. */
     private readonly onNativeTextTracksChanged = (): void => {
+        // dash.js'in kendi izleri: altyazılar DashEngine üzerinden (stream izleri) gelir.
+        if (this.sourceManager.engine.engine === 'dash.js') return;
         const list = Array.from(this.videoEl.textTracks).filter((t) => (t.kind === 'subtitles' || t.kind === 'captions') && !isPooledTrack(t));
         const hadNative = this.streamTracks.some((t) => t.id.startsWith('native:'));
         if (!list.length && !hadNative) return;
@@ -1544,7 +1550,31 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     /** Başlangıç kaynağı: `selected` (ya da ilk); kilitliyse serbest kaynakların en yükseği. */
+    /** `qualityLimit.max` üstü yükseklikler; hepsi üstündeyse en düşüğü kalır. */
+    private limitSources(sources: HopeSourceOption[]): HopeSourceOption[] {
+        const max = this._options.qualityLimit?.max;
+        if (!max || sources.length < 2) return sources;
+        const ok = sources.filter((s) => (this.sourceHeight(s) ?? 0) <= max);
+        if (ok.length) return ok;
+        return [sources.reduce((a, b) => ((this.sourceHeight(b) ?? Infinity) < (this.sourceHeight(a) ?? Infinity) ? b : a))];
+    }
+
+    /** Veri tasarrufu açık ve tarayıcı tasarruf / yavaş bağlantı bildiriyorsa üst sınır (px). */
+    private dataSaverHeight(): number | null {
+        const ds = this._options.qualityLimit?.dataSaver;
+        if (!ds) return null;
+        const c = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+        const slow = !!c && (c.saveData === true || ['slow-2g', '2g', '3g'].includes(c.effectiveType ?? ''));
+        return slow ? (typeof ds === 'number' && ds > 0 ? ds : 480) : null;
+    }
+
     private pickInitialSource(sources: HopeSourceOption[]): HopeSourceOption | undefined {
+        const saver = this.dataSaverHeight();
+        if (saver) {
+            // Tasarrufta sınırın altındaki en yüksek kalite (izleyici menüden değiştirebilir).
+            const fit = sources.filter((s) => !this.isSourceLocked(s) && (this.sourceHeight(s) ?? Infinity) <= saver);
+            if (fit.length) return fit.reduce((a, b) => ((this.sourceHeight(b) ?? 0) > (this.sourceHeight(a) ?? 0) ? b : a));
+        }
         const preferred = sources.find((s) => s.selected) ?? sources[0];
         if (!preferred || !this.isSourceLocked(preferred)) return preferred;
         const free = sources.filter((s) => !this.isSourceLocked(s));
@@ -1853,8 +1883,8 @@ export class HopePlayerElement extends HTMLElement {
         const group = this.sourceGroups[index];
         if (!group) return;
         this.activeGroup = index;
-        this.currentSources = group.sources;
-        const initial = this.pickInitialSource(group.sources)!;
+        this.currentSources = this.limitSources(group.sources);
+        const initial = this.pickInitialSource(this.currentSources)!;
         this.errorScreen.dismiss();
         this.controlBar.setQualities([], '');
         this.hlsQualitiesShown = false;
@@ -1895,19 +1925,26 @@ export class HopePlayerElement extends HTMLElement {
         const label = (l: HlsQualityLevel) => `${l.height}p`;
         const gate = this.qualityGate;
         const locked = (l: HlsQualityLevel) => !!gate?.isLocked(l.height);
-        // Kilit varsa ABR serbest seviyelerin en yükseğinde durur (hepsi kilitliyse en düşükte).
-        if (gate) {
-            const free = levels.filter((l) => !locked(l));
-            const pool = free.length ? free : [levels.reduce((a, b) => (b.height < a.height ? b : a))];
-            this.sourceManager.setMaxLevel(pool.reduce((a, b) => (b.height > a.height ? b : a)).index);
-        } else {
-            this.sourceManager.setMaxLevel(-1);
+        // qualityLimit.max üstü seviyeler hiç kullanılmaz (menüde de yok).
+        const max = this._options.qualityLimit?.max;
+        const lowest = levels.reduce((a, b) => (b.height < a.height ? b : a));
+        const allowed = max ? levels.filter((l) => l.height <= max) : levels;
+        if (!allowed.length) allowed.push(lowest);
+        // ABR üst sınırı: kilit (serbestlerin en yükseği), max ve veri tasarrufu — en düşüğü geçerli.
+        const saver = this.dataSaverHeight();
+        const free = allowed.filter((l) => !locked(l));
+        let pool = gate ? (free.length ? free : [lowest]) : allowed;
+        if (saver) {
+            const under = pool.filter((l) => l.height <= saver);
+            pool = under.length ? under : [pool.reduce((a, b) => (b.height < a.height ? b : a))];
         }
+        const capped = !!gate || !!saver || allowed.length < levels.length;
+        this.sourceManager.setMaxLevel(capped ? pool.reduce((a, b) => (b.height > a.height ? b : a)).index : -1);
         this.controlBar.setQualities(
             [
                 { label: this.i18n.autoQuality, onSelect: () => this.sourceManager.setLevel(-1) },
                 // Yüksekten düşüğe (hls.js artan sıralıyor) — l.index hls.js'teki gerçek seviye numarası, sıradan bağımsız.
-                ...[...levels]
+                ...[...allowed]
                     .sort((x, y) => y.height - x.height)
                     .map((l) => ({
                         label: label(l),

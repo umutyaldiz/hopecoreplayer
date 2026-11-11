@@ -18,7 +18,7 @@
 [![dash.js](https://img.shields.io/npm/dependency-version/%40hopeplayer%2Fcore/dashjs.svg?label=dash.js)](https://github.com/Dash-Industry-Forum/dash.js)
 [![Tailwind CSS](https://img.shields.io/npm/dependency-version/%40hopeplayer%2Fcore/dev/tailwindcss.svg?label=Tailwind%20CSS)](https://tailwindcss.com)
 [![Web Component](https://img.shields.io/badge/Web%20Component-Custom%20Element-29abe2.svg)](https://developer.mozilla.org/docs/Web/API/Web_components)
-[![first load](https://img.shields.io/badge/first%20load-~75%20KB%20gzip-brightgreen.svg)](./packages/core/scripts/check-size.mjs)
+[![first load](https://img.shields.io/badge/first%20load-~77%20KB%20gzip-brightgreen.svg)](./packages/core/scripts/check-size.mjs)
 [![a11y](https://img.shields.io/badge/a11y-WCAG%202.1%20AA%20%28axe%29-blue.svg)](./apps/playground/test/a11y.e2e.mjs)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
@@ -90,9 +90,9 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 
 ## Features
 
-**Playback** — MP4 / WebM / HLS (hls.js, loaded only for HLS — a light build is optional; native on Safari / iOS) / DASH (dash.js, loaded only for DASH), DRM (Widevine, PlayReady, FairPlay), live streams with a wall clock, fallback sources (`sourcePriority`), quality menu, alternate audio, WebVTT and in-stream captions, sprite thumbnails, chapters and markers, skip intro / credits buttons, playlist and story mode, audio player with vinyl mode, Picture-in-Picture, Chromecast and AirPlay.
+**Playback** — MP4 / WebM / HLS (hls.js, loaded only for HLS — a light build is optional; native on Safari / iOS) / DASH (dash.js, loaded only for DASH), DRM (Widevine, PlayReady, FairPlay), quality limits and data saver, live streams with a wall clock, fallback sources (`sourcePriority`), quality menu, alternate audio, WebVTT and in-stream captions, sprite thumbnails, chapters and markers, skip intro / credits buttons, playlist and story mode, audio player with vinyl mode, Picture-in-Picture, Chromecast and AirPlay.
 
-**Measurement** — built-in QoE analytics: startup time, rebuffer ratio, watch time, 25 / 50 / 75 / 100 %, quality switches and errors as `hp:analytics` events, batched to your endpoint (`sendBeacon`) and to GA4.
+**Measurement** — built-in QoE analytics and CMCD for CDN logs: startup time, rebuffer ratio, watch time, 25 / 50 / 75 / 100 %, quality switches and errors as `hp:analytics` events, batched to your endpoint (`sendBeacon`) and to GA4.
 
 **Monetization**
 - Google IMA: preroll / midroll / postroll, VMAP, overlay ads, retry and waterfall, OM SDK, SCTE-35 for live, Google DAI.
@@ -106,7 +106,7 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 - **Theming** — 4 presets plus CSS custom properties (`--hp-color-accent`…) and `::part()` hooks.
 - **i18n** — every label and ad-UI string follows `locale` / `labels` (Turkish and English included).
 - **One event API** — namespaced DOM `CustomEvent`s (`hp:ready`, `hp:adstart`, `hp:cast`…), from any framework.
-- **Tested** — a Playwright end-to-end suite, an accessibility scan and a bundle-size budget (about 75 KB gzip on first load) run on every change in Chromium; Firefox and WebKit run nightly and before every release on Linux, and `npm run test:linux` reproduces that exact environment locally with Docker; real Safari (macOS) and Safari on the iOS Simulator run nightly on GitHub's macOS machines.
+- **Tested** — a Playwright end-to-end suite, an accessibility scan and a bundle-size budget (about 77 KB gzip on first load) run on every change in Chromium; Firefox and WebKit run nightly and before every release on Linux, and `npm run test:linux` reproduces that exact environment locally with Docker; real Safari (macOS) and Safari on the iOS Simulator run nightly on GitHub's macOS machines.
 
 ## Browser support
 

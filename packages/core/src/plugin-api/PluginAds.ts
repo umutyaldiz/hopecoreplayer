@@ -16,7 +16,7 @@ const DEFAULT_BREAK_TIMEOUT_MS = 60_000;
 const PREROLL_GATE_TIMEOUT_MS = 15_000;
 const DEFAULT_PAUSE_DELAY_MS = 300;
 /** Reklam arasında engellenen içerik kısayolları. */
-const BLOCKED_KEYS = new Set([' ', 'k', 'j', 'l', 'ArrowLeft', 'ArrowRight']);
+const BLOCKED_KEYS = new Set([' ', 'k', 'j', 'l', 'ArrowLeft', 'ArrowRight', ',', '.']);
 
 type Guard = <A extends unknown[]>(fn: (...args: A) => unknown, where?: string) => (...args: A) => void;
 

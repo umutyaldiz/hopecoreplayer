@@ -132,6 +132,7 @@ export interface HopeLocaleStrings {
     a11yKeyVolume: string;
     a11yKeyMute: string;
     a11yKeyFullscreen: string;
+    a11yKeyFrame: string;
     a11yKeyZoom: string;
     a11yKeyPan: string;
     a11yKeyShortcuts: string;

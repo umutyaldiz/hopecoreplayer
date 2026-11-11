@@ -120,6 +120,7 @@ export const en: HopeLocaleStrings = {
     a11yKeyVolume: 'Volume up / down',
     a11yKeyMute: 'Mute / unmute',
     a11yKeyFullscreen: 'Fullscreen',
+    a11yKeyFrame: 'Previous / next frame',
     a11yKeyZoom: 'Zoom in / out, reset',
     a11yKeyPan: 'Move around the zoomed picture',
     a11yKeyShortcuts: 'Open / close this list',

@@ -11,6 +11,8 @@ export interface AnalyticsPlayerContext {
     isFullscreen(): boolean;
     /** `options.id`. */
     playerId(): string | undefined;
+    /** Kaynağın oturum kimliği (CMCD ile aynı). */
+    sessionId?(): string;
 }
 
 const DEFAULT_INTERVAL_MS = 15_000;
@@ -82,6 +84,7 @@ export class QoeTracker {
         document.addEventListener('visibilitychange', this.onVisibility);
         this.timer = setInterval(this.onInterval, Math.max(1000, options.intervalMs ?? DEFAULT_INTERVAL_MS));
         this.srcAtStart = ctx.currentSrc();
+        this.sessionId = ctx.sessionId?.() ?? this.sessionId;
         this.track('session_start');
     }
 
@@ -124,11 +127,12 @@ export class QoeTracker {
         // Oynatma başlamadıysa aynı oturum yeni kaynakla sürer.
         if (!this.started) {
             this.srcAtStart = src;
+            this.sessionId = this.ctx.sessionId?.() ?? this.sessionId;
             return;
         }
         // Yeni içerik: eski oturumu kapat, yenisini aç.
         this.endSession('source');
-        this.sessionId = newSessionId();
+        this.sessionId = this.ctx.sessionId?.() ?? newSessionId();
         this.sessionStart = performance.now();
         this.m = emptyMetrics();
         this.playIntentAt = null;
