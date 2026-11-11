@@ -13,9 +13,19 @@ export interface HopeBridgeMessage {
     data: unknown;
 }
 
+/**
+ * WebView'da çalışan eklenti: ES modül adresi ya da kodu (default / `plugin` export'u).
+ * `'https://…/watermark.js'`, `{ url, options }` ya da `{ code, options }`.
+ */
+export type HopeNativePlugin = string | { url: string; options?: unknown } | { code: string; options?: unknown };
+
+/** WebView'a giden seçenekler: `plugins` fonksiyon yerine adres / kod alır. */
+export type HopeNativeOptions = Omit<HopePlayerOptions, 'plugins'> & { plugins?: HopeNativePlugin[] };
+
 /** React Native → WebView komutu (`window.__hopeCommand`). */
 export type HopeBridgeCommand =
-    | { type: 'options'; options: HopePlayerOptions }
+    | { type: 'options'; options: HopeNativeOptions }
+    | { type: 'pluginMessage'; plugin: string; data?: unknown }
     | { type: 'play' }
     | { type: 'pause' }
     | { type: 'seek'; time: number }
@@ -24,7 +34,7 @@ export type HopeBridgeCommand =
 
 export interface PlayerHtmlConfig {
     /** Başlangıç seçenekleri — JSON'a çevrilebilir olmalı (fonksiyonlar WebView'a taşınamaz). */
-    options: HopePlayerOptions;
+    options: HopeNativeOptions;
     /** @hopeplayer/core ESM giriş dosyası. Varsayılan: jsDelivr, aynı sürüm. */
     coreUrl?: string;
     /** Sayfa arka planı (player yüklenene kadar görünen). Varsayılan #000. */
@@ -101,7 +111,31 @@ try {
 }
 await customElements.whenDefined('hope-player');
 const el = document.getElementById('hope-player');
-el.options = ${inlineJson(config.options)};
+
+// Eklentiler: adres → import(); kod → Blob URL (aynı kod aynı modül, yeniden kurulmaz).
+const blobUrls = new Map();
+const pluginEntries = (list) => (Array.isArray(list) ? list : []).map((p) => {
+    const d = typeof p === 'string' ? { url: p } : p || {};
+    let url = d.url;
+    if (!url && typeof d.code === 'string') {
+        url = blobUrls.get(d.code);
+        if (!url) blobUrls.set(d.code, (url = URL.createObjectURL(new Blob([d.code], { type: 'text/javascript' }))));
+    }
+    return [() => import(url), d.options];
+});
+const setOptions = (o) => { el.options = { ...o, plugins: pluginEntries(o && o.plugins) }; };
+
+// Eklenti olayları (<ad>:<olay>) React Native'e; '<ad>:native' ondan gelir, geri gönderilmez.
+const dispatch = el.dispatchEvent.bind(el);
+el.dispatchEvent = (ev) => {
+    const t = ev.type;
+    if (t.includes(':') && !t.startsWith('hp:') && !t.endsWith(':native')) {
+        try { post('plugin', { event: t, detail: ev.detail === undefined ? null : ev.detail }); } catch (_) { post('plugin', { event: t, detail: null }); }
+    }
+    return dispatch(ev);
+};
+
+setOptions(${inlineJson(config.options)});
 const video = el.shadowRoot.querySelector('video');
 
 for (const name of ${inlineJson(FORWARDED_EVENTS)}) {
@@ -140,7 +174,8 @@ const seekTo = (time) => {
 
 run = (cmd) => {
     switch (cmd && cmd.type) {
-        case 'options': el.options = cmd.options; break;
+        case 'options': setOptions(cmd.options); break;
+        case 'pluginMessage': dispatch(new CustomEvent(cmd.plugin + ':native', { detail: cmd.data === undefined ? null : cmd.data })); break;
         case 'play': video.play().catch((err) => post('error', { message: String(err && err.message ? err.message : err), code: 'play' })); break;
         case 'pause': video.pause(); break;
         case 'seek': seekTo(cmd.time); break;
