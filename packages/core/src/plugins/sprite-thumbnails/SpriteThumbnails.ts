@@ -56,6 +56,10 @@ export class SpriteThumbnails {
     private vttLoading: Promise<void> | null = null;
     /** Çok parçalı modda otomatik hesaplanan sheet süresi (ilk sheet yüklenince). */
     private derivedSheetDuration: number | null = null;
+    /** `lowRes` sheet'i — LRU dışında, hep bellekte. */
+    private lowSheet: Sheet | null = null;
+    /** Son çizilen asıl karenin genişliği (VTT'de `width` yok). */
+    private lastFrameWidth = 0;
     private warmed = false;
     private hovering = false;
     private lastClientX = 0;
@@ -94,6 +98,7 @@ export class SpriteThumbnails {
         this.tooltip.remove();
         this.ctx.seekBar.suppressHoverTime('sprite', false);
         for (const sheet of this.sheets.values()) sheet.img.src = '';
+        if (this.lowSheet) this.lowSheet.img.src = '';
         this.sheets.clear();
     }
 
@@ -121,6 +126,8 @@ export class SpriteThumbnails {
     private readonly warm = (): void => {
         if (this.warmed || this.destroyed) return;
         this.warmed = true;
+        // Küçük sheet bağlantı hızından bağımsız hemen iner.
+        if (this.options.lowRes?.url) this.lowSheet = this.createSheet(this.options.lowRes.url, () => this.hovering && this.scheduleRender());
         if (this.options.vtt) {
             void this.loadVtt();
             return;
@@ -149,17 +156,22 @@ export class SpriteThumbnails {
         const seconds = this.ctx.seekBar.ratioAtClientX(this.lastClientX) * duration;
         this.timeEl.textContent = formatTime(seconds);
 
-        const frame = this.isNetworkEligible() ? this.frameAt(seconds, duration) : null;
-        const scale = this.scale();
-        if (frame) {
-            const sheet = this.sheets.get(frame.url)!;
-            const { naturalWidth, naturalHeight } = sheet.img;
+        // Asıl kare hazır değilse küçük sheet'ten doğru zamanın karesi; o da yoksa son kare ekranda kalır.
+        const hi = this.isNetworkEligible() ? this.frameAt(seconds, duration) : null;
+        if (hi) this.lastFrameWidth = hi.w;
+        const frame = hi ?? this.lowResFrameAt(seconds, duration);
+        const img = hi ? this.sheets.get(hi.url)!.img : this.lowSheet?.img;
+        if (frame && img) {
+            // Hedef genişlik: displayWidth → kare genişliği; küçük kare aynı boyuta büyütülür.
+            const target = (this.options.displayWidth ?? (hi ? hi.w : this.options.width || this.lastFrameWidth || frame.w)) * this.scale();
+            const k = target / frame.w;
             this.imageEl.style.display = '';
-            this.imageEl.style.width = `${frame.w * scale}px`;
-            this.imageEl.style.height = `${frame.h * scale}px`;
+            this.imageEl.toggleAttribute('data-lowres', !hi);
+            this.imageEl.style.width = `${target}px`;
+            this.imageEl.style.height = `${frame.h * k}px`;
             this.imageEl.style.backgroundImage = `url("${frame.url}")`;
-            this.imageEl.style.backgroundSize = `${naturalWidth * scale}px ${naturalHeight * scale}px`;
-            this.imageEl.style.backgroundPosition = `${-frame.x * scale}px ${-frame.y * scale}px`;
+            this.imageEl.style.backgroundSize = `${img.naturalWidth * k}px ${img.naturalHeight * k}px`;
+            this.imageEl.style.backgroundPosition = `${-frame.x * k}px ${-frame.y * k}px`;
         } else if (!this.imageEl.style.backgroundImage) {
             // Henüz hiçbir kare yüklenmedi — yalnızca zaman (yükleme bitince yeniden çizilir).
             this.imageEl.style.display = 'none';
@@ -187,6 +199,18 @@ export class SpriteThumbnails {
     }
 
     // ── kare çözümleme ──
+
+    /** `lowRes` sheet'inden saniyedeki kare (hazır değilse null). */
+    private lowResFrameAt(seconds: number, duration: number): Frame | null {
+        const o = this.options.lowRes;
+        const img = this.lowSheet?.ready ? this.lowSheet.img : null;
+        if (!o || !img || !o.width || !o.height) return null;
+        const columns = Math.max(1, Math.floor(img.naturalWidth / o.width));
+        const count = columns * Math.max(1, Math.floor(img.naturalHeight / o.height));
+        const interval = o.interval || duration / count;
+        const i = Math.min(count - 1, Math.max(0, Math.floor(seconds / interval)));
+        return { url: o.url, x: (i % columns) * o.width, y: Math.floor(i / columns) * o.height, w: o.width, h: o.height };
+    }
 
     /** Saniyedeki kareyi döner; gereken sheet hazır değilse yüklemeyi başlatıp null döner (yüklenince render tekrar çağrılır). */
     private frameAt(seconds: number, duration: number): Frame | null {
@@ -296,17 +320,26 @@ export class SpriteThumbnails {
         const existing = this.sheets.get(url);
         if (existing) return existing.promise;
 
+        const sheet = this.createSheet(url, (img) => {
+            this.learnSheetDuration(img);
+            if (this.hovering) this.scheduleRender();
+        });
+        this.sheets.set(url, sheet);
+        this.evict();
+        return sheet.promise;
+    }
+
+    /** Görseli yükler; decode bitmeden hazır sayılmaz (sheet geçişinde titreme olmasın). */
+    private createSheet(url: string, onReady: (img: HTMLImageElement) => void): Sheet {
         const img = new Image();
         img.decoding = 'async';
         const sheet: Sheet = { img, ready: false, failed: false, promise: Promise.resolve() };
         sheet.promise = new Promise<void>((resolve) => {
             img.onload = () => {
-                // decode() bitmeden gösterme — yeni sheet'e geçerken boş/yanlış kare titremesi olmasın.
                 const done = () => {
                     if (this.destroyed) return resolve();
                     sheet.ready = true;
-                    this.learnSheetDuration(img);
-                    if (this.hovering) this.scheduleRender();
+                    onReady(img);
                     resolve();
                 };
                 img.decode ? img.decode().then(done, done) : done();
@@ -317,9 +350,7 @@ export class SpriteThumbnails {
             };
         });
         img.src = url;
-        this.sheets.set(url, sheet);
-        this.evict();
-        return sheet.promise;
+        return sheet;
     }
 
     /** Çok parçalı modda `sheetDuration` verilmediyse ilk yüklenen sheet'in ızgara kapasitesinden hesapla. */

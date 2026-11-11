@@ -203,6 +203,48 @@ async function openSprite(browser, feature) {
     return { page, requests };
 }
 
+async function testSpriteLowResAndRetina(browser) {
+    console.log('\n[3c] Sprite lowRes: asıl sheet gecikirken küçük sheet\'ten doğru kare, sonra netleşiyor; displayWidth: 320×180 kare 160 px\'te');
+    {
+        const { page, requests } = await openSprite(browser, 'sprite-lowres');
+        // Asıl sheet 1.5 sn gecikmeli — önce küçük sheet görünmeli.
+        await page.route('**/sprite.jpg', async (route) => {
+            await new Promise((r) => setTimeout(r, 1500));
+            await route.continue();
+        });
+        ok(requests.length === 0, 'kurulumda sprite indirilmedi (lazy)');
+        await spriteHoverAt(page, 7.5);
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('.hp-sprite-image').style.backgroundImage.includes('sprite-low'), { timeout: 3000 }).catch(() => {});
+        let s = await page.evaluate(() => {
+            const img = document.getElementById('player').shadowRoot.querySelector('.hp-sprite-image');
+            return { bg: img.style.backgroundImage, pos: img.style.backgroundPosition, size: img.style.backgroundSize, w: img.style.width, h: img.style.height, low: img.hasAttribute('data-lowres') };
+        });
+        ok(s.bg.includes('sprite-low.jpg') && s.low, `asıl sheet gelmeden küçük sheet gösterildi ${JSON.stringify(s)}`);
+        // 7.5 sn → 8. kare (5×2 ızgarada sütun 2, satır 1), 48 px → 160 px (k = 3.33).
+        ok(s.pos === '-320px -90px' && s.w === '160px' && s.h === '90px', `doğru zamanın karesi, asıl boyutta (${s.pos}, ${s.w}×${s.h})`);
+        await page.waitForFunction(() => !document.getElementById('player').shadowRoot.querySelector('.hp-sprite-image').hasAttribute('data-lowres'), { timeout: 5000 }).catch(() => {});
+        s = await page.evaluate(() => {
+            const img = document.getElementById('player').shadowRoot.querySelector('.hp-sprite-image');
+            return { bg: img.style.backgroundImage, pos: img.style.backgroundPosition, low: img.hasAttribute('data-lowres') };
+        });
+        ok(s.bg.includes('sprite.jpg') && !s.bg.includes('sprite-low') && !s.low && s.pos === '-480px -90px', `asıl sheet gelince netleşti ${JSON.stringify(s)}`);
+        await page.close();
+    }
+    {
+        const { page } = await openSprite(browser, 'sprite-2x');
+        await spriteHoverAt(page, 7.5);
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('.hp-sprite-image').style.backgroundImage.includes('sprite-2x'), { timeout: 3000 }).catch(() => {});
+        const s = await page.evaluate(() => {
+            const img = document.getElementById('player').shadowRoot.querySelector('.hp-sprite-image');
+            const r = img.getBoundingClientRect();
+            return { pos: img.style.backgroundPosition, size: img.style.backgroundSize, w: Math.round(r.width), h: Math.round(r.height) };
+        });
+        // 320×180 kare → 160×90 (k = 0.5); 8. kare 4×3 ızgarada sütun 3, satır 1.
+        ok(s.w === 160 && s.h === 90 && s.size === '640px 270px' && s.pos === '-480px -90px', `displayWidth: 160 → 320×180 kare yarıya ölçeklendi ${JSON.stringify(s)}`);
+        await page.close();
+    }
+}
+
 async function testSpriteThumbnails(browser) {
     console.log('\n[3b] Sprite önizleme: tek sprite / çok parçalı (otomatik sheetDuration) / WebVTT — doğru kare, lazy yükleme, sınırlar');
 
@@ -887,6 +929,7 @@ async function testCaptionFlickNoBounce(browser) {
         await testMarkers(browser);
         await testSegments(browser);
         await testSpriteThumbnails(browser);
+        await testSpriteLowResAndRetina(browser);
         await testCountdownScreen(browser);
         await testGeoCheckerDeny(browser);
         await testGeoCheckerAllow(browser);

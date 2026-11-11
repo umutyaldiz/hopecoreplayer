@@ -259,7 +259,13 @@ if (player) {
                         { url: '/sprite-%d.jpg', width: 160, height: 90, interval: 1 }
                       : feature === 'sprite-vtt'
                         ? { vtt: '/thumbs.vtt' }
-                        : undefined,
+                        : feature === 'sprite-lowres'
+                          ? // Asıl sheet gelene kadar 48×27'lik küçük sheet.
+                            { url: '/sprite.jpg', width: 160, height: 90, interval: 1, lowRes: { url: '/sprite-low.jpg', width: 48, height: 27 } }
+                          : feature === 'sprite-2x'
+                            ? // 320×180 kareler, ekranda 160 px (retina).
+                              { url: '/sprite-2x.jpg', width: 320, height: 180, interval: 1, displayWidth: 160 }
+                            : undefined,
             countdownScreen: feature === 'countdown' ? { time: new Date(Date.now() + 6000).toISOString(), title: 'Yayın başlıyor', spot: 'Birazdan canlı yayın' } : undefined,
             geoChecker: feature === 'geo-allow' ? { allowedCountries: ['TR'] } : feature === 'geo-deny' ? { allowedCountries: ['US'] } : undefined,
             redirectScreen:

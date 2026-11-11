@@ -785,6 +785,19 @@ export interface SpriteThumbnailsOptions {
     responsive?: number;
     /** navigator.connection.downlink bu değerin altındaysa (ve sheet daha önce cache'lenmediyse) sprite atlanır. */
     downlink?: number;
+    /** Önizlemenin ekrandaki genişliği (CSS px). Kare daha büyükse (ör. 320×180 → 160) retina'da keskin görünür. */
+    displayWidth?: number;
+    /** Tüm videoyu kapsayan küçük sheet: asıl sheet inene kadar anında (bulanık) önizleme. */
+    lowRes?: SpriteLowResOptions;
+}
+
+/** `spriteThumbnails.lowRes` — ör. 48×27 karelerden tek görsel. */
+export interface SpriteLowResOptions {
+    url: string;
+    width: number;
+    height: number;
+    /** Kareler arası saniye; verilmezse `süre / kare sayısı`. */
+    interval?: number;
 }
 
 export interface CountdownScreenOptions {
