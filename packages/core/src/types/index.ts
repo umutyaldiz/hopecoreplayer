@@ -832,6 +832,87 @@ export interface RedirectScreenSuggestion {
     duration?: string;
 }
 
+export interface DocumentPipOptions {
+    /** Pencere genişliği (px). Varsayılan: player genişliği (320–640). */
+    width?: number;
+    /** Pencere yüksekliği (px). Varsayılan: genişlik × player oranı. */
+    height?: number;
+}
+
+export interface InteractiveChoice {
+    /** Seçenek kimliği — olaylarda ve sonuçta döner. Verilmezse sırası. */
+    id?: string;
+    text: string;
+}
+
+export interface InteractiveItemBase {
+    /** Benzersiz kimlik (olaylarda döner, verilmezse sırası). */
+    id?: string;
+    /** Görüneceği saniye. */
+    time: number;
+    /** Kaç saniye açık kalsın (videonun zamanıyla). Varsayılan: anket / quiz 15, kart 8. */
+    duration?: number;
+    /** Açılınca videoyu duraklat (cevaplanınca / kapatınca devam eder). Varsayılan false. */
+    pause?: boolean;
+    /** Köşe. Varsayılan 'top-right' (anket / quiz için 'center' de olur). */
+    position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' | 'center';
+    /** Kapat (X) butonu. Varsayılan true. */
+    dismissible?: boolean;
+}
+
+export interface InteractivePoll extends InteractiveItemBase {
+    type: 'poll';
+    question: string;
+    choices: (string | InteractiveChoice)[];
+    /** Oy dağılımı (yüzde gösterimi için) — verilmezse yalnızca seçim işaretlenir. Sunucudan da gelebilir: bkz. `onAnswer`. */
+    results?: number[];
+}
+
+export interface InteractiveQuiz extends InteractiveItemBase {
+    type: 'quiz';
+    question: string;
+    choices: (string | InteractiveChoice)[];
+    /** Doğru seçeneğin sırası (0'dan). */
+    answer: number;
+    /** Cevaptan sonra gösterilecek açıklama. */
+    explanation?: string;
+}
+
+export interface InteractiveCard extends InteractiveItemBase {
+    /** 'product': fiyatlı ürün kartı; 'link': başlık + buton. */
+    type: 'product' | 'link';
+    title: string;
+    url: string;
+    image?: string;
+    /** Ürün fiyatı, ör. "₺1.299". */
+    price?: string;
+    /** Eski fiyat (üstü çizili). */
+    oldPrice?: string;
+    /** Kısa metin (marka, açıklama). */
+    subtitle?: string;
+    /** Buton metni. Varsayılan: ürün → "Satın al", bağlantı → "Git". */
+    cta?: string;
+    /** "Sponsorlu" etiketi. */
+    sponsored?: boolean;
+    /** Yeni sekmede aç. Varsayılan true. */
+    newTab?: boolean;
+}
+
+export type InteractiveItem = InteractivePoll | InteractiveQuiz | InteractiveCard;
+
+export interface InteractiveOptions {
+    items: InteractiveItem[];
+    /**
+     * Cevap gelince çağrılır (anket oyu, quiz cevabı). Anket için güncel oy dağılımını (`number[]`, yüzde ya da sayı)
+     * döndürürseniz sonuçlar onunla gösterilir — ör. sunucunuza POST edip cevabı döndürün.
+     */
+    onAnswer?: (answer: { item: InteractiveItem; id: string; choice: number; choiceId: string; correct?: boolean }) => void | number[] | Promise<void | number[]>;
+    /** Aynı öğe bir izleyiciye bir kez sorulsun (localStorage, `id` ile). Varsayılan true. */
+    rememberAnswers?: boolean;
+    /** Seek bar'da öğe noktaları. Varsayılan true. */
+    markers?: boolean;
+}
+
 export interface TranscriptOptions {
     /** Başlangıçta açık. Varsayılan false. */
     open?: boolean;
@@ -1197,6 +1278,13 @@ export interface HopePlayerOptions {
     /** Kontrol çubuğundaki Picture-in-Picture butonu. Varsayılan true (tarayıcı destekliyorsa); `false` gizler. */
     pipButton?: boolean;
     /**
+     * Document Picture-in-Picture (Chrome / Edge 116+): PiP penceresinde player'ın kendi kontrolleri, altyazı, menüler
+     * ve reklam katmanı. Desteklemeyen tarayıcıda normal PiP. Varsayılan kapalı.
+     */
+    documentPip?: boolean | DocumentPipOptions;
+    /** Belirli anlarda anket, quiz, ürün kartı ya da bağlantı kartı. */
+    interactive?: InteractiveOptions;
+    /**
      * Kontrol çubuğundaki tam ekran butonu. Varsayılan true; `false` gizler. Yalnızca buton: `F` kısayolu ve
      * `tapGestures`'taki `toggleFullscreen` çalışmaya devam eder.
      */
@@ -1402,6 +1490,22 @@ export type HopePlayerEventMap = {
         mode: 'screen' | 'card' | 'endScreen';
         reason?: 'auto' | 'click' | 'suggestion';
         index?: number;
+    }>;
+    /** Picture-in-Picture'a girildi / çıkıldı — `mode`: 'document' (Document PiP) ya da 'native'. */
+    'hp:pip': CustomEvent<{ state: 'enter' | 'exit'; mode: 'document' | 'native' }>;
+    /**
+     * Etkileşimli öğe: `shown`, `answer` (`choice`, quiz'de `correct`), `click` (kart, `url` — iptal edilebilir:
+     * `preventDefault()` → sayfa açılmaz), `dismiss` (X ya da süre doldu: `reason`).
+     */
+    'hp:interactive': CustomEvent<{
+        state: 'shown' | 'answer' | 'click' | 'dismiss';
+        id: string;
+        type: 'poll' | 'quiz' | 'product' | 'link';
+        choice?: number;
+        choiceId?: string;
+        correct?: boolean;
+        url?: string;
+        reason?: 'user' | 'timeout' | 'seek';
     }>;
     /** Transkript paneli açıldı / kapandı ya da bir satıra tıklanıp o ana gidildi (`seek`, `time`). */
     'hp:transcript': CustomEvent<{ state: 'open' | 'close' | 'seek'; time?: number }>;

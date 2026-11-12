@@ -3,6 +3,8 @@ import type { HopeLocaleStrings } from '../../i18n/types';
 import { createIcon } from '../../icons/Icon';
 import { formatTime } from '../../utils/format-time';
 import { trackCues } from '../../subtitles/attachTracks';
+import { adoptStyle } from '../../utils/plugin-style';
+import css from './transcript.css?inline';
 
 export interface TranscriptPlayerContext {
     hostEl: HTMLElement;
@@ -70,6 +72,7 @@ export class Transcript {
         private readonly options: TranscriptOptions
     ) {
         this.autoScroll = options.autoScroll !== false;
+        adoptStyle(ctx.overlayEl, 'transcript', css);
         const panel = document.createElement('aside');
         panel.className = 'hp-transcript';
         panel.setAttribute('part', 'transcript');

@@ -231,6 +231,19 @@ if (player) {
                     : [{ src: '/sample.vtt', label: 'Türkçe', srclang: 'tr', default: false }],
             // ?feature=transcript | transcript-open
             transcript: feature === 'transcript' ? true : feature === 'transcript-open' ? { open: true, track: 'tr' } : undefined,
+            // ?feature=docpip — Document PiP (testte documentPictureInPicture taklit edilir).
+            documentPip: feature === 'docpip' ? true : undefined,
+            // ?feature=interactive — 1. sn anket, 3. sn quiz, 6. sn ürün kartı.
+            interactive:
+                feature === 'interactive'
+                    ? {
+                          items: [
+                              { id: 'pg-poll', type: 'poll', time: 1, duration: 3, question: 'En sevdiğiniz semt?', choices: ['Galata', 'Kadıköy', 'Balat'], results: [5, 3, 2] },
+                              { id: 'pg-quiz', type: 'quiz', time: 3, duration: 4, pause: true, question: 'Kapadokya hangi bölgede?', choices: ['Ege', 'İç Anadolu', 'Karadeniz'], answer: 1, explanation: 'Nevşehir çevresi.' },
+                              { id: 'pg-product', type: 'product', time: 6, duration: 3, title: 'İnce belli çay bardağı (6\'lı)', subtitle: 'Paşabahçe', price: '₺349', oldPrice: '₺429', image: '/sample-cover.jpg', url: 'https://example.com/urun', sponsored: true },
+                          ],
+                      }
+                    : undefined,
             // ?feature=heatmap — 10 sn videoda 4. ve 8. saniyede tepe.
             heatmap: feature === 'heatmap' ? { data: [2, 3, 5, 9, 20, 12, 6, 8, 15, 4], show: 'always' } : undefined,
             muted: true,
