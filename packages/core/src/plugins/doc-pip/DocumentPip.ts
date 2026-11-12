@@ -109,7 +109,7 @@ export class DocumentPip {
         text.textContent = this.ctx.i18n.pipPlaying;
         const back = document.createElement('button');
         back.type = 'button';
-        back.className = 'hp-redirect-btn';
+        back.className = 'hp-docpip-btn';
         back.append(createIcon('pip'), document.createTextNode(this.ctx.i18n.pipBack));
         back.addEventListener('click', () => this.close());
         placeholder.append(text, back);

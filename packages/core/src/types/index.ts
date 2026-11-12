@@ -652,6 +652,8 @@ export interface MarkerItem {
 
 export interface MarkersOptions {
     items: MarkerItem[];
+    /** Seek bar'daki tüm işaret noktalarının rengi (öğedeki `color` önceliklidir). CSS: `--hp-seek-marker-color`. */
+    color?: string;
     /** true ise seek sırasında da marker tetiklenebilir — vars. false (yalnızca normal oynatma ilerlemesi tetikler). */
     triggerOnSeek?: boolean;
     seekJumpThresholdSec?: number;
@@ -858,6 +860,8 @@ export interface InteractiveItemBase {
     position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' | 'center';
     /** Kapat (X) butonu. Varsayılan true. */
     dismissible?: boolean;
+    /** Bu öğenin seek bar noktasının rengi (`InteractiveOptions.markerColor`'dan önceliklidir). */
+    markerColor?: string;
 }
 
 export interface InteractivePoll extends InteractiveItemBase {
@@ -911,6 +915,8 @@ export interface InteractiveOptions {
     rememberAnswers?: boolean;
     /** Seek bar'da öğe noktaları. Varsayılan true. */
     markers?: boolean;
+    /** Noktaların rengi. Varsayılan altın sarısı (#f5c518). CSS: `--hp-ia-marker-color`. */
+    markerColor?: string;
 }
 
 export interface TranscriptOptions {

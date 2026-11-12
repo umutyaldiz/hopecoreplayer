@@ -1046,6 +1046,65 @@ button.hp-context-menu-item:focus-visible {
     opacity: 0.9;
 }
 
+/* ── Seek bar işaretleri (markers, etkileşimli öğeler, A-B döngü): çizginin ortasında, ince koyu halkalı nokta —
+   açık ve koyu görüntüde seçilir; hover'da büyür, geçilenler soluklaşır. Thumb (z-2) üstte kalır. */
+.hp-seek-marker {
+    position: absolute;
+    top: 50%;
+    width: var(--hp-seek-marker-size, 6px);
+    height: var(--hp-seek-marker-size, 6px);
+    translate: -50% -50%;
+    border-radius: 9999px;
+    background: var(--hp-seek-marker-color, var(--hp-color-on-surface, #fff));
+    box-shadow:
+        0 0 0 1.5px rgba(0, 0, 0, 0.45),
+        0 1px 4px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+    z-index: 1;
+    transition:
+        scale 150ms ease,
+        opacity 150ms ease;
+}
+.hp-seekbar:hover .hp-seek-marker,
+.hp-seekbar:focus-visible .hp-seek-marker {
+    scale: 1.35;
+}
+.hp-seek-marker[data-passed] {
+    opacity: 0.6;
+}
+.hp-seekbar .hp-seek-marker[data-hover] {
+    scale: 1.8;
+    opacity: 1;
+}
+/* Hover balonunda işaret etiketi: "Etiket · 0:42" — uzun etiket kısaltılır. */
+.hp-seek-time-label {
+    display: inline-block;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: top;
+    /* overflow:hidden alt çıkıntıları (ç, ş, g, y) kırpmasın */
+    line-height: 1.4;
+    padding-bottom: 1px;
+    font-weight: 600;
+}
+/* A-B döngü sınırları: dikey hap */
+.hp-seek-marker.hp-seek-marker-loop {
+    width: 3px;
+    height: 14px;
+    border-radius: 2px;
+    background: var(--hp-color-accent, #fff);
+    opacity: 1;
+}
+.hp-seekbar:hover .hp-seek-marker-loop {
+    scale: 1 1.15;
+}
+@media (prefers-reduced-motion: reduce) {
+    .hp-seek-marker {
+        transition: none;
+    }
+}
+
 /* ── İnce ilerleme çizgisi (options.miniProgress) — kontroller gizliyken
    video alanının en altında, kenardan kenara 1px. z-6: altyazı(5) üstünde,
    reklam katmanı(10) ve chrome(20) altında. */
@@ -1085,6 +1144,7 @@ button.hp-context-menu-item:focus-visible {
     bottom: calc(100% + 8px);
     left: 0;
     padding: 3px 7px;
+    line-height: 1.4;
     border-radius: calc(var(--hp-radius) * 0.75);
     background: var(--hp-tooltip-bg);
     color: var(--hp-tooltip-text);
@@ -2293,363 +2353,7 @@ button.hp-context-menu-item:focus-visible {
     pointer-events: none;
 }
 
-/* ── Yönlendirme (redirectScreen) — 'card': köşede "Sıradaki" kartı, 'screen': tam alan ekran, öneriler. ── */
-.hp-redirect-thumb {
-    position: relative;
-    display: block;
-    flex: none;
-    overflow: hidden;
-    aspect-ratio: 16 / 9;
-    border-radius: 8px;
-    background: #111;
-}
-.hp-redirect-thumb img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: transform 0.3s;
-}
-.hp-redirect-ring {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 44px;
-    height: 44px;
-    transform: translate(-50%, -50%) rotate(-90deg);
-    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
-}
-.hp-redirect-ring-track {
-    fill: rgba(0, 0, 0, 0.45);
-    stroke: rgba(255, 255, 255, 0.28);
-    stroke-width: 3;
-}
-.hp-redirect-ring-bar {
-    fill: none;
-    stroke: var(--hp-color-accent, #fff);
-    stroke-width: 3;
-    stroke-linecap: round;
-    transition: stroke-dashoffset 0.3s linear;
-}
-.hp-redirect-play {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-45%, -50%);
-    color: #fff;
-    font-size: 18px;
-    line-height: 1;
-}
-.hp-redirect-duration {
-    position: absolute;
-    right: 5px;
-    bottom: 5px;
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: rgba(0, 0, 0, 0.78);
-    color: #fff;
-    font: 600 10px/1.4 system-ui, -apple-system, sans-serif;
-}
-.hp-redirect-label {
-    color: var(--hp-color-accent, #fff);
-    font: 700 10px/1.2 system-ui, -apple-system, sans-serif;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-}
-.hp-redirect-title {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    font: 600 13px/1.3 system-ui, -apple-system, sans-serif;
-}
-.hp-redirect-sub {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    opacity: 0.7;
-    font: 500 11px/1.3 system-ui, -apple-system, sans-serif;
-}
-
-/* Kart */
-.hp-redirect-card {
-    position: absolute;
-    z-index: 24;
-    display: flex;
-    align-items: stretch;
-    width: min(340px, calc(100% - 24px));
-    border-radius: 12px;
-    background: rgba(14, 14, 18, 0.9);
-    color: #fff;
-    box-shadow: 0 16px 36px -14px rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(8px);
-    animation: hp-redirect-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
-    transition:
-        bottom 0.25s,
-        top 0.25s;
-}
-.hp-redirect-card[data-position='bottom-right'] {
-    right: 12px;
-    bottom: 76px;
-}
-.hp-redirect-card[data-position='bottom-left'] {
-    left: 12px;
-    bottom: 76px;
-}
-.hp-redirect-card[data-position='top-right'] {
-    right: 12px;
-    top: 12px;
-}
-.hp-redirect-card[data-position='top-left'] {
-    left: 12px;
-    top: 12px;
-}
-.video-area[data-chrome-hidden] .hp-redirect-card[data-position^='bottom'] {
-    bottom: 12px;
-}
-.hp-redirect-card-main {
-    display: flex;
-    flex: 1;
-    min-width: 0;
-    gap: 10px;
-    align-items: center;
-    padding: 8px;
-    border: 0;
-    border-radius: 12px;
-    background: transparent;
-    color: inherit;
-    text-align: left;
-    cursor: pointer;
-}
-.hp-redirect-card-main .hp-redirect-thumb {
-    width: 42%;
-}
-.hp-redirect-card-main:hover .hp-redirect-thumb img {
-    transform: scale(1.04);
-}
-.hp-redirect-text {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    min-width: 0;
-    padding-right: 22px;
-}
-.hp-redirect-close {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    display: grid;
-    place-items: center;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: 0;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff;
-    font-size: 13px;
-    cursor: pointer;
-}
-.hp-redirect-close:hover {
-    background: rgba(255, 255, 255, 0.24);
-}
-.hp-redirect-card-main:focus-visible,
-.hp-redirect-close:focus-visible,
-.hp-redirect-poster:focus-visible,
-.hp-redirect-btn:focus-visible {
-    outline: 2px solid var(--hp-color-accent, #fff);
-    outline-offset: 2px;
-}
-.video-area[data-compact] .hp-redirect-card {
-    width: min(260px, calc(100% - 16px));
-}
-.video-area[data-compact] .hp-redirect-card[data-position^='bottom'] {
-    bottom: 56px;
-}
-.video-area[data-compact][data-chrome-hidden] .hp-redirect-card[data-position^='bottom'] {
-    bottom: 8px;
-}
-.video-area[data-compact] .hp-redirect-card .hp-redirect-sub {
-    display: none;
-}
-.video-area[data-compact] .hp-redirect-card .hp-redirect-ring {
-    width: 34px;
-    height: 34px;
-}
-
-/* Tam alan ekran */
-.hp-redirect-screen {
-    position: absolute;
-    inset: 0;
-    z-index: 30;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    padding: 16px;
-    background: rgba(6, 6, 9, 0.9);
-    color: #fff;
-    text-align: center;
-    animation: hp-redirect-fade 0.3s ease-out;
-}
-.hp-redirect-bg {
-    position: absolute;
-    inset: -20px;
-    width: calc(100% + 40px);
-    height: calc(100% + 40px);
-    object-fit: cover;
-    opacity: 0.35;
-    filter: blur(18px) saturate(1.2);
-}
-.hp-redirect-panel {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    width: min(420px, 100%);
-}
-.hp-redirect-poster {
-    width: min(320px, 70%);
-    padding: 0;
-    border: 0;
-    border-radius: 10px;
-    background: transparent;
-    cursor: pointer;
-    box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.9);
-}
-.hp-redirect-poster .hp-redirect-thumb {
-    width: 100%;
-    border-radius: 10px;
-}
-.hp-redirect-poster .hp-redirect-ring {
-    width: 64px;
-    height: 64px;
-}
-.hp-redirect-poster .hp-redirect-play {
-    font-size: 24px;
-}
-.hp-redirect-screen .hp-redirect-title {
-    font-size: 16px;
-}
-.hp-redirect-counter {
-    opacity: 0.75;
-    font: 500 12px/1.4 system-ui, -apple-system, sans-serif;
-}
-.hp-redirect-actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 4px;
-}
-.hp-redirect-btn {
-    padding: 7px 16px;
-    border: 0;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.14);
-    color: #fff;
-    font: 600 13px/1 system-ui, -apple-system, sans-serif;
-    cursor: pointer;
-}
-.hp-redirect-btn:hover {
-    background: rgba(255, 255, 255, 0.24);
-}
-.hp-redirect-btn-primary,
-.hp-redirect-btn-primary:hover {
-    background: var(--hp-color-accent, #fff);
-    color: var(--hp-color-on-accent, #000);
-}
-.video-area[data-compact] .hp-redirect-poster {
-    width: min(200px, 55%);
-}
-.video-area[data-compact] .hp-redirect-screen .hp-redirect-sub,
-.video-area[data-compact] .hp-redirect-counter {
-    display: none;
-}
-
-/* Öneriler */
-.hp-redirect-suggestions {
-    position: absolute;
-    inset: 0;
-    z-index: 30;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    overflow-y: auto;
-    padding: 16px clamp(16px, 4%, 40px);
-    background: rgba(6, 6, 9, 0.92);
-    color: #fff;
-    animation: hp-redirect-fade 0.25s ease-out;
-}
-.hp-redirect-grid-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-}
-.hp-redirect-grid-title {
-    font: 600 15px/1.3 system-ui, -apple-system, sans-serif;
-}
-.hp-redirect-suggestions .hp-redirect-close {
-    position: static;
-}
-.hp-redirect-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    align-content: center;
-    gap: 14px 12px;
-    flex: 1;
-}
-.hp-redirect-grid[data-count='1'],
-.hp-redirect-grid[data-count='2'] {
-    grid-template-columns: repeat(auto-fit, minmax(160px, 260px));
-    justify-content: center;
-}
-.hp-redirect-grid[data-count='4'] {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    max-width: 640px;
-    width: 100%;
-    margin-inline: auto;
-}
-.hp-redirect-grid[data-count='3'],
-.hp-redirect-grid[data-count='5'],
-.hp-redirect-grid[data-count='6'] {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.hp-redirect-suggestion {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-    color: #fff;
-    text-decoration: none;
-}
-.hp-redirect-replay {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    align-self: center;
-}
-.video-area[data-compact] .hp-redirect-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-content: start;
-}
-.video-area[data-compact] .hp-redirect-suggestion .hp-redirect-sub {
-    display: none;
-}
-.hp-redirect-suggestion .hp-redirect-play {
-    opacity: 0;
-    font-size: 22px;
-    transition: opacity 0.2s;
-}
-.hp-redirect-suggestion:hover .hp-redirect-play,
-.hp-redirect-suggestion:focus-visible .hp-redirect-play {
-    opacity: 1;
-}
-.hp-redirect-suggestion:hover .hp-redirect-thumb,
-.hp-redirect-suggestion:focus-visible .hp-redirect-thumb {
-    outline: 2px solid var(--hp-color-accent, #fff);
-}
+/* ── Ortak giriş animasyonları (redirectScreen, etkileşimli içerik — stilleri kendi parçalarında) ── */
 @keyframes hp-redirect-in {
     from {
         opacity: 0;
@@ -2659,12 +2363,6 @@ button.hp-context-menu-item:focus-visible {
 @keyframes hp-redirect-fade {
     from {
         opacity: 0;
-    }
-}
-@media (prefers-reduced-motion: reduce) {
-    .hp-redirect-card,
-    .hp-redirect-screen {
-        animation: none;
     }
 }
 

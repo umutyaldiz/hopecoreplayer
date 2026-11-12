@@ -10,7 +10,7 @@ export interface InteractivePlayerContext {
     overlayEl: HTMLElement;
     i18n: HopeLocaleStrings;
     isAdActive(): boolean;
-    addSeekBarMarker(ratio: number, extraClass?: string): HTMLElement;
+    addSeekBarMarker(ratio: number, extraClass?: string, label?: string): HTMLElement;
 }
 
 interface Entry {
@@ -95,7 +95,11 @@ export class Interactive {
         const d = this.ctx.videoEl.duration;
         if (this.options.markers === false || !Number.isFinite(d) || d <= 0) return;
         for (const e of this.entries) {
-            if (e.item.time >= 0 && e.item.time <= d) this.markers.push(this.ctx.addSeekBarMarker(e.item.time / d, 'hp-ia-marker'));
+            if (e.item.time < 0 || e.item.time > d) continue;
+            const m = this.ctx.addSeekBarMarker(e.item.time / d, 'hp-ia-marker', 'question' in e.item ? e.item.question : e.item.title);
+            const color = e.item.markerColor ?? this.options.markerColor;
+            if (color) m.style.backgroundColor = color;
+            this.markers.push(m);
         }
     };
 

@@ -7,7 +7,7 @@ export interface MarkersPlayerContext {
     /** Popup overlay'in ekleneceği katman (shadow root içinde, video üzerinde). */
     overlayContainerEl: HTMLElement;
     /** Seek bar üzerinde işaretçi çizmek için — SeekBar.addMarker ile aynı imza. */
-    addSeekBarMarker(ratio: number, extraClass?: string): HTMLDivElement;
+    addSeekBarMarker(ratio: number, extraClass?: string, label?: string): HTMLDivElement;
     i18n: HopeLocaleStrings;
 }
 
@@ -53,6 +53,8 @@ export class MarkProgress {
     private readonly triggerOnSeek: boolean;
     private readonly seekJumpThresholdSec: number;
     private readonly seekIgnoreWindowMs: number;
+    /** `options.color` — öğede renk yoksa. */
+    private readonly defaultColor: string | undefined;
 
     private hitSet = new Set<string>();
     private lastHitAt = new Map<string, number>();
@@ -70,6 +72,7 @@ export class MarkProgress {
         this.seekIgnoreWindowMs = options.seekIgnoreWindowMs ?? 250;
         this.popupGlobal = { ...POPUP_DEFAULTS, ...options.popup };
         this.pingGlobal = { ...PING_DEFAULTS, ...options.ping };
+        this.defaultColor = options.color;
 
         this.markers = (options.items || [])
             .map((m, idx) => this.normalize(m, idx))
@@ -108,7 +111,7 @@ export class MarkProgress {
         return {
             idx,
             time: Number(m.time),
-            color: m.color,
+            color: m.color ?? this.defaultColor,
             label: m.label ?? '',
             pauseOnHit: m.pauseOnHit ?? true,
             once: m.once ?? true,
@@ -126,9 +129,8 @@ export class MarkProgress {
 
         this.markers.forEach((m) => {
             if (m.el) return;
-            const el = this.ctx.addSeekBarMarker(m.time / duration);
+            const el = this.ctx.addSeekBarMarker(m.time / duration, '', m.label);
             if (m.color) el.style.backgroundColor = m.color;
-            if (m.label) el.title = m.label;
             m.el = el;
         });
 

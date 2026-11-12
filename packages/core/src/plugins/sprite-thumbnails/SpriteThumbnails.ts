@@ -8,6 +8,7 @@ export interface SpriteThumbnailsPlayerContext {
         readonly el: HTMLElement;
         ratioAtClientX(clientX: number): number;
         suppressHoverTime(key: string, suppressed: boolean): void;
+        markerLabelAt?(clientX: number): string | null;
     };
     /** Responsive ölçekleme için referans genişlik — genelde player/video alanının genişliği. */
     playerWidth(): number;
@@ -154,7 +155,8 @@ export class SpriteThumbnails {
         if (!Number.isFinite(duration) || duration <= 0) return;
 
         const seconds = this.ctx.seekBar.ratioAtClientX(this.lastClientX) * duration;
-        this.timeEl.textContent = formatTime(seconds);
+        const label = this.ctx.seekBar.markerLabelAt?.(this.lastClientX);
+        this.timeEl.textContent = label ? `${label} · ${formatTime(seconds)}` : formatTime(seconds);
 
         // Asıl kare hazır değilse küçük sheet'ten doğru zamanın karesi; o da yoksa son kare ekranda kalır.
         const hi = this.isNetworkEligible() ? this.frameAt(seconds, duration) : null;

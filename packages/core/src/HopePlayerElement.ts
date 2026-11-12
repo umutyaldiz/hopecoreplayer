@@ -1173,7 +1173,7 @@ export class HopePlayerElement extends HTMLElement {
                 {
                     videoEl: this.videoEl,
                     overlayContainerEl: this.videoArea,
-                    addSeekBarMarker: (ratio, extraClass) => this.controlBar.seekBar.addMarker(ratio, extraClass),
+                    addSeekBarMarker: (ratio, extraClass, label) => this.controlBar.seekBar.addMarker(ratio, extraClass, label),
                     i18n: this.i18n,
                 },
                 options.markers
@@ -1438,7 +1438,7 @@ export class HopePlayerElement extends HTMLElement {
                 overlayEl: this.videoArea,
                 i18n: this.i18n,
                 isAdActive: () => this.isAdPlaying(),
-                addSeekBarMarker: (ratio, extraClass) => this.controlBar.seekBar.addMarker(ratio, extraClass),
+                addSeekBarMarker: (ratio, extraClass, label) => this.controlBar.seekBar.addMarker(ratio, extraClass, label),
             },
             opts
         );

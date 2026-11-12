@@ -94,10 +94,10 @@ export class LoopSection {
         if (!duration || !Number.isFinite(duration)) return;
 
         if (this.loopStart !== null) {
-            this.markers.addMarker(this.loopStart / duration, 'hp:bg-accent');
+            this.markers.addMarker(this.loopStart / duration, 'hp-seek-marker-loop');
         }
         if (this.loopEnd !== null) {
-            this.markers.addMarker(this.loopEnd / duration, 'hp:bg-accent');
+            this.markers.addMarker(this.loopEnd / duration, 'hp-seek-marker-loop');
         }
     }
 }

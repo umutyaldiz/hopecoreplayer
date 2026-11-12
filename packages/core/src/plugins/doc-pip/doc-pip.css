@@ -29,8 +29,22 @@
     font: 500 14px/1.4 system-ui, -apple-system, sans-serif;
     text-align: center;
 }
-.hp-docpip-placeholder .hp-redirect-btn {
+.hp-docpip-btn {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    padding: 7px 16px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+    font: 600 13px/1 system-ui, -apple-system, sans-serif;
+    cursor: pointer;
+}
+.hp-docpip-btn:hover {
+    background: rgba(255, 255, 255, 0.24);
+}
+.hp-docpip-btn:focus-visible {
+    outline: 2px solid var(--hp-color-accent, #fff);
+    outline-offset: 2px;
 }

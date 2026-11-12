@@ -185,9 +185,21 @@ export class SeekBar {
             this.hoverTimeEl.removeAttribute('data-visible');
             return;
         }
-        const time = tl.start + ratio * (tl.end - tl.start);
+        // İşaretin üzerindeyken onun tam zamanı (piksel yuvarlaması 0:00 göstermesin).
+        const marker = this.markerAt(e.clientX);
+        const at = marker ? Number(marker.dataset.ratio) : ratio;
+        const time = tl.start + at * (tl.end - tl.start);
         // Canlıda mutlak zaman anlamsız — canlı uçtan ne kadar geride ("-1:24").
-        this.hoverTimeEl.textContent = tl.live ? `-${formatTime(tl.end - time)}` : formatTime(time);
+        const timeText = tl.live ? `-${formatTime(tl.end - time)}` : formatTime(time);
+        const label = marker?.dataset.label ?? null;
+        if (label) {
+            const l = document.createElement('span');
+            l.className = 'hp-seek-time-label';
+            l.textContent = label;
+            this.hoverTimeEl.replaceChildren(l, ` · ${timeText}`);
+        } else {
+            this.hoverTimeEl.textContent = timeText;
+        }
         this.hoverTimeEl.setAttribute('data-visible', '');
         // İmleci ortala, seek bar kenarlarından taşma.
         const w = this.hoverTimeEl.offsetWidth;
@@ -196,6 +208,7 @@ export class SeekBar {
     };
 
     private readonly onHoverLeave = (): void => {
+        for (const m of this.markerEls) m.removeAttribute('data-hover');
         this.hoverTimeEl.removeAttribute('data-visible');
         this.hoverDotEl.removeAttribute('data-visible');
     };
@@ -410,19 +423,48 @@ export class SeekBar {
             this.bufferedEl.style.transform = `scaleX(${bufferedRatio})`;
         }
 
+        // Geçilen işaretler soluklaşır.
+        for (const m of this.markerEls) m.toggleAttribute('data-passed', Number(m.dataset.ratio) <= playedRatio);
+
         this.el.setAttribute('aria-valuemin', String(Math.floor(tl.start)));
         this.el.setAttribute('aria-valuemax', String(Math.floor(tl.end)));
         this.el.setAttribute('aria-valuenow', String(Math.floor(this.video.currentTime)));
     };
 
-    /** 0–1 arası oranda, seek bar üzerine ince bir işaret çizgisi ekler (ör. loop A/B noktaları). */
-    addMarker(ratio: number, extraClass = ''): HTMLDivElement {
+    /** 0–1 arası oranda, çizginin ortasına bir işaret noktası ekler (markers, etkileşimli öğeler, A-B döngü). */
+    addMarker(ratio: number, extraClass = '', label?: string): HTMLDivElement {
+        const r = Math.min(1, Math.max(0, ratio));
         const marker = document.createElement('div');
-        marker.className = `hp:absolute hp:top-0 hp:bottom-0 hp:w-0.5 hp:bg-on-surface hp:pointer-events-none ${extraClass}`;
-        marker.style.left = `${Math.min(1, Math.max(0, ratio)) * 100}%`;
+        marker.className = `hp-seek-marker ${extraClass}`.trim();
+        marker.setAttribute('part', 'seek-marker');
+        marker.dataset.ratio = String(r);
+        if (label) marker.dataset.label = label;
+        marker.style.left = `${r * 100}%`;
         this.el.appendChild(marker);
         this.markerEls.push(marker);
+        this.render();
         return marker;
+    }
+
+    /** İmlecin yakınındaki (±8 px) etiketli işaretin metni — önizleme balonları "Etiket · 0:42" gösterir. */
+    markerLabelAt(clientX: number): string | null {
+        return this.markerAt(clientX)?.dataset.label ?? null;
+    }
+
+    private markerAt(clientX: number): HTMLDivElement | null {
+        const x = this.layoutXAtClientX(clientX);
+        let best: HTMLDivElement | null = null;
+        let bestDist = 8;
+        for (const m of this.markerEls) {
+            if (!m.dataset.label || !m.isConnected) continue;
+            const d = Math.abs(this.xAtRatio(Number(m.dataset.ratio)) - x);
+            if (d <= bestDist) {
+                best = m;
+                bestDist = d;
+            }
+        }
+        for (const m of this.markerEls) m.toggleAttribute('data-hover', m === best);
+        return best;
     }
 
     clearMarkers(): void {

@@ -225,8 +225,8 @@
     outline: 2px solid var(--hp-color-accent, #fff);
     outline-offset: 2px;
 }
-.hp-ia-marker {
-    background: #f5c518 !important;
+.hp-seek-marker.hp-ia-marker {
+    background: var(--hp-ia-marker-color, #f5c518);
 }
 @media (prefers-reduced-motion: reduce) {
     .hp-ia,

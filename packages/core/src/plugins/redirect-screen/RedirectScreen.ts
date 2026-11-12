@@ -1,6 +1,8 @@
 import type { RedirectScreenOptions, RedirectScreenSuggestion } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { createIcon } from '../../icons/Icon';
+import { adoptStyle } from '../../utils/plugin-style';
+import css from './redirect-screen.css?inline';
 
 export interface RedirectScreenPlayerContext {
     /** hp:redirect olayları ve postroll'un bitişini (hp:adend) dinlemek için. */
@@ -89,6 +91,7 @@ export class RedirectScreen {
         private readonly options: RedirectScreenOptions
     ) {
         this.mode = options.mode === 'card' || options.mode === 'endScreen' ? options.mode : 'screen';
+        adoptStyle(ctx.overlayContainerEl, 'redirect-screen', css);
         if (options.enabled === false) return;
         ctx.videoEl.addEventListener('ended', this.onEnded);
         ctx.videoEl.addEventListener('play', this.onPlay);

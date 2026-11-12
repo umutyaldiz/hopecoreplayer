@@ -11,6 +11,7 @@ export interface SegmentsPlayerContext {
         suppressHoverTime(key: string, suppressed: boolean): void;
         clearChapters(): void;
         ratioAtClientX(clientX: number): number;
+        markerLabelAt?(clientX: number): string | null;
     };
 }
 
@@ -88,7 +89,8 @@ export class Segments {
         const chapter = this.chapters[index]!;
         this.titleEl.textContent = chapter.text ?? '';
         this.titleEl.style.display = chapter.text ? '' : 'none';
-        this.timeEl.textContent = formatTime(time);
+        const label = this.ctx.seekBar.markerLabelAt?.(e.clientX);
+        this.timeEl.textContent = label ? `${label} · ${formatTime(time)}` : formatTime(time);
 
         // sprite-thumbnails önizlemesi de seek bar'ın hemen üstünde açılıyor —
         // görünürse popup onun ÜSTÜNE çıkıyor (üst üste binmesin).

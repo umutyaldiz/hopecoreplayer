@@ -89,6 +89,28 @@ async function testPoll(browser) {
     try {
         let s = await ia(page);
         ok(s.markers === 3, `seek bar'da 3 nokta (${s.markers})`);
+        // Noktanın üzerine gelince balonda "Soru · 0:01".
+        const pt = await page.evaluate(() => {
+            const m = document.getElementById('player').shadowRoot.querySelector('.hp-ia-marker').getBoundingClientRect();
+            return { x: m.x + m.width / 2, y: m.y + m.height / 2 };
+        });
+        await page.mouse.move(pt.x, pt.y);
+        await page.waitForTimeout(150);
+        const tip = await page.evaluate(() => {
+            const r = document.getElementById('player').shadowRoot;
+            return { text: r.querySelector('[part="seek-time"]')?.textContent, hover: !!r.querySelector('.hp-ia-marker[data-hover]') };
+        });
+        ok(tip.text === 'En sevdiğiniz semt? · 0:01' && tip.hover, `nokta üzerinde açıklama: "${tip.text}"`);
+        await page.mouse.move(5, 5);
+
+        // markerColor → noktaların rengi.
+        await page.evaluate(() => {
+            const el = document.getElementById('player');
+            el.options = { ...el.options, interactive: { ...el.options.interactive, markerColor: '#ff0000', items: el.options.interactive.items.map((it, i) => (i === 2 ? { ...it, markerColor: '#00ff00' } : it)) } };
+        });
+        await page.waitForTimeout(400);
+        const colors = await page.evaluate(() => [...document.getElementById('player').shadowRoot.querySelectorAll('.hp-ia-marker')].map((m) => getComputedStyle(m).backgroundColor));
+        ok(colors.join(',') === 'rgb(255, 0, 0),rgb(255, 0, 0),rgb(0, 255, 0)', `markerColor + öğe başına markerColor (${colors.join(', ')})`);
         await seekPlay(page, 0.6);
         await waitType(page, 'poll');
         s = await ia(page);
