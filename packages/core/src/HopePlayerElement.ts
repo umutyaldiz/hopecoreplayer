@@ -44,6 +44,8 @@ import type { SpriteThumbnails } from './plugins/sprite-thumbnails';
 import type { CountdownScreen } from './plugins/countdown-screen';
 import type { GeoChecker } from './plugins/geo-checker';
 import type { RedirectScreen } from './plugins/redirect-screen';
+import type { Transcript } from './plugins/transcript';
+import type { Heatmap } from './plugins/heatmap';
 import type { PluginHost } from './plugin-api/PluginHost';
 import type { HopePlugin, PluginEntry, PluginInstanceHandle, PluginLoader } from './plugin-api/types';
 import { globalPluginEntries, onGlobalPluginsChange, registerPlugin } from './plugin-api/registry';
@@ -199,6 +201,10 @@ export class HopePlayerElement extends HTMLElement {
     private geoChecker: GeoChecker | null = null;
     private redirectScreen: RedirectScreen | null = null;
     private redirectKey = '';
+    private transcript: Transcript | null = null;
+    private transcriptKey = '';
+    private heatmap: Heatmap | null = null;
+    private heatmapKey = '';
     /** Eklentileri çalıştıran taraf — yalnızca bir eklenti kullanılınca indirilir (plugin-api/PluginHost). */
     private pluginHost: PluginHost | null = null;
     /** Seçenekler uygulanırken eklenti senkronu bitince çözülür (reklam tag dönüşümü bekler). */
@@ -560,6 +566,8 @@ export class HopePlayerElement extends HTMLElement {
         this.countdownScreen?.destroy();
         this.geoChecker?.destroy();
         this.redirectScreen?.destroy();
+        this.transcript?.destroy();
+        this.heatmap?.destroy();
         this.pluginHost?.destroy();
         this.pluginHost = null;
         this.offGlobalPlugins?.();
@@ -935,6 +943,7 @@ export class HopePlayerElement extends HTMLElement {
         this.countdownScreen?.refreshLabels();
         this.geoChecker?.refreshLabels();
         this.redirectScreen?.refreshLabels();
+        this.transcript?.refreshLabels();
         this.pluginHost?.refreshLabels();
         this.accessibility?.refreshLabels();
         this.playbackHistory?.refreshLabels();
@@ -1169,6 +1178,9 @@ export class HopePlayerElement extends HTMLElement {
             );
         }
 
+        await this.applyTranscript(options);
+        await this.applyHeatmap(options);
+
         // Ayar değişince (ör. playlist'te sıradaki video, mode) yeniden kurulur — eski kart / ekran kalmasın.
         const redirectKey = options.redirectScreen ? JSON.stringify(options.redirectScreen) : '';
         if (redirectKey !== this.redirectKey) {
@@ -1348,6 +1360,57 @@ export class HopePlayerElement extends HTMLElement {
         this.rebuildCaptions(options.subtitles?.find((s) => s.default)?.label ?? null);
     }
 
+    /** Transkript paneli — ayar değişince yeniden kurulur. */
+    private async applyTranscript(options: HopePlayerOptions): Promise<void> {
+        const key = options.transcript ? JSON.stringify(options.transcript) : '';
+        if (key === this.transcriptKey) return;
+        this.transcriptKey = key;
+        this.transcript?.destroy();
+        this.transcript = null;
+        if (!options.transcript) return;
+        const { installTranscript } = await import('./plugins/transcript');
+        if (this.transcriptKey !== key) return;
+        this.transcript = installTranscript(
+            {
+                hostEl: this,
+                videoEl: this.videoEl,
+                overlayEl: this.videoArea,
+                i18n: this.i18n,
+                getTracks: () => this.subtitleTracks.map(({ label, track }) => ({ label, track })),
+                activeLabel: () => this.activeCaptionLabel,
+                addButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick),
+            },
+            options.transcript === true ? {} : options.transcript
+        );
+    }
+
+    /** Isı haritası — veri değişince yeniden çizilir. */
+    private async applyHeatmap(options: HopePlayerOptions): Promise<void> {
+        const h = options.heatmap;
+        const opts = Array.isArray(h) ? { data: h } : h;
+        const key = opts && (opts.data?.length || opts.src) ? JSON.stringify(opts) : '';
+        if (key === this.heatmapKey) return;
+        this.heatmapKey = key;
+        this.heatmap?.destroy();
+        this.heatmap = null;
+        if (!key || !opts) return;
+        const { installHeatmap } = await import('./plugins/heatmap');
+        if (this.heatmapKey !== key) return;
+        this.heatmap = installHeatmap(
+            {
+                videoEl: this.videoEl,
+                seekBar: this.controlBar.seekBar,
+                log: (entry) => this.log.add({ source: 'player', ...entry }),
+            },
+            opts
+        );
+    }
+
+    /** Transkript panelini aç / kapat (`force` verilmezse tersine çevirir). `options.transcript` gerekir. */
+    toggleTranscript(force?: boolean): void {
+        this.transcript?.setOpen(force ?? !this.transcript.isOpen);
+    }
+
     /** Altyazı menüsünü `options.subtitles` + yayın izlerinden kurar; `activeLabel` varsa onu seçer. */
     private rebuildCaptions(activeLabel: string | null): void {
         this.subtitleTracks = [...this.optionTracks, ...this.streamTracks];
@@ -1359,6 +1422,7 @@ export class HopePlayerElement extends HTMLElement {
             this.captionTrackActive = false;
             this.controlBar.settingsMenu.setCaptionAppearance(null);
             this.sourceManager.selectTextTrack(null);
+            this.transcript?.onTracksChanged();
             return;
         }
         // selectCaption: altyazı seçiminin tek doğruluk kaynağı (track mode + renderer + ayarlar menüsü + hls.js).
@@ -1370,6 +1434,7 @@ export class HopePlayerElement extends HTMLElement {
             this.captionTrackActive = track !== null;
             this.controlBar.settingsMenu.setActiveCaption(track ? label! : this.i18n.captionsOff);
             this.controlBar.settingsMenu.setCaptionAppearance(track !== null ? this.buildCaptionAppearance() : null);
+            this.transcript?.onTracksChanged();
         };
         this.selectCaption = selectCaption;
         const active = activeLabel && this.subtitleTracks.some((t) => t.label === activeLabel) ? activeLabel : null;

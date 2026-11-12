@@ -825,31 +825,64 @@ export interface GeoCheckerOptions {
 export interface RedirectScreenSuggestion {
     url: string;
     title: string;
-    image: string;
+    image?: string;
+    /** Başlığın altındaki kısa metin (kanal, izlenme…). */
+    subtitle?: string;
     /** Görselin üstündeki süre rozeti, ör. "12:34". */
     duration?: string;
 }
 
-export type RedirectCardPosition = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+export interface TranscriptOptions {
+    /** Başlangıçta açık. Varsayılan false. */
+    open?: boolean;
+    /** Gösterilecek altyazı izi (label ya da srclang). Varsayılan: seçili altyazı, yoksa ilk iz. */
+    track?: string;
+    /** Arama kutusu. Varsayılan true. */
+    search?: boolean;
+    /** Oynayan satırı görünür tut. Varsayılan true. */
+    autoScroll?: boolean;
+    /** Kontrol çubuğunda aç / kapat butonu. Varsayılan true. */
+    button?: boolean;
+    /** Panelin yeri. Varsayılan 'right'. */
+    position?: 'right' | 'left';
+}
+
+export interface HeatmapOptions {
+    /** Yoğunluk değerleri — videoya eşit aralıklarla yayılır; ölçek serbest (en yüksek değere göre normalize). */
+    data?: number[];
+    /** `data` yerine: sayı dizisi döndüren JSON adresi. */
+    src?: string;
+    /** 'hover' (varsayılan): seek bar üzerine gelince; 'always': kontroller görünürken hep. */
+    show?: 'hover' | 'always';
+    /** Eğrinin en yüksek noktası (px). Varsayılan 36. */
+    height?: number;
+}
+
+export type RedirectCardPosition ='bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
 
 export interface RedirectScreenOptions {
     enabled?: boolean;
-    /** 'screen' modunda video bittikten sonraki geri sayım (sn). */
-    time: number;
+    /** 'screen' modunda video bittikten sonraki geri sayım (sn). Varsayılan 10. */
+    time?: number;
     /** Sıradaki videonun başlığı. */
     title?: string;
     /** Sıradaki videonun görseli (16:9 önerilir). */
     image?: string;
-    /** Yönlendirilecek adres. */
-    url: string;
-    /** İptal edilince (ya da 'card' modunda iptalden sonra video bitince) gösterilecek öneriler. */
+    /** Yönlendirilecek adres ('screen' / 'card' modunda zorunlu). */
+    url?: string;
+    /** Öneri ızgarası: 'endScreen' modunda video bitince, diğer modlarda iptal edilince gösterilir. */
     suggestions?: RedirectScreenSuggestion[];
     /**
      * 'screen' (varsayılan): video bitince tam alan "Sıradaki video" ekranı + `time` sn geri sayım.
      * 'card': video bitmeden `showBefore` sn kala köşede küçük "Sıradaki" kartı; geri sayım videoyla birlikte işler,
      * video bitince yönlendirilir. Karta tıklayınca hemen gidilir, X ile iptal edilir.
+     * 'endScreen': yönlendirme yok — video bitince doğrudan `suggestions` ızgarası (bitiş ekranı).
      */
-    mode?: 'screen' | 'card';
+    mode?: 'screen' | 'card' | 'endScreen';
+    /** Öneri ızgarasının başlığı. Verilmezse dil dosyasından ("Önerilen videolar"). */
+    suggestionsTitle?: string;
+    /** Öneri ızgarasında "Tekrar izle" butonu. Varsayılan true. */
+    replay?: boolean;
     /** 'card' modunda bitişe kaç sn kala kart görünsün. Varsayılan 10. */
     showBefore?: number;
     /** 'card' modunda kartın köşesi. Varsayılan 'bottom-right'. */
@@ -1255,6 +1288,10 @@ export interface HopePlayerOptions {
     markers?: MarkersOptions;
     /** Seekbar üzerinde bölüm/segment bantları. */
     segments?: SegmentItem[];
+    /** Altyazıdan üretilen, aranabilir ve tıklayınca o ana giden transkript paneli. */
+    transcript?: boolean | TranscriptOptions;
+    /** Seek bar üzerinde "en çok izlenen" yoğunluk eğrisi — değerler dizisi ya da HeatmapOptions. */
+    heatmap?: number[] | HeatmapOptions;
     /** "İntroyu atla" / "Özeti atla" / "Jeneriği atla" butonları — bölüm oynarken görünür, basınca sonuna atlar. */
     skipSegments?: SkipSegment[];
     /**
@@ -1356,10 +1393,18 @@ export type HopePlayerEventMap = {
     'hp:adtriggerclose': CustomEvent<{ rule?: string; reason: 'user' | 'timeout' | 'mode' | 'ad' | 'content' | 'replaced' }>;
     /**
      * Yönlendirme ekranı / kartı. `shown`: göründü (`mode`), `cancel`: kullanıcı iptal etti, `redirect`: yönlendirilecek
-     * (`reason`: auto | click). `redirect` olayı iptal edilebilir — `preventDefault()` ile sayfa değişmez, yönlendirmeyi
-     * kendiniz yaparsınız (ör. SPA router, playlist).
+     * (`reason`: auto | click | suggestion — öneri kartı, `index` ile). `redirect` olayı iptal edilebilir — `preventDefault()`
+     * ile sayfa değişmez, yönlendirmeyi kendiniz yaparsınız (ör. SPA router, playlist). `replay`: "Tekrar izle".
      */
-    'hp:redirect': CustomEvent<{ state: 'shown' | 'cancel' | 'redirect'; url: string; mode: 'screen' | 'card'; reason?: 'auto' | 'click' }>;
+    'hp:redirect': CustomEvent<{
+        state: 'shown' | 'cancel' | 'redirect' | 'replay';
+        url: string;
+        mode: 'screen' | 'card' | 'endScreen';
+        reason?: 'auto' | 'click' | 'suggestion';
+        index?: number;
+    }>;
+    /** Transkript paneli açıldı / kapandı ya da bir satıra tıklanıp o ana gidildi (`seek`, `time`). */
+    'hp:transcript': CustomEvent<{ state: 'open' | 'close' | 'seek'; time?: number }>;
     'hp:pausead': CustomEvent<{ state: 'shown' | 'hidden' | 'empty'; size?: [number, number]; reason?: 'closed' | 'resumed' }>;
     /**
      * `skipSegments` butonu: `shown` (bölüm başladı, buton göründü) ve `skip` (`reason`: click | auto). `skip` iptal

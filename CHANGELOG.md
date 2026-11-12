@@ -14,6 +14,14 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+### Added
+- **End screen (`redirectScreen.mode: 'endScreen'`):** no redirect or countdown — when the video ends, the `suggestions` grid opens right away (`url` / `time` are not needed). The grid (also shown after cancelling in the other modes) now has a heading (`suggestionsTitle`), per-card `subtitle`, "Watch again" (`replay`, on by default) and a close button, and lays out by card count. Clicking a card fires a cancelable `hp:redirect` (`reason: 'suggestion'`, `index`) so SPAs can route it themselves; "Watch again" fires `state: 'replay'`.
+- **Transcript panel (`transcript`):** a control-bar button opens a side panel listing every caption line with its time; clicking a line seeks there, the playing line is highlighted and kept in view, search ignores case and accents and marks matches, and a language picker appears with several tracks. VTT files from `subtitles` are read even while captions are off; in-stream HLS / DASH captions fill in while selected. Options: `open`, `track`, `search`, `autoScroll`, `button`, `position`; `player.toggleTranscript(force?)`; `hp:transcript` (`open` / `close` / `seek`). Separate chunk.
+- **Heatmap (`heatmap`):** a "most watched" density curve above the seek bar from your own values (`number[]`, or `{ data | src, show: 'hover' | 'always', height }`); the played part fills with the accent color. Hidden on live streams. Separate chunk.
+
+### Changed
+- `redirectScreen.url` and `redirectScreen.time` are optional in the types (`time` defaults to 10); `url` is still needed for `screen` / `card`. `RedirectScreenSuggestion.image` is optional.
+
 ## [1.5.0] — 2026-11-11
 
 ### Added

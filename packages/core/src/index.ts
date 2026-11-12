@@ -70,6 +70,8 @@ export type {
     RedirectScreenSuggestion,
     RedirectScreenOptions,
     RedirectCardPosition,
+    TranscriptOptions,
+    HeatmapOptions,
     QrResumeOptions,
     PauseAdOptions,
     SkipButtonsOptions,
