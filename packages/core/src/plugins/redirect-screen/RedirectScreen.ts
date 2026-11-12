@@ -66,10 +66,11 @@ function thumb(image: string | undefined, duration: string | undefined, classNam
 }
 
 /**
- * Sıradaki videoya yönlendirme. İki mod:
+ * Sıradaki videoya yönlendirme. Üç mod:
  * - 'screen' (varsayılan): video bitince tam alan ekran + `time` sn geri sayım; iptal → öneriler.
  * - 'card': bitime `showBefore` sn kala köşede küçük "Sıradaki" kartı; geri sayım videoyla birlikte işler (duraklatınca
  *   durur), video bitince yönlendirilir. Karta tıklamak hemen yönlendirir, X iptal eder.
+ * - 'endScreen': yönlendirme yok; video bitince doğrudan öneri ızgarası (bitiş ekranı).
  * Bitişte postroll oynuyorsa yönlendirme reklam bitene kadar bekler. `hp:redirect` (state: redirect) iptal edilirse
  * (`preventDefault`) sayfa değişmez.
  */
@@ -81,13 +82,13 @@ export class RedirectScreen {
     private cardLabel: HTMLSpanElement | null = null;
     private cancelled = false;
     private waitingForAd = false;
-    private readonly mode: 'screen' | 'card';
+    private readonly mode: 'screen' | 'card' | 'endScreen';
 
     constructor(
         private readonly ctx: RedirectScreenPlayerContext,
         private readonly options: RedirectScreenOptions
     ) {
-        this.mode = options.mode === 'card' ? 'card' : 'screen';
+        this.mode = options.mode === 'card' || options.mode === 'endScreen' ? options.mode : 'screen';
         if (options.enabled === false) return;
         ctx.videoEl.addEventListener('ended', this.onEnded);
         ctx.videoEl.addEventListener('play', this.onPlay);
@@ -109,18 +110,24 @@ export class RedirectScreen {
         this.hideCard();
     }
 
-    private emit(state: 'shown' | 'cancel' | 'redirect', reason?: 'auto' | 'click'): boolean {
+    private emit(
+        state: 'shown' | 'cancel' | 'redirect' | 'replay',
+        reason?: 'auto' | 'click' | 'suggestion',
+        url = this.options.url ?? '',
+        index?: number
+    ): boolean {
         return this.ctx.hostEl.dispatchEvent(
-            new CustomEvent('hp:redirect', { detail: { state, url: this.options.url, mode: this.mode, reason }, cancelable: state === 'redirect' })
+            new CustomEvent('hp:redirect', { detail: { state, url, mode: this.mode, reason, index }, cancelable: state === 'redirect' })
         );
     }
 
     private go(reason: 'auto' | 'click'): void {
         this.remove();
         this.hideCard();
-        if (!this.emit('redirect', reason)) return; // entegratör kendisi yönlendirecek
-        if (this.options.newTab) window.open(this.options.url, '_blank', 'noopener');
-        else window.location.href = this.options.url;
+        const url = this.options.url;
+        if (!this.emit('redirect', reason) || !url) return; // entegratör kendisi yönlendirecek
+        if (this.options.newTab) window.open(url, '_blank', 'noopener');
+        else window.location.href = url;
     }
 
     private readonly onPlay = (): void => {
@@ -149,6 +156,13 @@ export class RedirectScreen {
     };
 
     private finish(): void {
+        if (this.mode === 'endScreen') {
+            if (this.options.suggestions?.length) {
+                this.showSuggestions(this.options.suggestions);
+                this.emit('shown');
+            }
+            return;
+        }
         if (this.mode === 'card') {
             this.hideCard();
             if (!this.cancelled) this.go('auto');
@@ -334,7 +348,7 @@ export class RedirectScreen {
         this.wrapper = wrapper;
         this.emit('shown');
 
-        const total = Math.max(0, o.time);
+        const total = Math.max(0, o.time ?? 10);
         let remaining = total;
         const render = (): void => {
             counter.textContent = this.ctx.i18n.redirectCountdown(remaining);
@@ -355,15 +369,38 @@ export class RedirectScreen {
         }, 1000);
     }
 
+    /** Öneri ızgarası (bitiş ekranı): başlık + kapat, kartlar, "Tekrar izle". */
     private showSuggestions(items: RedirectScreenSuggestion[]): void {
         this.remove();
+        const o = this.options;
+        const i18n = this.ctx.i18n;
         const wrapper = document.createElement('div');
         wrapper.setAttribute('part', 'redirect-suggestions');
         wrapper.className = 'hp-redirect-suggestions';
-        for (const item of items) {
+        wrapper.setAttribute('role', 'region');
+        const heading = o.suggestionsTitle ?? i18n.redirectSuggestions;
+        wrapper.setAttribute('aria-label', heading);
+
+        const head = document.createElement('div');
+        head.className = 'hp-redirect-grid-head';
+        const h = document.createElement('span');
+        h.className = 'hp-redirect-grid-title';
+        h.textContent = heading;
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'hp-redirect-close';
+        close.setAttribute('aria-label', i18n.redirectCloseSuggestions);
+        close.appendChild(createIcon('close'));
+        close.addEventListener('click', () => this.remove());
+        head.append(h, close);
+
+        const grid = document.createElement('div');
+        grid.className = 'hp-redirect-grid';
+        grid.setAttribute('data-count', String(Math.min(items.length, 6)));
+        items.forEach((item, index) => {
             const box = document.createElement('a');
             box.href = item.url;
-            if (this.options.newTab) {
+            if (o.newTab) {
                 box.target = '_blank';
                 box.rel = 'noopener';
             }
@@ -374,8 +411,35 @@ export class RedirectScreen {
             title.className = 'hp-redirect-title';
             title.textContent = item.title;
             box.append(t.el, title);
-            wrapper.appendChild(box);
+            if (item.subtitle) {
+                const sub = document.createElement('span');
+                sub.className = 'hp-redirect-sub';
+                sub.textContent = item.subtitle;
+                box.appendChild(sub);
+            }
+            // SPA: preventDefault ile sayfa değişmez.
+            box.addEventListener('click', (e) => {
+                if (!this.emit('redirect', 'suggestion', item.url, index)) e.preventDefault();
+            });
+            grid.appendChild(box);
+        });
+        wrapper.append(head, grid);
+
+        if (o.replay !== false) {
+            const replay = document.createElement('button');
+            replay.type = 'button';
+            replay.className = 'hp-redirect-btn hp-redirect-replay';
+            replay.append(createIcon('loop'), document.createTextNode(i18n.redirectReplay));
+            replay.addEventListener('click', () => {
+                this.remove();
+                this.emit('replay');
+                const v = this.ctx.videoEl;
+                v.currentTime = 0;
+                void v.play().catch(() => {});
+            });
+            wrapper.appendChild(replay);
         }
+
         for (const ev of ['pointerdown', 'click', 'dblclick'] as const) wrapper.addEventListener(ev, (e) => e.stopPropagation());
         this.ctx.overlayContainerEl.appendChild(wrapper);
         this.wrapper = wrapper;

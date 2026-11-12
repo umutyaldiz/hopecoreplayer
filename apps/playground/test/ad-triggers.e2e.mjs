@@ -191,17 +191,20 @@ async function testPauseContentAndEmpty(browser) {
     await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggerempty'), null, { timeout: 5000, polling: 50 }).catch(() => {});
     let s = await state(page);
     ok(s.ev.some((e) => e.t === 'adtriggerempty' && e.rule === 'empty') && !s.open && s.lightAds === 0, 'boş birim → hp:adtriggerempty, kutu yok');
-    await page.waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggershow'), null, { timeout: 5000, polling: 50 }).catch(() => {});
+    // Yavaş CI WebKit'te 2.5. saniyeye varmak 5 sn'yi aşabiliyor — çerçevenin kendisi beklenir.
+    await page
+        .waitForFunction(() => window.__ev.some((e) => e.t === 'adtriggershow') && !!document.getElementById('player').shadowRoot.querySelector('.hp-adtrigger-frame'), null, { timeout: 12000, polling: 50 })
+        .catch(() => {});
     await page.waitForTimeout(300);
     s = await state(page);
     const full = await page.evaluate(() => {
         const a = document.getElementById('player').shadowRoot.querySelector('.video-area').getBoundingClientRect();
-        const f = document.getElementById('player').shadowRoot.querySelector('.hp-adtrigger-frame').getBoundingClientRect();
-        return Math.abs(a.width - f.width) < 2 && Math.abs(a.height - f.height) < 2;
+        const f = document.getElementById('player').shadowRoot.querySelector('.hp-adtrigger-frame')?.getBoundingClientRect();
+        return !!f && Math.abs(a.width - f.width) < 2 && Math.abs(a.height - f.height) < 2;
     });
     ok(s.open && s.paused && full, `tam alan reklam açık, içerik duraklatıldı (paused=${s.paused}, tam alan=${full})`);
     const pauseRules = s.ev.filter((e) => e.t === 'adtriggershow').length;
-    await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-adtrigger-close').click());
+    await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-adtrigger-close')?.click());
     await page.waitForTimeout(500);
     s = await state(page);
     ok(!s.open && !s.paused && pauseRules === 1, 'kapandı → içerik devam ediyor');

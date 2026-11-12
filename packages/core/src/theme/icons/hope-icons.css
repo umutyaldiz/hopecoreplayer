@@ -27,7 +27,8 @@
 .hp-icon-settings::before { content: "\e90d"; }
 .hp-icon-skip-back::before { content: "\e90e"; }
 .hp-icon-skip-forward::before { content: "\e90f"; }
-.hp-icon-volume-high::before { content: "\e910"; }
-.hp-icon-volume-low::before { content: "\e911"; }
-.hp-icon-volume-muted::before { content: "\e912"; }
-.hp-icon-warning::before { content: "\e913"; }
+.hp-icon-transcript::before { content: "\e910"; }
+.hp-icon-volume-high::before { content: "\e911"; }
+.hp-icon-volume-low::before { content: "\e912"; }
+.hp-icon-volume-muted::before { content: "\e913"; }
+.hp-icon-warning::before { content: "\e914"; }

@@ -222,7 +222,17 @@ if (player) {
                 { src: '/sample.mp4', label: '720p', selected: true },
                 { src: '/sample.mp4', label: '360p' },
             ],
-            subtitles: [{ src: '/sample.vtt', label: 'Türkçe', srclang: 'tr', default: false }],
+            subtitles:
+                feature === 'transcript'
+                    ? [
+                          { src: '/sample.vtt', label: 'Türkçe', srclang: 'tr', default: true },
+                          { src: '/sample.en.vtt', label: 'English', srclang: 'en' },
+                      ]
+                    : [{ src: '/sample.vtt', label: 'Türkçe', srclang: 'tr', default: false }],
+            // ?feature=transcript | transcript-open
+            transcript: feature === 'transcript' ? true : feature === 'transcript-open' ? { open: true, track: 'tr' } : undefined,
+            // ?feature=heatmap — 10 sn videoda 4. ve 8. saniyede tepe.
+            heatmap: feature === 'heatmap' ? { data: [2, 3, 5, 9, 20, 12, 6, 8, 15, 4], show: 'always' } : undefined,
             muted: true,
             // İstek üzerine: "mouse out sonrası toolbar'ın kaybolma süresini
             // kısaltır mısın, bu da options'tan ayarlanabilmeli" — varsayılan
@@ -303,7 +313,17 @@ if (player) {
                                 { url: 'https://example.com/s2', title: 'Öneri 2 <b>kalın değil</b>', image: '/sample-cover.jpg' },
                             ],
                         }
-                      : undefined,
+                      : feature === 'endscreen'
+                        ? {
+                              mode: 'endScreen',
+                              suggestionsTitle: 'Bunları da izleyin',
+                              suggestions: [
+                                  { url: 'https://example.com/s1', title: 'Öneri 1', subtitle: 'Kanal · 2 gün önce', image: '/sample-cover.jpg', duration: '1:20' },
+                                  { url: 'https://example.com/s2', title: 'Öneri 2', image: '/sample-cover.jpg' },
+                                  { url: 'https://example.com/s3', title: 'Öneri 3', image: '/sample-cover.jpg' },
+                              ],
+                          }
+                        : undefined,
             dubbing:
                 feature === 'dubbing'
                     ? {

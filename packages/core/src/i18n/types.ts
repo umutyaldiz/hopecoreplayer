@@ -99,6 +99,18 @@ export interface HopeLocaleStrings {
     /** Kart / ekran üst etiketi. */
     redirectUpNext: string;
     redirectCancelCard: string;
+    /** Öneri ızgarası başlığı, "Tekrar izle" ve kapatma. */
+    redirectSuggestions: string;
+    redirectReplay: string;
+    redirectCloseSuggestions: string;
+    /** Transkript paneli. */
+    transcript: string;
+    transcriptSearch: string;
+    transcriptClose: string;
+    transcriptTrack: string;
+    transcriptEmpty: string;
+    transcriptNoResults: string;
+    transcriptWaiting: string;
     /** `skipSegments` buton metinleri (türe göre). */
     skipIntro: string;
     skipRecap: string;
