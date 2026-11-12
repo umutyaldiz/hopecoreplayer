@@ -14,6 +14,9 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+### Added
+- **Multi-camera (`multiview`):** several streams of the same event (HLS recommended). Focus view: the selected camera plays large and the others stream as small screens above the control bar (`thumbnails: 'bottom' | 'right'`); clicking one switches to it. Split view (`layout: 'grid'`): 2–4 cameras in equal cells, audio from the selected one, clicking a cell swaps it in. Switching continues from the same moment: cameras are aligned by `EXT-X-PROGRAM-DATE-TIME` (live and VOD), or by `sources[].offset` when the tags are missing; previews stay aligned while playing and show "Not started yet" before a camera joins. Previews play at the lowest quality with a short buffer; `previews: 'auto'` streams on desktop and shows posters on mobile (`posterRefresh`), and split view on mobile is limited by `maxMobileStreams` (2). Controls, captions and ads follow the selected camera; previews pause during ads. `player.switchCamera(id)`, `player.setMultiviewLayout(layout)`, `hp:multiview` (`switch` / `layout`). Separate chunk.
+
 ## [1.6.0] — 2026-11-12
 
 ### Added

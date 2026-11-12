@@ -834,6 +834,46 @@ export interface RedirectScreenSuggestion {
     duration?: string;
 }
 
+export interface MultiviewSource {
+    /** Kamera kimliği (olaylarda ve `switchCamera()`'da). */
+    id: string;
+    /** Görünen ad, ör. "Sahne", "Seyirci". */
+    label: string;
+    /** Yayın adresi (HLS önerilir; MP4 de olur). */
+    src: string;
+    type?: string;
+    /** Önizleme görseli (küçük ekranlar ve poster önizleme). */
+    poster?: string;
+    /**
+     * Saat etiketi (EXT-X-PROGRAM-DATE-TIME) yoksa senkron için: bu kamera etkinliğin kaçıncı saniyesinde başladı.
+     * Kameraların biri etiketsizse hepsine verin.
+     */
+    offset?: number;
+}
+
+export interface MultiviewOptions {
+    sources: MultiviewSource[];
+    /** Başlangıç kamerası (`id`). Varsayılan ilk kamera. */
+    start?: string;
+    /** 'focus' (varsayılan): seçili kamera büyük, diğerleri küçük; 'grid': bölünmüş ekran (2–4). */
+    layout?: 'focus' | 'grid';
+    /** 'focus' görünümünde küçük ekranların yeri. Varsayılan 'bottom'. */
+    thumbnails?: 'bottom' | 'right';
+    /**
+     * Küçük ekranlarda ne görünsün: 'video' canlı (düşük kaliteli) akış, 'poster' görsel. 'auto' (varsayılan):
+     * masaüstünde video, mobilde poster — veri ve pil için.
+     */
+    previews?: 'auto' | 'video' | 'poster';
+    /** Poster önizlemelerini kaç saniyede bir yenile (canlı yayın kareleri için). Varsayılan 0 (yenileme yok). */
+    posterRefresh?: number;
+    /** Mobilde aynı anda en fazla kaç akış (ana dahil). Varsayılan 2. */
+    maxMobileStreams?: number;
+    /** Kamera değişince ve oynarken kameraları aynı ana hizala. Varsayılan true. */
+    sync?: boolean;
+    /** Kontrol çubuğunda görünüm (tek / bölünmüş) butonu. Varsayılan true. */
+    button?: boolean;
+}
+
 export interface DocumentPipOptions {
     /** Pencere genişliği (px). Varsayılan: player genişliği (320–640). */
     width?: number;
@@ -1290,6 +1330,8 @@ export interface HopePlayerOptions {
     documentPip?: boolean | DocumentPipOptions;
     /** Belirli anlarda anket, quiz, ürün kartı ya da bağlantı kartı. */
     interactive?: InteractiveOptions;
+    /** Çoklu kamera: aynı etkinliğin birden fazla yayını — kamera seçimi ve bölünmüş ekran (en fazla 4). */
+    multiview?: MultiviewOptions;
     /**
      * Kontrol çubuğundaki tam ekran butonu. Varsayılan true; `false` gizler. Yalnızca buton: `F` kısayolu ve
      * `tapGestures`'taki `toggleFullscreen` çalışmaya devam eder.
@@ -1497,6 +1539,8 @@ export type HopePlayerEventMap = {
         reason?: 'auto' | 'click' | 'suggestion';
         index?: number;
     }>;
+    /** Çoklu kamera: kamera değişti (`switch`, `from`) ya da görünüm değişti (`layout`). */
+    'hp:multiview': CustomEvent<{ state: 'switch' | 'layout'; id: string; from?: string; layout: 'focus' | 'grid' }>;
     /** Picture-in-Picture'a girildi / çıkıldı — `mode`: 'document' (Document PiP) ya da 'native'. */
     'hp:pip': CustomEvent<{ state: 'enter' | 'exit'; mode: 'document' | 'native' }>;
     /**
