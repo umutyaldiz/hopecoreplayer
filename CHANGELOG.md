@@ -14,15 +14,23 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-11-12
+
 ### Added
 - **End screen (`redirectScreen.mode: 'endScreen'`):** no redirect or countdown — when the video ends, the `suggestions` grid opens right away (`url` / `time` are not needed). The grid (also shown after cancelling in the other modes) now has a heading (`suggestionsTitle`), per-card `subtitle`, "Watch again" (`replay`, on by default) and a close button, and lays out by card count. Clicking a card fires a cancelable `hp:redirect` (`reason: 'suggestion'`, `index`) so SPAs can route it themselves; "Watch again" fires `state: 'replay'`.
 - **Transcript panel (`transcript`):** a control-bar button opens a side panel listing every caption line with its time; clicking a line seeks there, the playing line is highlighted and kept in view, search ignores case and accents and marks matches, and a language picker appears with several tracks. VTT files from `subtitles` are read even while captions are off; in-stream HLS / DASH captions fill in while selected. Options: `open`, `track`, `search`, `autoScroll`, `button`, `position`; `player.toggleTranscript(force?)`; `hp:transcript` (`open` / `close` / `seek`). Separate chunk.
 - **Document Picture-in-Picture (`documentPip`):** on Chrome / Edge 116+ the PiP button opens a Document PiP window and moves the player's video area into it — controls, captions, settings menu, ad layer and plugins — without interrupting playback. The page keeps a "Bring it back" placeholder; keyboard shortcuts work in the window; `inViewAutoplay` and `sticky` stay out of the way while it is open. Other browsers keep regular PiP and never download the code. `player.togglePip()`; new `hp:pip` event (`enter` / `exit`, `mode: 'document' | 'native'`) for both kinds of PiP. Separate chunk.
 - **Interactive content (`interactive`):** polls (percentage bars from `results` or the value returned by `onAnswer`), quizzes (correct / wrong marking, `explanation`), product cards (price, old price, "Sponsored") and link cards at set times. Video-time based `duration`, optional `pause`, seek-aware (skipped items are not shown, seeking back brings them again), answered polls / quizzes are not asked twice (`rememberAnswers`), seek bar dots, hidden during ads. `hp:interactive` (`shown` / `answer` / `click` — cancelable / `dismiss`). Separate chunk.
 - **Heatmap (`heatmap`):** a "most watched" density curve above the seek bar from your own values (`number[]`, or `{ data | src, show: 'hover' | 'always', height }`); the played part fills with the accent color. Hidden on live streams. Separate chunk.
+- **Seek bar marker labels and colors:** hovering a marker dot shows "label · time" in the seek bar tooltip (the time snaps to the marker) — the `markers` item `label`, an interactive item's question or card title; also inside chapter and sprite previews. Colors: `markers.color` for all dots (an item's `color` wins), `interactive.markerColor` and `items[].markerColor`; CSS `--hp-seek-marker-color`, `--hp-ia-marker-color`, `--hp-seek-marker-size`, `::part(seek-marker)`.
 
 ### Changed
 - `redirectScreen.url` and `redirectScreen.time` are optional in the types (`time` defaults to 10); `url` is still needed for `screen` / `card`. `RedirectScreenSuggestion.image` is optional.
+- Seek bar markers (markers, loop A-B, interactive items) are centered dots with a dark ring instead of full-height lines; they grow on hover and dim once passed. Loop bounds are accent pills.
+- Plugin styles (redirect screen, transcript, heatmap, interactive content, Document PiP) ship with their own chunks instead of the main bundle — the initial load stays at ~79 KB gzip with all the new features.
+
+### Fixed
+- **Ad triggers:** time / percent marks were skipped when two `timeupdate` events were more than 1.5 s apart (slow devices, background tabs, Linux WebKit) because the gap was treated as a seek. Seeks are now detected with the `seeking` event and the natural-progress limit follows the real time elapsed.
 
 ## [1.5.0] — 2026-11-11
 
