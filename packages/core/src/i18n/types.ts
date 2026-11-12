@@ -111,6 +111,12 @@ export interface HopeLocaleStrings {
     transcriptEmpty: string;
     transcriptNoResults: string;
     transcriptWaiting: string;
+    /** Çoklu kamera. */
+    multiviewLayout: string;
+    multiviewCameras: string;
+    multiviewWatching: string;
+    multiviewSwitch: (label: string) => string;
+    multiviewNotStarted: string;
     /** Document PiP yer tutucusu. */
     pipPlaying: string;
     pipBack: string;

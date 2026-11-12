@@ -218,10 +218,13 @@ if (player) {
         // Faz 1 API testi: birden fazla "kalite" (aynı dosya, farklı etiket —
         // gerçek bitrate farkı yok ama geçiş mekanizmasını test eder) + altyazı.
         player.options = {
-            sources: [
-                { src: '/sample.mp4', label: '720p', selected: true },
-                { src: '/sample.mp4', label: '360p' },
-            ],
+            // Çoklu kamerada kaynak kameralardan gelir.
+            sources: feature?.startsWith('multiview')
+                ? undefined
+                : [
+                      { src: '/sample.mp4', label: '720p', selected: true },
+                      { src: '/sample.mp4', label: '360p' },
+                  ],
             subtitles:
                 feature === 'transcript'
                     ? [
@@ -231,6 +234,21 @@ if (player) {
                     : [{ src: '/sample.vtt', label: 'Türkçe', srclang: 'tr', default: false }],
             // ?feature=transcript | transcript-open
             transcript: feature === 'transcript' ? true : feature === 'transcript-open' ? { open: true, track: 'tr' } : undefined,
+            // ?feature=multiview | multiview-grid — 4 kamera (kamera 1–3 PROGRAM-DATE-TIME, kamera 4 yalnızca offset).
+            multiview:
+                feature === 'multiview' || feature === 'multiview-grid' || feature === 'multiview-poster'
+                    ? {
+                          layout: feature === 'multiview-grid' ? 'grid' : 'focus',
+                          previews: feature === 'multiview-poster' ? 'poster' : 'video',
+                          sources: [1, 2, 3, 4].map((n) => ({
+                              id: `cam${n}`,
+                              label: ['Sahne', 'Yakın plan', 'Siyah-beyaz', 'Sol üst'][n - 1]!,
+                              src: `/multiview/cam${n}/index.m3u8`,
+                              poster: `/multiview/cam${n}/poster.jpg`,
+                              offset: [0, 2, 1, 3][n - 1],
+                          })),
+                      }
+                    : undefined,
             // ?feature=docpip — Document PiP (testte documentPictureInPicture taklit edilir).
             documentPip: feature === 'docpip' ? true : undefined,
             // ?feature=interactive — 1. sn anket, 3. sn quiz, 6. sn ürün kartı.

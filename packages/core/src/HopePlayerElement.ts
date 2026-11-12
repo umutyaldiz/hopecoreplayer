@@ -48,6 +48,7 @@ import type { Transcript } from './plugins/transcript';
 import type { Heatmap } from './plugins/heatmap';
 import type { DocumentPip } from './plugins/doc-pip';
 import type { Interactive } from './plugins/interactive';
+import type { Multiview } from './plugins/multiview';
 import type { PluginHost } from './plugin-api/PluginHost';
 import type { HopePlugin, PluginEntry, PluginInstanceHandle, PluginLoader } from './plugin-api/types';
 import { globalPluginEntries, onGlobalPluginsChange, registerPlugin } from './plugin-api/registry';
@@ -211,6 +212,8 @@ export class HopePlayerElement extends HTMLElement {
     private docPipOptions: import('./types').DocumentPipOptions | null = null;
     private interactive: Interactive | null = null;
     private interactiveKey = '';
+    private multiview: Multiview | null = null;
+    private multiviewKey = '';
     /** Eklentileri çalıştıran taraf — yalnızca bir eklenti kullanılınca indirilir (plugin-api/PluginHost). */
     private pluginHost: PluginHost | null = null;
     /** Seçenekler uygulanırken eklenti senkronu bitince çözülür (reklam tag dönüşümü bekler). */
@@ -582,6 +585,7 @@ export class HopePlayerElement extends HTMLElement {
         this.heatmap?.destroy();
         this.docPip?.destroy();
         this.interactive?.destroy();
+        this.multiview?.destroy();
         this.pluginHost?.destroy();
         this.pluginHost = null;
         this.offGlobalPlugins?.();
@@ -961,6 +965,7 @@ export class HopePlayerElement extends HTMLElement {
         this.redirectScreen?.refreshLabels();
         this.transcript?.refreshLabels();
         this.interactive?.refreshLabels();
+        this.multiview?.refreshLabels();
         this.pluginHost?.refreshLabels();
         this.accessibility?.refreshLabels();
         this.playbackHistory?.refreshLabels();
@@ -1045,7 +1050,15 @@ export class HopePlayerElement extends HTMLElement {
         this.errorScreen.dismiss();
         await this.applyRewardedUnlock(options);
 
-        const all: HopeSourceOption[] = options.sources?.length ? options.sources : options.src ? [{ src: options.src, label: this.i18n.autoQuality }] : [];
+        // Çoklu kamerada src verilmezse başlangıç kamerası oynar.
+        const mv = options.multiview?.sources?.length ? (options.multiview.sources.find((c) => c.id === options.multiview!.start) ?? options.multiview.sources[0]!) : null;
+        const all: HopeSourceOption[] = options.sources?.length
+            ? options.sources
+            : options.src
+              ? [{ src: options.src, label: this.i18n.autoQuality }]
+              : mv
+                ? [{ src: mv.src, type: mv.type, label: this.i18n.autoQuality }]
+                : [];
         this.sourceGroups = groupSources(all, options.sourcePriority);
         // O an yüklü kaynak listede varsa (ve kilitli değilse) korunur: seçenekler yeniden uygulanınca (ör. React prop)
         // kullanıcının seçtiği kalite `selected` olana geri dönmesin — yedek gruba düşülmüşse o grupta kalınır.
@@ -1200,6 +1213,7 @@ export class HopePlayerElement extends HTMLElement {
         await this.applyTranscript(options);
         await this.applyHeatmap(options);
         await this.applyInteractive(options);
+        await this.applyMultiview(options);
         // Document PiP parçası önceden yüklenir — tıklamada (kullanıcı hareketi süresi içinde) pencere hemen açılsın.
         if (this.docPipOptions && !this.docPip) {
             const { installDocumentPip } = await import('./plugins/doc-pip');
@@ -1415,6 +1429,42 @@ export class HopePlayerElement extends HTMLElement {
             },
             options.transcript === true ? {} : options.transcript
         );
+    }
+
+    /** Çoklu kamera — kamera listesi / ayar değişince yeniden kurulur. */
+    private async applyMultiview(options: HopePlayerOptions): Promise<void> {
+        const opts = options.multiview;
+        const key = opts?.sources?.length ? JSON.stringify(opts) : '';
+        if (key === this.multiviewKey) return;
+        this.multiviewKey = key;
+        this.multiview?.destroy();
+        this.multiview = null;
+        if (!key || !opts) return;
+        const { installMultiview } = await import('./plugins/multiview');
+        if (this.multiviewKey !== key) return;
+        this.multiview = installMultiview(
+            {
+                hostEl: this,
+                videoEl: this.videoEl,
+                videoAreaEl: this.videoArea,
+                i18n: this.i18n,
+                isAdActive: () => this.isAdPlaying(),
+                loadSource: (src, type) => this.sourceManager.load(src, type),
+                mainHls: () => this.sourceManager.hlsInstance as unknown as import('./plugins/multiview').HlsLike | null,
+                addButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick),
+            },
+            opts
+        );
+    }
+
+    /** Çoklu kamerada kamerayı değiştir (`options.multiview` gerekir). */
+    switchCamera(id: string): void {
+        void this.multiview?.switchTo(id);
+    }
+
+    /** Çoklu kamera görünümü: 'focus' (tek + küçükler) ya da 'grid' (bölünmüş). */
+    setMultiviewLayout(layout: 'focus' | 'grid'): void {
+        this.multiview?.setLayout(layout);
     }
 
     /** Etkileşimli içerik — öğeler değişince yeniden kurulur (`onAnswer` fonksiyonu anahtara girmez). */

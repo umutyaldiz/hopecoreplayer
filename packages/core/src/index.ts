@@ -73,6 +73,8 @@ export type {
     TranscriptOptions,
     HeatmapOptions,
     DocumentPipOptions,
+    MultiviewOptions,
+    MultiviewSource,
     InteractiveOptions,
     InteractiveItem,
     InteractivePoll,
