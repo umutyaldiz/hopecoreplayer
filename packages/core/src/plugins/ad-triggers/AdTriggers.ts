@@ -193,6 +193,10 @@ export class AdTriggers {
     private watchedMs = 0;
     private lastTick = performance.now();
     private lastPos = 0;
+    /** lastPos'un ölçüldüğü an — doğal ilerlemenin üst sınırı geçen gerçek süreden hesaplanır. */
+    private lastPosAt = performance.now();
+    /** `seeking` ile `seeked` arası: aradaki işaretler tetiklenmez. */
+    private seekPending = false;
     private started = false;
     private userPaused = false;
     /** Player'ın kendi duraklatması (pauseContent) — pause/resume kuralı sayılmaz. */
@@ -206,6 +210,7 @@ export class AdTriggers {
         this.options = options;
         const v = ctx.videoEl;
         v.addEventListener('timeupdate', this.onTimeUpdate);
+        v.addEventListener('seeking', this.onSeeking);
         v.addEventListener('seeked', this.onSeeked);
         v.addEventListener('playing', this.onPlaying);
         v.addEventListener('pause', this.onPause);
@@ -303,6 +308,8 @@ export class AdTriggers {
         this.lastShownAt.clear();
         this.watchedMs = 0;
         this.lastPos = 0;
+        this.lastPosAt = performance.now();
+        this.seekPending = false;
         this.started = false;
         this.userPaused = false;
         this.cancelDelayed();
@@ -337,8 +344,14 @@ export class AdTriggers {
         if (!this.ctx.isBlocked()) this.trigger('ended');
     };
 
+    private readonly onSeeking = (): void => {
+        this.seekPending = true;
+    };
+
     private readonly onSeeked = (): void => {
+        this.seekPending = false;
         this.lastPos = this.ctx.videoEl.currentTime;
+        this.lastPosAt = performance.now();
     };
 
     private readonly onFullscreenChange = (): void => {
@@ -366,11 +379,16 @@ export class AdTriggers {
         const v = this.ctx.videoEl;
         const pos = v.currentTime;
         const prev = this.lastPos;
+        const now = performance.now();
+        const elapsed = (now - this.lastPosAt) / 1000;
         this.lastPos = pos;
+        this.lastPosAt = now;
         const c = this.config;
-        if (!c || v.paused || v.seeking || this.isLive() || this.ctx.isBlocked()) return;
-        // Yalnızca doğal ilerleme — ileri sarınca aradaki anlar tetiklenmez.
-        if (pos <= prev || pos - prev > MAX_NATURAL_STEP_S) return;
+        if (!c || v.paused || v.seeking || this.seekPending || this.isLive() || this.ctx.isBlocked()) return;
+        // Yalnızca doğal ilerleme — ileri sarınca aradaki anlar tetiklenmez. Sarma `seeking` ile yakalanır; adım
+        // sınırı geçen gerçek süreye göre (seyrek timeupdate'te — yavaş cihaz, arka plan sekmesi — işaret kaçmasın).
+        const maxStep = Math.max(MAX_NATURAL_STEP_S, elapsed * (v.playbackRate || 1) + 0.5);
+        if (pos <= prev || pos - prev > maxStep) return;
         const dur = v.duration;
         c.rules.forEach((rule, ri) =>
             rule.triggers.forEach((t, ti) => {
@@ -649,6 +667,7 @@ export class AdTriggers {
         if (this.refreshTimer) clearInterval(this.refreshTimer);
         const v = this.ctx.videoEl;
         v.removeEventListener('timeupdate', this.onTimeUpdate);
+        v.removeEventListener('seeking', this.onSeeking);
         v.removeEventListener('seeked', this.onSeeked);
         v.removeEventListener('playing', this.onPlaying);
         v.removeEventListener('pause', this.onPause);

@@ -202,7 +202,10 @@ async function testPauseContentAndEmpty(browser) {
         const f = document.getElementById('player').shadowRoot.querySelector('.hp-adtrigger-frame')?.getBoundingClientRect();
         return !!f && Math.abs(a.width - f.width) < 2 && Math.abs(a.height - f.height) < 2;
     });
-    ok(s.open && s.paused && full, `tam alan reklam açık, içerik duraklatıldı (paused=${s.paused}, tam alan=${full})`);
+    ok(
+        s.open && s.paused && full,
+        `tam alan reklam açık, içerik duraklatıldı (paused=${s.paused}, tam alan=${full}, t=${s.time.toFixed(2)}, olaylar=${s.ev.map((e) => e.t + (e.rule ? `:${e.rule}` : '')).join(',')})`
+    );
     const pauseRules = s.ev.filter((e) => e.t === 'adtriggershow').length;
     await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-adtrigger-close')?.click());
     await page.waitForTimeout(500);
