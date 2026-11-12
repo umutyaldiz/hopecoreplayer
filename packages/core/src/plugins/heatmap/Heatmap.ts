@@ -1,4 +1,6 @@
 import type { HeatmapOptions } from '../../types';
+import { adoptStyle } from '../../utils/plugin-style';
+import css from './heatmap.css?inline';
 
 export interface HeatmapPlayerContext {
     videoEl: HTMLVideoElement;
@@ -67,6 +69,7 @@ export class Heatmap {
         private readonly ctx: HeatmapPlayerContext,
         private readonly options: HeatmapOptions
     ) {
+        adoptStyle(ctx.seekBar.el, 'heatmap', css);
         const el = document.createElement('div');
         el.className = 'hp-heatmap';
         el.setAttribute('part', 'heatmap');

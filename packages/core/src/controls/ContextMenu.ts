@@ -64,22 +64,28 @@ export class ContextMenu {
         this.el.style.top = `${y}px`;
         this.el.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
 
-        document.addEventListener('pointerdown', this.onOutside, true);
-        document.addEventListener('keydown', this.onKeyDown, true);
-        window.addEventListener('blur', this.close);
-        window.addEventListener('resize', this.close);
-        window.addEventListener('scroll', this.close, true);
+        // Menünün o anki belgesi (Document PiP penceresinde olabilir).
+        const doc = (this.doc = this.el.ownerDocument);
+        const win = doc.defaultView ?? window;
+        doc.addEventListener('pointerdown', this.onOutside, true);
+        doc.addEventListener('keydown', this.onKeyDown, true);
+        win.addEventListener('blur', this.close);
+        win.addEventListener('resize', this.close);
+        win.addEventListener('scroll', this.close, true);
     }
+
+    private doc: Document = document;
 
     readonly close = (): void => {
         if (!this.open) return;
         this.open = false;
         this.el.removeAttribute('data-open');
-        document.removeEventListener('pointerdown', this.onOutside, true);
-        document.removeEventListener('keydown', this.onKeyDown, true);
-        window.removeEventListener('blur', this.close);
-        window.removeEventListener('resize', this.close);
-        window.removeEventListener('scroll', this.close, true);
+        const win = this.doc.defaultView ?? window;
+        this.doc.removeEventListener('pointerdown', this.onOutside, true);
+        this.doc.removeEventListener('keydown', this.onKeyDown, true);
+        win.removeEventListener('blur', this.close);
+        win.removeEventListener('resize', this.close);
+        win.removeEventListener('scroll', this.close, true);
     };
 
     private readonly onOutside = (e: PointerEvent): void => {

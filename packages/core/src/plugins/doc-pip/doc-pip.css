@@ -1,0 +1,36 @@
+/* ── Document Picture-in-Picture (options.documentPip): pencerede tam alan; sayfada yer tutucu ── */
+:host(.hp-docpip) {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+:host(.hp-docpip) .hp-root {
+    height: 100%;
+}
+:host(.hp-docpip) .video-area {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    border-radius: 0;
+    background: #000;
+}
+.hp-docpip-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 16px;
+    border-radius: var(--hp-radius);
+    background: #0b0b0f;
+    color: #fff;
+    font: 500 14px/1.4 system-ui, -apple-system, sans-serif;
+    text-align: center;
+}
+.hp-docpip-placeholder .hp-redirect-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}

@@ -397,7 +397,8 @@ export class SettingsMenu {
         this.onOpenChange?.(false);
     }
 
-    private readonly onDocumentClick = (e: MouseEvent): void => {
+    /** PiP penceresi gibi ek bir belgede de dışarı tıklayınca kapansın. */
+    readonly onDocumentClick = (e: MouseEvent): void => {
         // composedPath(): Shadow DOM'da e.target host'a retarget edilir; contains() menünün kendi satırlarını "dışarı tıklama" sanardı.
         if (this.open && !e.composedPath().includes(this.el)) this.close();
     };

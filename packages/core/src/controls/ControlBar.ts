@@ -64,6 +64,8 @@ export interface ControlBarCallbacks {
     interceptTogglePlay?(): boolean;
     /** Yükleme halkası (medya takılması ya da preroll beklemesi) açıldı / kapandı — kontroller bu sırada gizlenmesin. */
     onLoadingChange?(loading: boolean): void;
+    /** PiP butonu: true dönerse player işledi (Document PiP), yoksa normal PiP. */
+    onTogglePip?(): boolean;
 }
 
 /** Alt kontrol çubuğunu kurar; alt bileşenleri (SeekBar/VolumePanel/SettingsMenu) birleştirir. */
@@ -337,10 +339,10 @@ export class ControlBar {
      * desteği (PiP) ve kompakt düzende tam ekranın ayrı yuvası — hepsi birlikte değerlendirilir, biri diğerini açmasın.
      */
     private applyButtonVisibility(): void {
-        const fullscreen = this.showFullscreenButton && !this.audioMode;
+        const fullscreen = this.showFullscreenButton && !this.audioMode && !this.docPipActive;
         this.fullscreenButton.style.display = fullscreen ? '' : 'none';
         if (this.compact) this.fullscreenSlot.style.display = fullscreen && !this.adMode ? 'flex' : 'none';
-        this.pipButton.style.display = this.showPipButton && !this.audioMode && document.pictureInPictureEnabled ? '' : 'none';
+        this.pipButton.style.display = this.showPipButton && !this.audioMode && (document.pictureInPictureEnabled || this.docPipAvailable) ? '' : 'none';
     }
 
     setFullscreenState(isFullscreen: boolean): void {
@@ -492,7 +494,18 @@ export class ControlBar {
         else this.video.pause();
     }
 
+    /** Document PiP kullanılabiliyor (normal PiP olmasa da buton görünsün) / açık (tam ekran butonu gizli). */
+    setDocPip(available: boolean, active: boolean): void {
+        this.docPipAvailable = available;
+        this.docPipActive = active;
+        this.applyButtonVisibility();
+    }
+
+    private docPipAvailable = false;
+    private docPipActive = false;
+
     private async togglePip(): Promise<void> {
+        if (this.callbacks.onTogglePip?.()) return;
         try {
             if (document.pictureInPictureElement) {
                 await document.exitPictureInPicture();

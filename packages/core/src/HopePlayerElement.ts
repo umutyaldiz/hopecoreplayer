@@ -46,6 +46,8 @@ import type { GeoChecker } from './plugins/geo-checker';
 import type { RedirectScreen } from './plugins/redirect-screen';
 import type { Transcript } from './plugins/transcript';
 import type { Heatmap } from './plugins/heatmap';
+import type { DocumentPip } from './plugins/doc-pip';
+import type { Interactive } from './plugins/interactive';
 import type { PluginHost } from './plugin-api/PluginHost';
 import type { HopePlugin, PluginEntry, PluginInstanceHandle, PluginLoader } from './plugin-api/types';
 import { globalPluginEntries, onGlobalPluginsChange, registerPlugin } from './plugin-api/registry';
@@ -205,6 +207,10 @@ export class HopePlayerElement extends HTMLElement {
     private transcriptKey = '';
     private heatmap: Heatmap | null = null;
     private heatmapKey = '';
+    private docPip: DocumentPip | null = null;
+    private docPipOptions: import('./types').DocumentPipOptions | null = null;
+    private interactive: Interactive | null = null;
+    private interactiveKey = '';
     /** Eklentileri çalıştıran taraf — yalnızca bir eklenti kullanılınca indirilir (plugin-api/PluginHost). */
     private pluginHost: PluginHost | null = null;
     /** Seçenekler uygulanırken eklenti senkronu bitince çözülür (reklam tag dönüşümü bekler). */
@@ -312,6 +318,11 @@ export class HopePlayerElement extends HTMLElement {
         this.prerollGate.onWaitChange = (waiting) => this.onPrerollWaitChange(waiting);
         this.videoEl.addEventListener('error', this.onMediaError);
         this.videoEl.addEventListener('hp-internal:subtitle-error', this.onSubtitleError);
+        for (const ev of ['enterpictureinpicture', 'leavepictureinpicture'] as const) {
+            this.videoEl.addEventListener(ev, () =>
+                this.dispatchEvent(new CustomEvent('hp:pip', { detail: { state: ev === 'enterpictureinpicture' ? 'enter' : 'exit', mode: 'native' } }))
+            );
+        }
 
         this.loadingSpinner = new LoadingSpinner(this.videoEl);
         this.root.querySelector('.media-layer')!.appendChild(this.loadingSpinner.el);
@@ -392,6 +403,7 @@ export class HopePlayerElement extends HTMLElement {
                 isAdActive: () => this.isAdPlaying(),
                 interceptTogglePlay: () => this.cancelPrerollWait(),
                 onLoadingChange: (loading) => this.onLoadingChange(loading),
+                onTogglePip: () => this.toggleDocPip(),
                 adTogglePlay: () => this.adsController?.toggleAdPlayPause(),
                 adIsPaused: () => this.adsController?.isAdPaused() ?? true,
                 adVolume: {
@@ -568,6 +580,8 @@ export class HopePlayerElement extends HTMLElement {
         this.redirectScreen?.destroy();
         this.transcript?.destroy();
         this.heatmap?.destroy();
+        this.docPip?.destroy();
+        this.interactive?.destroy();
         this.pluginHost?.destroy();
         this.pluginHost = null;
         this.offGlobalPlugins?.();
@@ -898,6 +912,8 @@ export class HopePlayerElement extends HTMLElement {
         this.controlBar.settingsMenu.setPlaybackRates(options.playbackRates ?? DEFAULT_PLAYBACK_RATES);
         this.controlBar.setLiveSeekBar(options.liveSeekBar !== false);
         this.controlBar.setButtonsVisible({ pip: options.pipButton !== false, fullscreen: options.fullscreenButton !== false });
+        this.docPipOptions = options.documentPip && 'documentPictureInPicture' in window ? (options.documentPip === true ? {} : options.documentPip) : null;
+        this.controlBar.setDocPip(this.docPipOptions !== null, this.docPip?.active ?? false);
         if (options.miniProgress && !this.miniProgress) {
             this.miniProgress = new MiniProgress(this.videoEl);
             this.videoArea.appendChild(this.miniProgress.el);
@@ -944,6 +960,7 @@ export class HopePlayerElement extends HTMLElement {
         this.geoChecker?.refreshLabels();
         this.redirectScreen?.refreshLabels();
         this.transcript?.refreshLabels();
+        this.interactive?.refreshLabels();
         this.pluginHost?.refreshLabels();
         this.accessibility?.refreshLabels();
         this.playbackHistory?.refreshLabels();
@@ -1088,7 +1105,8 @@ export class HopePlayerElement extends HTMLElement {
             const inViewOptions = options.inViewAutoplay === true ? {} : options.inViewAutoplay;
             const { installInViewAutoplay } = await import('./plugins/in-view-autoplay');
             this.inViewAutoplay = installInViewAutoplay(
-                { videoEl: this.videoEl, observeEl: this, isAdActive: () => this.isAdPlaying() || this.casting },
+                // Video TV'deyken ya da Document PiP penceresindeyken sayfa kaydırılınca duraklatma.
+                { videoEl: this.videoEl, observeEl: this, isAdActive: () => this.isAdPlaying() || this.casting || !!this.docPip?.active },
                 inViewOptions
             );
         }
@@ -1104,6 +1122,7 @@ export class HopePlayerElement extends HTMLElement {
                     wrapperEl: this,
                     closeButtonMountEl: this.videoArea,
                     isAdActive: () => this.isAdPlaying(),
+                    isSuspended: () => !!this.docPip?.active,
                     i18n: this.i18n,
                 },
                 stickyOptions
@@ -1180,6 +1199,20 @@ export class HopePlayerElement extends HTMLElement {
 
         await this.applyTranscript(options);
         await this.applyHeatmap(options);
+        await this.applyInteractive(options);
+        // Document PiP parçası önceden yüklenir — tıklamada (kullanıcı hareketi süresi içinde) pencere hemen açılsın.
+        if (this.docPipOptions && !this.docPip) {
+            const { installDocumentPip } = await import('./plugins/doc-pip');
+            this.docPip ??= installDocumentPip({
+                hostEl: this,
+                videoArea: this.videoArea,
+                rootEl: this.root.querySelector('.hp-root')!,
+                css: tailwindCss,
+                i18n: this.i18n,
+                onChange: (active, win) => this.onDocPipChange(active, win),
+                forwardKey: (e) => this.forwardPipKey(e),
+            });
+        }
 
         // Ayar değişince (ör. playlist'te sıradaki video, mode) yeniden kurulur — eski kart / ekran kalmasın.
         const redirectKey = options.redirectScreen ? JSON.stringify(options.redirectScreen) : '';
@@ -1384,6 +1417,33 @@ export class HopePlayerElement extends HTMLElement {
         );
     }
 
+    /** Etkileşimli içerik — öğeler değişince yeniden kurulur (`onAnswer` fonksiyonu anahtara girmez). */
+    private async applyInteractive(options: HopePlayerOptions): Promise<void> {
+        const opts = options.interactive;
+        const key = opts?.items?.length ? JSON.stringify({ ...opts, onAnswer: undefined }) : '';
+        if (key === this.interactiveKey) {
+            this.interactive?.setOptions(opts!);
+            return;
+        }
+        this.interactiveKey = key;
+        this.interactive?.destroy();
+        this.interactive = null;
+        if (!key || !opts) return;
+        const { installInteractive } = await import('./plugins/interactive');
+        if (this.interactiveKey !== key) return;
+        this.interactive = installInteractive(
+            {
+                hostEl: this,
+                videoEl: this.videoEl,
+                overlayEl: this.videoArea,
+                i18n: this.i18n,
+                isAdActive: () => this.isAdPlaying(),
+                addSeekBarMarker: (ratio, extraClass) => this.controlBar.seekBar.addMarker(ratio, extraClass),
+            },
+            opts
+        );
+    }
+
     /** Isı haritası — veri değişince yeniden çizilir. */
     private async applyHeatmap(options: HopePlayerOptions): Promise<void> {
         const h = options.heatmap;
@@ -1404,6 +1464,56 @@ export class HopePlayerElement extends HTMLElement {
             },
             opts
         );
+    }
+
+    /** PiP butonu: Document PiP açıksa kapatır, kullanılabiliyorsa açar; işlemediyse false (normal PiP). */
+    private toggleDocPip(): boolean {
+        const pip = this.docPip;
+        if (pip?.active) {
+            pip.close();
+            return true;
+        }
+        if (!pip || !this.docPipOptions || this.isAdPlaying()) return false;
+        if (document.pictureInPictureElement) void document.exitPictureInPicture().catch(() => {});
+        void pip.open(this.docPipOptions).catch((err: unknown) => {
+            this.log.add({ source: 'player', message: `Document Picture-in-Picture could not open: ${String(err)}` });
+            void this.videoEl.requestPictureInPicture?.().catch(() => {});
+        });
+        return true;
+    }
+
+    /** Document PiP açıldı / kapandı. */
+    private onDocPipChange(active: boolean, win: Window | null): void {
+        this.toggleAttribute('data-doc-pip', active);
+        this.controlBar.setDocPip(this.docPipOptions !== null, active);
+        // Ayarlar menüsü PiP penceresinde de dışarı tıklayınca kapansın.
+        win?.document.addEventListener('click', this.controlBar.settingsMenu.onDocumentClick, true);
+        this.dispatchEvent(new CustomEvent('hp:pip', { detail: { state: active ? 'enter' : 'exit', mode: 'document' } }));
+    }
+
+    /** PiP penceresindeki kısayol tuşları player'a gider (tam ekran hariç). */
+    private forwardPipKey(e: KeyboardEvent): boolean {
+        if (e.key === 'f' || e.key === 'F') return false;
+        const copy = new KeyboardEvent('keydown', {
+            key: e.key,
+            code: e.code,
+            shiftKey: e.shiftKey,
+            ctrlKey: e.ctrlKey,
+            altKey: e.altKey,
+            metaKey: e.metaKey,
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+        });
+        this.dispatchEvent(copy);
+        return copy.defaultPrevented;
+    }
+
+    /** Picture-in-Picture'ı aç / kapat — `documentPip` açıksa ve destekleniyorsa Document PiP, değilse normal PiP. */
+    togglePip(): void {
+        if (this.toggleDocPip()) return;
+        if (document.pictureInPictureElement) void document.exitPictureInPicture().catch(() => {});
+        else void this.videoEl.requestPictureInPicture?.().catch(() => {});
     }
 
     /** Transkript panelini aç / kapat (`force` verilmezse tersine çevirir). `options.transcript` gerekir. */

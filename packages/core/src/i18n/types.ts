@@ -111,6 +111,19 @@ export interface HopeLocaleStrings {
     transcriptEmpty: string;
     transcriptNoResults: string;
     transcriptWaiting: string;
+    /** Document PiP yer tutucusu. */
+    pipPlaying: string;
+    pipBack: string;
+    /** Etkileşimli içerik. */
+    interactivePoll: string;
+    interactiveQuiz: string;
+    interactiveCorrect: string;
+    interactiveWrong: string;
+    interactiveBuy: string;
+    interactiveGo: string;
+    interactiveSponsored: string;
+    interactiveClose: string;
+    interactiveVotes: (percent: number) => string;
     /** `skipSegments` buton metinleri (türe göre). */
     skipIntro: string;
     skipRecap: string;

@@ -13,6 +13,8 @@ export interface StickyPlayerContext {
      */
     closeButtonMountEl: HTMLElement;
     isAdActive(): boolean;
+    /** true iken köşeye yapışmaz (ör. video Document PiP penceresinde). */
+    isSuspended?(): boolean;
     i18n: HopeLocaleStrings;
 }
 
@@ -341,6 +343,7 @@ class StickyManagerImpl {
     // ── stick / unstick ──
 
     private maybeStick(item: StickyItem, _trigger: string): void {
+        if (item.ctx.isSuspended?.()) return;
         const maxMs = USER_PAUSED_MAX_MS;
         if (item.state.userPaused && Date.now() - item.state.userPausedAt > maxMs) {
             item.state.userPaused = false;
