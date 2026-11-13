@@ -14,6 +14,8 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-11-13
+
 ### Added
 - **Sharing (`share`):** a control-bar button opens a panel with the video link, "Copy", "Start at 0:42" (adds `?t=`) and the networks you choose (`networks`: X, WhatsApp, Facebook, LinkedIn, Telegram, Reddit, email; `[]` → copy only), plus the system share sheet where available. Opening the page with `?t=90`, `?t=1:30` or `?t=1m30s` starts the video there (`readParam`). Canonical URL by default (`url`, `title`, `param`). `player.openShare()`; cancelable `hp:share` (`open` / `copy` / `native` / network). Separate chunk.
 - **Audio description (`audioDescription`):** `true` uses the stream's description track (HLS `CHARACTERISTICS="public.accessibility.describes-video"`, Safari `kind: "description"`); `{ src }` plays a separate narration file in sync with the video, mixed over the original audio (play / pause, seek, speed and volume follow the player). "Audio description: On / Off" in the settings menu, saved per viewer; picking a non-description track from the audio menu turns it off. The audio menu marks description tracks. `player.setAudioDescription(on)`, `hp:audiodescription`. Separate chunk.
