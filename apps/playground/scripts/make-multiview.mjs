@@ -31,6 +31,9 @@ for (const cam of cams) {
         '-vf', `${cam.vf}scale=-2:216,${text}`,
         '-c:v', 'libx264', '-preset', 'veryfast', '-b:v', '180k', '-maxrate', '220k', '-bufsize', '440k',
         '-force_key_frames', 'expr:gte(t,n_forced*2)',
+        // Anahtar kare yalnızca segment başında (sahne geçişinde ek kare yok) + her anahtar karede SPS/PPS — HLS için
+        // önerilen ayar. Bunlar olmadan Linux WebKit (GStreamer) tampon dışına sarmada çözme hatası (kod 3) veriyordu.
+        '-sc_threshold', '0', '-profile:v', 'main', '-x264-params', 'repeat-headers=1',
         '-c:a', 'aac', '-b:a', '48k', '-ac', '1',
         '-f', 'hls', '-hls_time', '2', '-hls_playlist_type', 'vod',
         '-hls_segment_filename', join(dir, 'seg%02d.ts'),
