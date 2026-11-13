@@ -39,7 +39,7 @@ Kurulum rehberi, canlı demolar ve tüm options/tema/plugin referansı: **[umuty
 <hope-player src="https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" style="display:block;aspect-ratio:16/9"></hope-player>
 ```
 
-CDN'de tam `…/dist/hope-player.js` yolunu kullanın — player eklentilerini bu dosyanın yanındaki parçalardan yükler. unpkg ve esm.sh de aynı şekilde çalışır. Canlı sitede tam sürüm kullanın (`@hopeplayer/core@1.7.0/dist/hope-player.js`): CDN'ler `@1` gibi aralıkları bir süre önbellekte tutar, yeni sürüm hemen görünmeyebilir; tam sürümlü adres hiç değişmez. Eklenti parçalarının adında içerik hash'i var (`ads-DPL7m9PV.js`), yeni sürümde eski parça önbellekten gelmez.
+CDN'de tam `…/dist/hope-player.js` yolunu kullanın — player eklentilerini bu dosyanın yanındaki parçalardan yükler. unpkg ve esm.sh de aynı şekilde çalışır. Canlı sitede tam sürüm kullanın (`@hopeplayer/core@1.7.1/dist/hope-player.js`): CDN'ler `@1` gibi aralıkları bir süre önbellekte tutar, yeni sürüm hemen görünmeyebilir; tam sürümlü adres hiç değişmez. Eklenti parçalarının adında içerik hash'i var (`ads-DPL7m9PV.js`), yeni sürümde eski parça önbellekten gelmez.
 
 npm ile: `npm install @hopeplayer/core` (React: `@hopeplayer/react`, Vue: `@hopeplayer/vue`, React Native: `@hopeplayer/react-native`).
 

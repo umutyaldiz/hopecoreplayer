@@ -14,6 +14,7 @@ export function installSkipSegments(ctx: SkipSegmentsPlayerContext, segments: Sk
 export const skipSegmentsPlugin = definePlugin<SkipSegment[]>({
     name: 'hope:skip-segments',
     setup(player, segments) {
+        adoptStyle(player.video, 'skip-segments', css);
         const layer = player.ui.addLayer({ position: 'fill' });
         const skip = new SkipSegments(
             {

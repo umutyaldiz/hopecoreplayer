@@ -14,6 +14,12 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.7.1] — 2026-11-13
+
+### Fixed
+
+- **`skipSegments` button rendered without styles** — since the 1.7.0 move to plugin chunks, the "Skip intro" button loaded without its CSS (plain text in the corner). The style is injected again when the plugin starts.
+
 ## [1.7.0] — 2026-11-13
 
 ### Added

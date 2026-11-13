@@ -50,6 +50,7 @@ const state = (page) =>
             position: btn?.getAttribute('data-position') ?? null,
             faded: !!btn?.hasAttribute('data-faded'),
             auto: !!btn?.hasAttribute('data-auto'),
+            styled: !!btn && getComputedStyle(btn).position === 'absolute',
             events: window.__skip.map((e) => `${e.state}${e.reason ? ':' + e.reason : ''}`),
         };
     });
@@ -78,6 +79,7 @@ async function testShowAndClick(browser) {
         await seek(page, 5);
         s = await state(page);
         ok(s.visible && s.label === 'İntroyu atla' && s.position === 'top-left', `showFrom sonrası buton: "${s.label}", ${s.position}`);
+        ok(s.styled, 'buton stili yüklendi (position: absolute)');
         ok(s.events.includes('shown'), `hp:skip shown geldi ${JSON.stringify(s.events)}`);
         await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="skip-segment"]').click());
         await page.waitForTimeout(400);
