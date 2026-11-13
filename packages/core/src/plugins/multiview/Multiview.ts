@@ -183,11 +183,19 @@ export class Multiview {
             await this.waitFor(v, 'loadedmetadata', 10_000);
             if (this.options.sync !== false) {
                 const c = nowDate !== null ? await this.waitClock(v) : null;
-                // Geçen süre, saat beklemesinden sonra — yoksa hedef bekleme kadar geride kalır.
-                const elapsed = wasPaused ? 0 : ((performance.now() - startedAt) / 1000) * rate;
-                const target =
-                    nowDate !== null && c ? c.pos + (nowDate + elapsed * 1000 - c.date) / 1000 : nowEvent + elapsed - (next.offset ?? 0);
-                v.currentTime = clamp(v, target);
+                // Hedef her an yeniden hesaplanır: beklerken geçen süre de eklenir.
+                const target = (): number => {
+                    const elapsed = wasPaused ? 0 : ((performance.now() - startedAt) / 1000) * rate;
+                    return clamp(v, nowDate !== null && c ? c.pos + (nowDate + elapsed * 1000 - c.date) / 1000 : nowEvent + elapsed - (next.offset ?? 0));
+                };
+                // hls.js ilk segmentte kendi başlangıç konumuna sarar — yavaş tarayıcıda bizim sarmamızı ezerdi.
+                // Hizalama video oynamaya hazır olunca yapılır ve tutana kadar (en fazla 3 kez) tekrarlanır.
+                await this.waitFor(v, 'canplay', 5000);
+                for (let i = 0; i < 3; i++) {
+                    v.currentTime = target();
+                    await this.waitFor(v, 'seeked', 3000);
+                    if (Math.abs(v.currentTime - target()) <= DRIFT) break;
+                }
             }
             v.playbackRate = rate;
             if (!wasPaused) await v.play().catch(() => {});
@@ -426,7 +434,8 @@ export class Multiview {
                 if (!v.paused) v.pause();
                 continue;
             }
-            if (Math.abs(v.currentTime - want) > DRIFT) v.currentTime = clamp(v, want);
+            // Oynamaya hazır olmadan sarılmaz (hls.js ilk segmentte başlangıç konumuna sarıp ezerdi).
+            if (v.readyState >= 3 && !v.seeking && Math.abs(v.currentTime - want) > DRIFT) v.currentTime = clamp(v, want);
             v.playbackRate = main.playbackRate || 1;
             if (main.paused || this.ctx.isAdActive()) {
                 if (!v.paused) v.pause();
@@ -464,7 +473,8 @@ export class Multiview {
 
     private waitFor(target: EventTarget, type: string, ms: number): Promise<void> {
         const v = target as HTMLVideoElement;
-        if (type === 'loadedmetadata' && v.readyState >= 1) return Promise.resolve();
+        // Olay zaten olmuşsa beklenmez.
+        if ((type === 'loadedmetadata' && v.readyState >= 1) || (type === 'canplay' && v.readyState >= 3) || (type === 'seeked' && !v.seeking)) return Promise.resolve();
         return new Promise((resolve) => {
             const done = (): void => {
                 clearTimeout(timer);
