@@ -1,7 +1,7 @@
 {
   "name": "hopeplayer-react-example",
   "private": true,
-  "version": "1.7.1",
+  "version": "1.7.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@hopeplayer/core": "^1.7.1",
-    "@hopeplayer/react": "^1.7.1",
+    "@hopeplayer/core": "^1.7.2",
+    "@hopeplayer/react": "^1.7.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

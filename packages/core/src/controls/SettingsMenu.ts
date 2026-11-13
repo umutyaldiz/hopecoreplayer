@@ -88,8 +88,19 @@ const MENU_MAX_HEIGHT_PX = 256;
  * Eşikler biraz aşağıda — kırpılmış kaynaklar (ör. 3840×1600 sinema oranı → kısa kenar 1600) bir alt sınıfa düşmesin
  * diye uzun kenar da sayılır.
  */
-function escapeHtml(s: string): string {
-    return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+function iconEl(cls: string): HTMLElement {
+    const i = document.createElement('i');
+    i.className = `hp-icon ${cls}`;
+    return i;
+}
+
+const checkIcon = (): HTMLElement => iconEl('hp-icon-check');
+
+/** Sabit kilit SVG'sinden düğüm (yalnızca kendi sabitimiz ayrıştırılır). */
+function lockIcon(): Node {
+    const t = document.createElement('template');
+    t.innerHTML = LOCK_SVG;
+    return t.content.firstElementChild ?? document.createTextNode('');
 }
 
 export function qualityBadgeText(width: number, height: number): string | null {
@@ -403,12 +414,18 @@ export class SettingsMenu {
         if (this.open && !e.composedPath().includes(this.el)) this.close();
     };
 
-    private row(label: string, value: string, onClick: () => void): HTMLButtonElement {
+    /** Metinler textContent ile yazılır (manifest / eklenti etiketleri HTML olarak çalışmasın); ikonlar düğüm olarak gelir. */
+    private row(label: string, value: string | Node | Array<string | Node>, onClick: () => void): HTMLButtonElement {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className =
             'hp:flex hp:items-center hp:justify-between hp:w-full hp:px-3 hp:py-2 hp:text-left hp:bg-transparent hp:border-0 hp:cursor-pointer hp:text-on-surface hp:hover:bg-on-surface/10';
-        btn.innerHTML = `<span>${label}</span><span class="hp:text-on-surface-muted hp:text-xs hp:flex hp:items-center hp:gap-1">${value}</span>`;
+        const labelEl = document.createElement('span');
+        labelEl.textContent = label;
+        const valueEl = document.createElement('span');
+        valueEl.className = 'hp:text-on-surface-muted hp:text-xs hp:flex hp:items-center hp:gap-1';
+        valueEl.append(...(Array.isArray(value) ? value : [value]));
+        btn.append(labelEl, valueEl);
         btn.addEventListener('click', onClick);
         return btn;
     }
@@ -513,8 +530,8 @@ export class SettingsMenu {
             })
         );
         for (const item of def.getItems()) {
-            const value = item.children ? '<i class="hp-icon hp-icon-chevron-left hp-chevron-forward"></i>' : item.active ? '<i class="hp-icon hp-icon-check"></i>' : '';
-            const row = this.row(item.label, item.value !== undefined ? escapeHtml(item.value) + (item.children ? value : '') : value, () => {
+            const value = item.children ? iconEl('hp-icon-chevron-left hp-chevron-forward') : item.active ? checkIcon() : '';
+            const row = this.row(item.label, item.value !== undefined ? (item.children ? [item.value, value] : item.value) : value, () => {
                 if (item.children) {
                     this.renderSubmenu(item.children(), [...parents, def]);
                     return;
@@ -532,7 +549,7 @@ export class SettingsMenu {
         this.panel.appendChild(this.backRow(this.labels.playbackSpeed, () => this.renderMain()));
         for (const rate of this.playbackRates) {
             const active = this.video.playbackRate === rate;
-            const btn = this.row(rate === 1 ? this.labels.normal : `${rate}x`, active ? '<i class="hp-icon hp-icon-check"></i>' : '', () => {
+            const btn = this.row(rate === 1 ? this.labels.normal : `${rate}x`, active ? checkIcon() : '', () => {
                 this.video.playbackRate = rate;
                 this.close();
             });
@@ -545,7 +562,7 @@ export class SettingsMenu {
         this.panel.appendChild(this.backRow(this.labels.quality, () => this.renderMain()));
         for (const q of this.qualities) {
             const active = q.label === this.activeQualityLabel;
-            const row = this.row(q.label, q.locked ? LOCK_SVG : active ? '<i class="hp-icon hp-icon-check"></i>' : '', () => {
+            const row = this.row(q.label, q.locked ? lockIcon() : active ? checkIcon() : '', () => {
                 q.onSelect();
                 this.close();
             });
@@ -560,7 +577,7 @@ export class SettingsMenu {
         for (const c of this.captions) {
             const active = c.label === this.activeCaptionLabel;
             this.panel.appendChild(
-                this.row(c.label, active ? '<i class="hp-icon hp-icon-check"></i>' : '', () => {
+                this.row(c.label, active ? checkIcon() : '', () => {
                     c.onSelect();
                     this.close();
                 })
@@ -592,10 +609,13 @@ export class SettingsMenu {
         );
         const appearance = this.captionAppearance;
         if (!appearance) return;
-        const dot = (color: string | undefined): string =>
-            color
-                ? `<span class="hp:inline-block hp:w-3 hp:h-3 hp:rounded-full hp:border hp:border-on-surface/30" style="background:${color}"></span>`
-                : '';
+        const dot = (color: string | undefined): string | Node => {
+            if (!color) return '';
+            const el = document.createElement('span');
+            el.className = 'hp:inline-block hp:w-3 hp:h-3 hp:rounded-full hp:border hp:border-on-surface/30';
+            el.style.background = color;
+            return el;
+        };
         this.panel.appendChild(
             this.row(appearance.sizeLabel, appearance.getSizeOptions().find((o) => o.active)?.label ?? '', () => {
                 this.currentPanel = 'captions-size';
@@ -634,7 +654,7 @@ export class SettingsMenu {
         if (!appearance) return;
         for (const item of appearance.getSizeOptions()) {
             this.panel.appendChild(
-                this.row(item.label, item.active ? '<i class="hp-icon hp-icon-check"></i>' : '', () => {
+                this.row(item.label, item.active ? checkIcon() : '', () => {
                     item.onSelect();
                     this.close();
                 })

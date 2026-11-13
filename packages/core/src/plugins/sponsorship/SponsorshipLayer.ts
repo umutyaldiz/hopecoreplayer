@@ -1,6 +1,7 @@
 import type { SponsorshipConfig, SponsorshipOptions } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { firePixels as fire } from '../shared/trackingPixel';
+import { safeUrl } from '../../utils/safe-url';
 
 export interface SponsorshipContext {
     hostEl: HTMLElement;
@@ -22,17 +23,6 @@ const THEME_TOKENS: Record<keyof NonNullable<SponsorshipConfig['theme']>, string
     onSurface: '--hp-color-on-surface',
 };
 const POSITIONS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
-
-/** Yalnızca http(s) ya da göreli adresler — `javascript:` / `data:` gibi şemalar reddedilir. */
-function safeUrl(value: unknown): string | null {
-    if (typeof value !== 'string' || !value.trim()) return null;
-    try {
-        const u = new URL(value, document.baseURI);
-        return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : null;
-    } catch {
-        return null;
-    }
-}
 
 function safeColor(value: unknown): string | null {
     return typeof value === 'string' && value.length < 64 && CSS.supports('color', value) ? value : null;

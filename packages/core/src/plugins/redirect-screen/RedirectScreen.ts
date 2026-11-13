@@ -3,6 +3,7 @@ import type { HopeLocaleStrings } from '../../i18n/types';
 import { createIcon } from '../../icons/Icon';
 import { adoptStyle } from '../../utils/plugin-style';
 import css from './redirect-screen.css?inline';
+import { isSafeUrl } from '../../utils/safe-url';
 
 export interface RedirectScreenPlayerContext {
     /** hp:redirect olayları ve postroll'un bitişini (hp:adend) dinlemek için. */
@@ -128,7 +129,7 @@ export class RedirectScreen {
         this.remove();
         this.hideCard();
         const url = this.options.url;
-        if (!this.emit('redirect', reason) || !url) return; // entegratör kendisi yönlendirecek
+        if (!this.emit('redirect', reason) || !isSafeUrl(url)) return; // entegratör kendisi yönlendirecek
         if (this.options.newTab) window.open(url, '_blank', 'noopener');
         else window.location.href = url;
     }
@@ -402,7 +403,7 @@ export class RedirectScreen {
         grid.setAttribute('data-count', String(Math.min(items.length, 6)));
         items.forEach((item, index) => {
             const box = document.createElement('a');
-            box.href = item.url;
+            if (isSafeUrl(item.url)) box.href = item.url;
             if (o.newTab) {
                 box.target = '_blank';
                 box.rel = 'noopener';

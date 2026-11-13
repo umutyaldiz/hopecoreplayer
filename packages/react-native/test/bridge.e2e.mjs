@@ -178,6 +178,13 @@ try {
     const cssPwned = await styled.evaluate(() => window.__pwned === 1);
     ok(styledReady && accent === 'rgb(1, 2, 3)' && !cssPwned, `css uygulandı (accent: ${accent}, enjeksiyon: ${cssPwned})`);
     await styled.close();
+
+    console.log('\n[7] backgroundColor: geçerli renk uygulanıyor, "</style>" içeren değer reddediliyor');
+    const bg = (backgroundColor) => buildPlayerHtml({ coreUrl: `${BASE}/core/hope-player.js`, options: { src: '/media/sample.mp4' }, backgroundColor });
+    const good = bg('rgb(10, 20, 30)');
+    const bad = bg('red; } </style><script>window.__pwned=1</script><style> body {');
+    ok(good.includes('background: rgb(10, 20, 30);'), 'geçerli renk sayfada');
+    ok(!bad.includes('__pwned') && bad.includes('background: #000;'), 'zararlı değer yerine #000');
 } finally {
     await browser.close();
     server.close();

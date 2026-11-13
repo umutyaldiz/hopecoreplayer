@@ -1,6 +1,7 @@
 import type { AdTrigger, AdTriggerLayout, AdTriggerRule, AdTriggersConfig, AdTriggersOptions } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { firePixels as fire } from '../shared/trackingPixel';
+import { safeUrl } from '../../utils/safe-url';
 import { loadGpt, type GoogleTag, type GptSlot, type GptSlotRenderEndedEvent } from '../pause-ad/loadGpt';
 
 export interface AdTriggersContext {
@@ -28,16 +29,6 @@ const TRIGGER_TYPES = ['time', 'interval', 'percent', 'fullscreen', 'fullscreenE
 /** Doğal ilerleme sayılan en büyük timeupdate adımı (sn) — daha büyük sıçrama ileri sarmadır, aradaki anlar atlanır. */
 const MAX_NATURAL_STEP_S = 1.5;
 let instanceCount = 0;
-
-function safeUrl(value: unknown): string | null {
-    if (typeof value !== 'string' || !value.trim()) return null;
-    try {
-        const u = new URL(value, document.baseURI);
-        return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : null;
-    } catch {
-        return null;
-    }
-}
 
 const num = (n: unknown, min: number, max: number): number | undefined =>
     typeof n === 'number' && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : undefined;

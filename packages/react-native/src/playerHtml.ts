@@ -76,7 +76,8 @@ function inlineJson(value: unknown): string {
  */
 export function buildPlayerHtml(config: PlayerHtmlConfig): string {
     const coreUrl = config.coreUrl ?? DEFAULT_CORE_URL;
-    const background = config.backgroundColor ?? '#000';
+    // Renk yalnızca CSS değeri olarak kalsın: `;`, `{}`, `<` ile kuralın / <style>'ın dışına çıkamaz.
+    const background = /^[#\w\s(),.%-]+$/.test(config.backgroundColor ?? '') ? config.backgroundColor! : '#000';
     const interval = config.timeUpdateIntervalMs ?? 250;
     // `</style` CSS'in içinden <style> etiketini kapatamasın.
     const css = (config.css ?? '').split('</').join('<\\/');

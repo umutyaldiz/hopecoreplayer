@@ -1,6 +1,7 @@
 import { createIcon } from '../../icons/Icon';
 import type { MarkerItem, MarkerPingOptions, MarkerPopupOptions, MarkersOptions } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
+import { isSafeUrl } from '../../utils/safe-url';
 
 export interface MarkersPlayerContext {
     videoEl: HTMLVideoElement;
@@ -336,7 +337,7 @@ export class MarkProgress {
         }
 
         if (linkEl) {
-            if (isRich && cfg.linkUrl) {
+            if (isRich && isSafeUrl(cfg.linkUrl)) {
                 linkEl.classList.remove('hp:hidden');
                 linkEl.href = cfg.linkUrl;
                 linkEl.textContent = cfg.linkText || this.ctx.i18n.markerLearnMore;

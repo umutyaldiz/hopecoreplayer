@@ -10,6 +10,8 @@ suites=("$@")
 
 mkdir -p /work
 cd /src
+# Repoda artık olmayan eski test dosyaları volume'de kalıp koşmasın.
+rm -f /work/apps/playground/test/*.e2e.mjs
 # Güncel kaynakları kopyala (Windows / macOS node_modules'u, .git ve derleme çıktıları hariç).
 tar --exclude=node_modules --exclude=.git --exclude=apps/docs --exclude=dist -cf - . | (cd /work && tar -xf -)
 cd /work

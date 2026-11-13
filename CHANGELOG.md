@@ -14,6 +14,14 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.7.2] — 2026-11-14
+
+### Security
+
+- **Settings menu labels were rendered as HTML.** Caption / audio track names (which can come from an HLS or DASH manifest), quality labels and plugin menu labels were written with `innerHTML`, so a crafted track name could run script in the page. They are now set as plain text.
+- **Unsafe link schemes are ignored.** `javascript:`, `data:` and other non-http(s) URLs no longer become links or navigation in interactive cards (`interactive`), rich marker links (`markers`), end-screen suggestions and the redirect itself (`redirectScreen`). Relative and http(s) URLs work as before; the `hp:redirect` / `hp:interactive` events still fire. Ad triggers and sponsorship already filtered these and now share the same check.
+- **React Native:** `backgroundColor` is only accepted as a plain color value, so it can no longer close the page's `<style>` block.
+
 ## [1.7.1] — 2026-11-13
 
 ### Fixed

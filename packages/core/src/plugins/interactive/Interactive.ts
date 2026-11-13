@@ -3,6 +3,7 @@ import type { HopeLocaleStrings } from '../../i18n/types';
 import { createIcon } from '../../icons/Icon';
 import { adoptStyle } from '../../utils/plugin-style';
 import css from './interactive.css?inline';
+import { isSafeUrl } from '../../utils/safe-url';
 
 export interface InteractivePlayerContext {
     hostEl: HTMLElement;
@@ -263,7 +264,7 @@ export class Interactive {
     private buildCard(box: HTMLElement, entry: Entry, item: InteractiveCard): void {
         const i18n = this.ctx.i18n;
         const link = el('a', 'hp-ia-card');
-        link.href = item.url;
+        if (isSafeUrl(item.url)) link.href = item.url;
         if (item.newTab !== false) {
             link.target = '_blank';
             link.rel = 'noopener';
