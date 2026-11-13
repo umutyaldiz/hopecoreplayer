@@ -221,7 +221,9 @@ if (player) {
             // Çoklu kamerada kaynak kameralardan gelir.
             sources: feature?.startsWith('multiview')
                 ? undefined
-                : [
+                : feature === 'ad-hls'
+                  ? [{ src: '/hls-ad/master.m3u8', label: 'Oto' }]
+                  : [
                       { src: '/sample.mp4', label: '720p', selected: true },
                       { src: '/sample.mp4', label: '360p' },
                   ],
@@ -249,6 +251,10 @@ if (player) {
                           })),
                       }
                     : undefined,
+            // ?feature=share — paylaşım paneli (tüm ağlar).
+            share: feature === 'share' ? { networks: ['x', 'whatsapp', 'facebook', 'linkedin', 'telegram', 'reddit', 'email'] } : undefined,
+            // ?feature=ad-hls (yayının betimleme izi) | ad-file (ayrı anlatım dosyası).
+            audioDescription: feature === 'ad-hls' ? true : feature === 'ad-file' ? { src: '/ad-narration.m4a' } : undefined,
             // ?feature=docpip — Document PiP (testte documentPictureInPicture taklit edilir).
             documentPip: feature === 'docpip' ? true : undefined,
             // ?feature=interactive — 1. sn anket, 3. sn quiz, 6. sn ürün kartı.

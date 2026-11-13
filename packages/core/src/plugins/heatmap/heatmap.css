@@ -34,6 +34,10 @@
 .hp-heatmap-played {
     clip-path: inset(0 calc(100% - var(--hp-heatmap-p, 0%)) 0 0);
 }
+/* Tepe noktası işareti görünmez — yalnızca hover etiketi. */
+.hp-seek-marker.hp-heatmap-peak {
+    visibility: hidden;
+}
 .hp-heatmap-played path {
     fill: color-mix(in srgb, var(--hp-color-accent, #fff) 60%, transparent);
 }

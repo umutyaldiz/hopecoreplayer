@@ -1,0 +1,98 @@
+/* ── Paylaşım paneli (options.share) ── */
+.hp-share {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 26;
+    display: grid;
+    gap: 10px;
+    width: min(380px, calc(100% - 24px));
+    max-height: calc(100% - 24px);
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 14px;
+    border: 1px solid var(--hp-panel-border);
+    border-radius: 12px;
+    background: var(--hp-panel-bg);
+    backdrop-filter: blur(var(--hp-panel-blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--hp-panel-blur)) saturate(160%);
+    color: var(--hp-panel-text);
+    box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
+    font: 13px/1.4 system-ui, -apple-system, sans-serif;
+    transform: translate(-50%, -50%);
+    animation: hp-redirect-fade 0.2s ease-out;
+}
+.hp-share-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.hp-share-title {
+    font-weight: 600;
+    font-size: 15px;
+}
+.hp-share-close {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+.hp-share-close:hover {
+    background: color-mix(in srgb, var(--hp-panel-text) 14%, transparent);
+}
+.hp-share-link {
+    display: flex;
+    gap: 6px;
+}
+.hp-share-link input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    border: 1px solid var(--hp-panel-border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--hp-panel-text) 8%, transparent);
+    color: inherit;
+    font: 12.5px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.hp-share-copy,
+.hp-share-net {
+    padding: 7px 12px;
+    border: 1px solid var(--hp-panel-border);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--hp-panel-text) 10%, transparent);
+    color: inherit;
+    font: 600 12.5px/1 system-ui, -apple-system, sans-serif;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.hp-share-copy:hover,
+.hp-share-net:hover {
+    background: color-mix(in srgb, var(--hp-panel-text) 18%, transparent);
+}
+.hp-share-copy[data-done] {
+    background: #2fbf71;
+    border-color: #2fbf71;
+    color: #fff;
+}
+.hp-share-start {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    cursor: pointer;
+}
+.hp-share-networks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.hp-share :is(button, input):focus-visible {
+    outline: 2px solid var(--hp-panel-text);
+    outline-offset: 2px;
+}

@@ -454,11 +454,13 @@ export class SeekBar {
     private markerAt(clientX: number): HTMLDivElement | null {
         const x = this.layoutXAtClientX(clientX);
         let best: HTMLDivElement | null = null;
-        let bestDist = 8;
+        let bestDist = Infinity;
         for (const m of this.markerEls) {
             if (!m.dataset.label || !m.isConnected) continue;
             const d = Math.abs(this.xAtRatio(Number(m.dataset.ratio)) - x);
-            if (d <= bestDist) {
+            // Varsayılan ±8 px; geniş işaretlerde (ısı haritası tepesi) dilimin yarısı.
+            const hit = Math.max(8, Number(m.dataset.hitRatio ?? 0) * this.trackWidth);
+            if (d <= hit && d < bestDist) {
                 best = m;
                 bestDist = d;
             }

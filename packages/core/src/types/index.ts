@@ -834,6 +834,35 @@ export interface RedirectScreenSuggestion {
     duration?: string;
 }
 
+/** Paylaşım ağları. */
+export type ShareNetwork = 'x' | 'whatsapp' | 'facebook' | 'linkedin' | 'telegram' | 'reddit' | 'email';
+
+export interface ShareOptions {
+    /** Paylaşılacak adres. Varsayılan: sayfanın canonical adresi, yoksa sayfa adresi. */
+    url?: string;
+    /** Paylaşım metni. Varsayılan sayfa başlığı. */
+    title?: string;
+    /** Gösterilecek ağlar ve sırası. Varsayılan ['x', 'whatsapp', 'facebook', 'linkedin', 'telegram', 'email']; [] → yalnızca kopyala. */
+    networks?: ShareNetwork[];
+    /** "Bu andan başlat" seçeneği (bağlantıya ?t= eklenir). Varsayılan true. */
+    startAt?: boolean;
+    /** Zaman parametresinin adı. Varsayılan 't'. */
+    param?: string;
+    /** Sayfa ?t=… ile açılınca o saniyeden başlat (90, 1:30, 1m30s). Varsayılan true. */
+    readParam?: boolean;
+    /** Kontrol çubuğu butonu. Varsayılan true (`player.openShare()` ile de açılır). */
+    button?: boolean;
+}
+
+export interface AudioDescriptionOptions {
+    /** Ayrı anlatım dosyası (mp3 / m4a): videoyla eş zamanlı çalar, orijinal sesin üstüne karışır. */
+    src?: string;
+    /** Başlangıçta açık (izleyicinin kayıtlı tercihi yoksa). Varsayılan false. */
+    default?: boolean;
+    /** Anlatımın ses düzeyi (0–1), player sesiyle çarpılır. Varsayılan 1. */
+    volume?: number;
+}
+
 export interface MultiviewSource {
     /** Kamera kimliği (olaylarda ve `switchCamera()`'da). */
     id: string;
@@ -975,6 +1004,8 @@ export interface TranscriptOptions {
 }
 
 export interface HeatmapOptions {
+    /** Tepe noktasının üzerine gelince "En çok izlenen an" etiketi. `string` → kendi metniniz. Varsayılan true. */
+    peakLabel?: boolean | string;
     /** Yoğunluk değerleri — videoya eşit aralıklarla yayılır; ölçek serbest (en yüksek değere göre normalize). */
     data?: number[];
     /** `data` yerine: sayı dizisi döndüren JSON adresi. */
@@ -1332,6 +1363,13 @@ export interface HopePlayerOptions {
     interactive?: InteractiveOptions;
     /** Çoklu kamera: aynı etkinliğin birden fazla yayını — kamera seçimi ve bölünmüş ekran (en fazla 4). */
     multiview?: MultiviewOptions;
+    /** Paylaşım: bağlantıyı kopyala, "bu andan" bağlantısı (?t=) ve seçilen sosyal ağlar. */
+    share?: boolean | ShareOptions;
+    /**
+     * Sesli betimleme: `true` yayının kendi betimleme ses izini (HLS CHARACTERISTICS="public.accessibility.describes-video")
+     * kullanır; `{ src }` ayrı bir anlatım dosyasını videoyla eş zamanlı, orijinal sesin üstüne karıştırır.
+     */
+    audioDescription?: boolean | AudioDescriptionOptions;
     /**
      * Kontrol çubuğundaki tam ekran butonu. Varsayılan true; `false` gizler. Yalnızca buton: `F` kısayolu ve
      * `tapGestures`'taki `toggleFullscreen` çalışmaya devam eder.
@@ -1539,6 +1577,10 @@ export type HopePlayerEventMap = {
         reason?: 'auto' | 'click' | 'suggestion';
         index?: number;
     }>;
+    /** Paylaşım: `open`, `copy`, `native` (cihazın paylaşım menüsü) ya da bir ağ — iptal edilebilir (`preventDefault()`). */
+    'hp:share': CustomEvent<{ action: 'open' | 'copy' | 'native' | ShareNetwork; url: string; time: number | null }>;
+    /** Sesli betimleme açıldı / kapandı (`source`: yayının izi ya da ayrı dosya). */
+    'hp:audiodescription': CustomEvent<{ enabled: boolean; source: 'stream' | 'file' | null }>;
     /** Çoklu kamera: kamera değişti (`switch`, `from`) ya da görünüm değişti (`layout`). */
     'hp:multiview': CustomEvent<{ state: 'switch' | 'layout'; id: string; from?: string; layout: 'focus' | 'grid' }>;
     /** Picture-in-Picture'a girildi / çıkıldı — `mode`: 'document' (Document PiP) ya da 'native'. */

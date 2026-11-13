@@ -111,6 +111,8 @@ export interface StreamAudioTrack {
     index: number;
     label: string;
     lang: string;
+    /** Sesli betimleme izi (HLS CHARACTERISTICS describes-video, Safari kind 'description' / 'main-desc'). */
+    description?: boolean;
 }
 
 export interface SourceManagerCallbacks {
@@ -130,6 +132,7 @@ interface NativeAudioTrack {
     label: string;
     language: string;
     enabled: boolean;
+    kind?: string;
 }
 type NativeAudioTrackList = EventTarget & ArrayLike<NativeAudioTrack>;
 
@@ -343,7 +346,12 @@ export class SourceManager {
         const list = (this.video as unknown as { audioTracks?: NativeAudioTrackList }).audioTracks;
         if (!list) return;
         const report = (): void => {
-            const tracks: StreamAudioTrack[] = Array.from(list, (t, index) => ({ index, label: t.label || t.language || `${index + 1}`, lang: t.language }));
+            const tracks: StreamAudioTrack[] = Array.from(list, (t, index) => ({
+                index,
+                label: t.label || t.language || `${index + 1}`,
+                lang: t.language,
+                description: t.kind === 'description' || t.kind === 'main-desc',
+            }));
             this.callbacks.onAudioTracksChanged(tracks, Array.from(list).findIndex((t) => t.enabled));
         };
         for (const ev of ['addtrack', 'removetrack', 'change']) list.addEventListener(ev, report);
@@ -426,7 +434,12 @@ export class SourceManager {
         });
 
         const audio = (): StreamAudioTrack[] =>
-            hls.audioTracks.map((t, index) => ({ index, label: t.name || t.lang || `${index + 1}`, lang: t.lang ?? '' }));
+            hls.audioTracks.map((t, index) => ({
+                index,
+                label: t.name || t.lang || `${index + 1}`,
+                lang: t.lang ?? '',
+                description: /describes-video/.test(t.characteristics ?? ''),
+            }));
         hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => this.callbacks.onAudioTracksChanged(audio(), hls.audioTrack));
         hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (_event, data) => this.callbacks.onAudioTracksChanged(audio(), data.id));
 

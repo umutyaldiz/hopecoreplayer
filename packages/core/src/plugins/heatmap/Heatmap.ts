@@ -4,7 +4,8 @@ import css from './heatmap.css?inline';
 
 export interface HeatmapPlayerContext {
     videoEl: HTMLVideoElement;
-    seekBar: { readonly el: HTMLElement };
+    seekBar: { readonly el: HTMLElement; addMarker(ratio: number, extraClass?: string, label?: string): HTMLElement };
+    i18n: { heatmapPeak: string };
     log?: (entry: { message: string; details?: Record<string, string> }) => void;
 }
 
@@ -64,6 +65,8 @@ export class Heatmap {
     private readonly base: SVGPathElement;
     private readonly played: SVGPathElement;
     private destroyed = false;
+    /** Tepe noktası: görünmez işaret — üzerine gelince "En çok izlenen an · 1:23". */
+    private peak: HTMLElement | null = null;
 
     constructor(
         private readonly ctx: HeatmapPlayerContext,
@@ -101,7 +104,9 @@ export class Heatmap {
 
     /** Yeni değerler (ör. sunucudan güncel istatistik). */
     setData(values: number[]): void {
-        const d = heatmapPath(normalize(values));
+        const norm = normalize(values);
+        this.setPeak(norm);
+        const d = heatmapPath(norm);
         this.base.setAttribute('d', d);
         this.played.setAttribute('d', d);
         this.el.toggleAttribute('data-empty', !d);
@@ -115,6 +120,7 @@ export class Heatmap {
         v.removeEventListener('seeking', this.onTime);
         v.removeEventListener('durationchange', this.onDuration);
         v.removeEventListener('loadedmetadata', this.onDuration);
+        this.peak?.remove();
         v.removeEventListener('play', this.startLoop);
         v.removeEventListener('pause', this.stopLoop);
         v.removeEventListener('ended', this.stopLoop);
@@ -139,6 +145,19 @@ export class Heatmap {
         this.onTime();
     };
 
+    /** En yüksek dilim (birden fazlaysa ilki) — üzerine gelince etiket. */
+    private setPeak(norm: number[]): void {
+        this.peak?.remove();
+        this.peak = null;
+        const label = this.options.peakLabel;
+        if (label === false || !norm.length) return;
+        const i = norm.indexOf(1);
+        if (i < 0) return;
+        const el = this.ctx.seekBar.addMarker((i + 0.5) / norm.length, 'hp-heatmap-peak', typeof label === 'string' ? label : this.ctx.i18n.heatmapPeak);
+        el.dataset.hitRatio = String(0.5 / norm.length);
+        this.peak = el;
+    }
+
     private async fetchData(src: string): Promise<void> {
         try {
             const res = await fetch(src);
@@ -155,6 +174,11 @@ export class Heatmap {
     private readonly onDuration = (): void => {
         const d = this.ctx.videoEl.duration;
         this.el.hidden = !Number.isFinite(d) || d <= 0 || this.el.hasAttribute('data-empty') || !this.base.getAttribute('d');
+        // Canlıda / veri yokken tepe etiketi de yok (işaret DOM'dan çıkar, geri gelince eklenir).
+        if (this.peak) {
+            if (this.el.hidden) this.peak.remove();
+            else if (!this.peak.isConnected) this.ctx.seekBar.el.appendChild(this.peak);
+        }
         this.onTime();
     };
 

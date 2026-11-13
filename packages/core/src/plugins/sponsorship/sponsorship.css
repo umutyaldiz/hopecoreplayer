@@ -1,0 +1,136 @@
+/* ── Sponsorluk katmanı ───────────────────────────────────────────────────── */
+.hp-sponsor-logo {
+    position: absolute;
+    z-index: 21;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    width: var(--hp-sponsor-logo-w, 96px);
+    color: #fff;
+    text-decoration: none;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.55));
+    transition:
+        opacity 0.25s,
+        right 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
+        bottom 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+    animation: hp-rw-fade 0.4s ease-out;
+}
+.hp-sponsor-logo[data-position='top-left'] {
+    top: 12px;
+    left: 12px;
+}
+.hp-sponsor-logo[data-position='top-right'] {
+    top: 12px;
+    right: var(--hp-sponsor-avoid-right, 12px);
+}
+.hp-sponsor-logo[data-position='bottom-left'] {
+    bottom: var(--hp-sponsor-avoid-bottom, 76px);
+    left: 12px;
+}
+.hp-sponsor-logo[data-position='bottom-right'] {
+    bottom: var(--hp-sponsor-avoid-bottom, 76px);
+    right: 12px;
+}
+/* Kontroller gizliyken (üst çubuk ve seek bar yok) logo köşesine döner. */
+.video-area[data-chrome-hidden] .hp-sponsor-logo[data-position='top-right'] {
+    right: 12px;
+}
+.video-area[data-chrome-hidden] .hp-sponsor-logo[data-position='bottom-left'],
+.video-area[data-chrome-hidden] .hp-sponsor-logo[data-position='bottom-right'] {
+    bottom: 12px;
+}
+.hp-sponsor-logo img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+.hp-sponsor-label {
+    max-width: 100%;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font: 600 10px/1 system-ui, -apple-system, sans-serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.85;
+}
+/* Ödüllü reklam butonu sol üstteyse sponsor logosu sola gelirse alta kayar. */
+.video-area:has(.hp-rw-button:not([hidden])) .hp-sponsor-logo[data-position='top-left'] {
+    top: 52px;
+}
+.hp-sponsor-intro {
+    position: absolute;
+    left: 50%;
+    bottom: 84px;
+    z-index: 22;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100% - 32px);
+    padding: 8px 16px 8px 8px;
+    border-radius: 999px;
+    background: rgba(12, 12, 16, 0.82);
+    color: #fff;
+    font: 600 14px/1.2 system-ui, -apple-system, sans-serif;
+    transform: translateX(-50%);
+    box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.8);
+    pointer-events: none;
+    animation: hp-sponsor-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition:
+        opacity 0.35s,
+        transform 0.35s;
+}
+.hp-sponsor-intro[data-leaving] {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+}
+.hp-sponsor-intro img {
+    height: 28px;
+    width: auto;
+    max-width: 96px;
+    border-radius: 6px;
+}
+.hp-sponsor-intro span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+@keyframes hp-sponsor-in {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 12px) scale(0.96);
+    }
+}
+:host([data-sponsor-hidden]) .hp-sponsor-logo,
+:host([data-sponsor-hidden]) .hp-sponsor-intro {
+    display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hp-sponsor-intro {
+        animation: none;
+    }
+}
+/* Dokunmatikte "Sesi aç" rozeti sol üstte — görünürken sol üst sponsor logosu altına kayar (ödül butonu da varsa daha aşağı). */
+@media (hover: none) and (pointer: coarse) {
+    .video-area:has(.hp-unmute-badge[data-visible]) .hp-sponsor-logo[data-position='top-left'] {
+        top: 52px;
+    }
+    .video-area:has(.hp-unmute-badge[data-visible]):has(.hp-rw-button:not([hidden])) .hp-sponsor-logo[data-position='top-left'] {
+        top: 92px;
+    }
+}
+/* Dar player: sponsor logosu küçük (kontrollerle aynı satırda / seek bar'ın üstünde yer kalsın). */
+.hp-sponsor-logo[data-compact] {
+    width: min(var(--hp-sponsor-logo-w, 96px), 48px);
+    gap: 2px;
+}
+.hp-sponsor-logo[data-compact] .hp-sponsor-label {
+    font-size: 8.5px;
+}
+:host([data-sponsor-intro]) .hp-sponsor-logo {
+    opacity: 0 !important;
+    pointer-events: none;
+}
