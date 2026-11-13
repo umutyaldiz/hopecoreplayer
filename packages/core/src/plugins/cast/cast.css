@@ -1,0 +1,47 @@
+/* ── TV'ye yayın (cast) — "Salon TV'sinde oynatılıyor"; kontrollerin (20) altında, tıklamaları geçirir. */
+.hp-cast-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 12;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px;
+    background: radial-gradient(ellipse at center, rgba(20, 20, 26, 0.86), rgba(6, 6, 9, 0.96));
+    color: #fff;
+    text-align: center;
+    font: 600 15px/1.3 system-ui, -apple-system, sans-serif;
+    pointer-events: none;
+}
+.hp-cast-overlay[data-open] {
+    display: flex;
+}
+.hp-cast-overlay .hp-icon {
+    font-size: 44px;
+    color: var(--hp-color-accent, #fff);
+}
+.hp-cast-overlay-ad {
+    display: none;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    font-size: 12px;
+    font-weight: 600;
+}
+.hp-cast-overlay[data-break] .hp-cast-overlay-ad {
+    display: inline-block;
+}
+/* Yayın sırasında yerel video karesi görünmesin (TV'de oynuyor). */
+.video-area[data-casting] video {
+    visibility: hidden;
+}
+[part='cast-button'][data-connecting] .hp-icon {
+    animation: hp-cast-pulse 1s ease-in-out infinite;
+}
+@keyframes hp-cast-pulse {
+    50% {
+        opacity: 0.35;
+    }
+}

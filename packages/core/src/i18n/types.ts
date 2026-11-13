@@ -111,6 +111,23 @@ export interface HopeLocaleStrings {
     transcriptEmpty: string;
     transcriptNoResults: string;
     transcriptWaiting: string;
+    /** Paylaşım. */
+    share: string;
+    shareCopy: string;
+    shareCopied: string;
+    shareStartAt: (time: string) => string;
+    shareMore: string;
+    shareClose: string;
+    shareLink: string;
+    shareEmail: string;
+    /** Isı haritası tepe noktası. */
+    heatmapPeak: string;
+    /** Sesli betimleme (ayarlar menüsü). */
+    audioDescription: string;
+    audioDescriptionOn: string;
+    audioDescriptionOff: string;
+    /** Ses izi menüsünde betimleme izine eklenen not. */
+    audioDescriptionTag: string;
     /** Çoklu kamera. */
     multiviewLayout: string;
     multiviewCameras: string;
@@ -207,3 +224,47 @@ export interface HopeLocaleStrings {
 
 /** Hazır gelen diller — herhangi bir string de geçerli (bkz. HopePlayerOptions.locale). */
 export type HopeLocale = 'tr' | 'en' | (string & {});
+
+/** Eklentilerin kendi dosyalarında (her eklentinin strings.ts dosyası) duran metinler — eklenti yüklenince sözlüğe eklenir. */
+export type PluginStringKey =
+    | 'share'
+    | 'shareCopy'
+    | 'shareCopied'
+    | 'shareStartAt'
+    | 'shareMore'
+    | 'shareClose'
+    | 'shareLink'
+    | 'shareEmail'
+    | 'audioDescription'
+    | 'audioDescriptionOn'
+    | 'audioDescriptionOff'
+    | 'heatmapPeak'
+    | 'multiviewLayout'
+    | 'multiviewCameras'
+    | 'multiviewWatching'
+    | 'multiviewSwitch'
+    | 'multiviewNotStarted'
+    | 'pipPlaying'
+    | 'pipBack'
+    | 'transcript'
+    | 'transcriptSearch'
+    | 'transcriptClose'
+    | 'transcriptTrack'
+    | 'transcriptEmpty'
+    | 'transcriptNoResults'
+    | 'transcriptWaiting'
+    | 'redirectSuggestions'
+    | 'redirectReplay'
+    | 'redirectCloseSuggestions'
+    | 'interactivePoll'
+    | 'interactiveQuiz'
+    | 'interactiveCorrect'
+    | 'interactiveWrong'
+    | 'interactiveBuy'
+    | 'interactiveGo'
+    | 'interactiveSponsored'
+    | 'interactiveClose'
+    | 'interactiveVotes';
+
+/** Ana pakete giren yerleşik sözlük (tr / en). */
+export type CoreLocaleStrings = Omit<HopeLocaleStrings, PluginStringKey>;

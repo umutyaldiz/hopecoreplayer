@@ -1,9 +1,12 @@
+import { adoptStyle } from '../../utils/plugin-style';
+import css from './skip-segments.css?inline';
 import { SkipSegments, type SkipSegmentsPlayerContext } from './SkipSegments';
 import type { SkipSegment } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { definePlugin } from '../../plugin-api/registry';
 
 export function installSkipSegments(ctx: SkipSegmentsPlayerContext, segments: SkipSegment[]): SkipSegments {
+    adoptStyle(ctx.videoEl, 'skip-segments', css);
     return new SkipSegments(ctx, segments);
 }
 

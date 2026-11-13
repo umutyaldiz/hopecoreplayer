@@ -49,6 +49,8 @@ import type { Heatmap } from './plugins/heatmap';
 import type { DocumentPip } from './plugins/doc-pip';
 import type { Interactive } from './plugins/interactive';
 import type { Multiview } from './plugins/multiview';
+import type { Share } from './plugins/share';
+import type { AudioDescription } from './plugins/audio-description';
 import type { PluginHost } from './plugin-api/PluginHost';
 import type { HopePlugin, PluginEntry, PluginInstanceHandle, PluginLoader } from './plugin-api/types';
 import { globalPluginEntries, onGlobalPluginsChange, registerPlugin } from './plugin-api/registry';
@@ -63,7 +65,7 @@ import { generateVastUrl, mergeCustParams, toCustRecord } from './plugins/ads/ge
 import type { Dubbing } from './plugins/dubbing';
 import type { LiveWallClock } from './plugins/live';
 import type { DaiController } from './plugins/dai';
-import { createLocaleStrings, applyLocale } from './i18n';
+import { createLocaleStrings, applyLocale, onLocaleStrings } from './i18n';
 import { PrerollGate, expectsPreroll, DEFAULT_PREROLL_TIMEOUT_MS } from './plugins/ads/PrerollGate';
 import { preconnectAdHosts } from './plugins/ads/preconnect';
 import type { HopeLocaleStrings } from './i18n/types';
@@ -214,6 +216,10 @@ export class HopePlayerElement extends HTMLElement {
     private interactiveKey = '';
     private multiview: Multiview | null = null;
     private multiviewKey = '';
+    private share: Share | null = null;
+    private shareKey = '';
+    private audioDescription: AudioDescription | null = null;
+    private audioDescriptionKey = '';
     /** Eklentileri çalıştıran taraf — yalnızca bir eklenti kullanılınca indirilir (plugin-api/PluginHost). */
     private pluginHost: PluginHost | null = null;
     /** Seçenekler uygulanırken eklenti senkronu bitince çözülür (reklam tag dönüşümü bekler). */
@@ -222,6 +228,9 @@ export class HopePlayerElement extends HTMLElement {
     /** `player.use()` ile çalışırken eklenenler. */
     private readonly runtimePlugins: PluginEntry[] = [];
     private offGlobalPlugins: (() => void) | null = null;
+    private localeLabels: HopePlayerOptions['labels'];
+    /** Eklenti metinleri yüklenince sözlük tamamlanır (eklentiler ana pakete metin taşımaz). */
+    private offLocaleStrings: (() => void) | null = null;
     private accessibility: Accessibility | null = null;
     private accessibilityKey = '';
     private playbackHistory: PlaybackHistory | null = null;
@@ -452,6 +461,7 @@ export class HopePlayerElement extends HTMLElement {
 
     connectedCallback(): void {
         this.offGlobalPlugins ??= onGlobalPluginsChange(() => void this.syncPlugins());
+        this.offLocaleStrings ??= onLocaleStrings(() => applyLocale(this.i18n, this.localeCode, this.localeLabels));
         // tabIndex constructor'da değil burada: tabindex attribute'una yansır ve Custom Elements spec'i
         // constructor'da attribute eklemeyi yasaklar (createElement "must not have attributes" hatası).
         // `tabindex` verilmemişse 0 — `this.tabIndex || 0` YAZILMAMALI: attribute'suz öğede tabIndex -1 döner (truthy),
@@ -586,10 +596,14 @@ export class HopePlayerElement extends HTMLElement {
         this.docPip?.destroy();
         this.interactive?.destroy();
         this.multiview?.destroy();
+        this.share?.destroy();
+        this.audioDescription?.destroy();
         this.pluginHost?.destroy();
         this.pluginHost = null;
         this.offGlobalPlugins?.();
         this.offGlobalPlugins = null;
+        this.offLocaleStrings?.();
+        this.offLocaleStrings = null;
         this.accessibility?.destroy();
         this.accessibility = null;
         this.accessibilityKey = '';
@@ -952,6 +966,7 @@ export class HopePlayerElement extends HTMLElement {
         else this.removeAttribute('data-theme');
 
         this.localeCode = options.locale ?? 'tr';
+        this.localeLabels = options.labels;
         applyLocale(this.i18n, options.locale, options.labels);
         this.centerPlayButton.setAttribute('aria-label', this.i18n.play);
         this.controlBar.refreshLabels();
@@ -966,6 +981,8 @@ export class HopePlayerElement extends HTMLElement {
         this.transcript?.refreshLabels();
         this.interactive?.refreshLabels();
         this.multiview?.refreshLabels();
+        this.share?.refreshLabels();
+        this.audioDescription?.refreshLabels();
         this.pluginHost?.refreshLabels();
         this.accessibility?.refreshLabels();
         this.playbackHistory?.refreshLabels();
@@ -1214,6 +1231,8 @@ export class HopePlayerElement extends HTMLElement {
         await this.applyHeatmap(options);
         await this.applyInteractive(options);
         await this.applyMultiview(options);
+        await this.applyShare(options);
+        await this.applyAudioDescription(options);
         // Document PiP parçası önceden yüklenir — tıklamada (kullanıcı hareketi süresi içinde) pencere hemen açılsın.
         if (this.docPipOptions && !this.docPip) {
             const { installDocumentPip } = await import('./plugins/doc-pip');
@@ -1431,6 +1450,63 @@ export class HopePlayerElement extends HTMLElement {
         );
     }
 
+    /** Paylaşım — ayar değişince yeniden kurulur. */
+    private async applyShare(options: HopePlayerOptions): Promise<void> {
+        const key = options.share ? JSON.stringify(options.share) : '';
+        if (key === this.shareKey) return;
+        this.shareKey = key;
+        this.share?.destroy();
+        this.share = null;
+        if (!options.share) return;
+        const { installShare } = await import('./plugins/share');
+        if (this.shareKey !== key) return;
+        this.share = installShare(
+            {
+                hostEl: this,
+                videoEl: this.videoEl,
+                overlayEl: this.videoArea,
+                i18n: this.i18n,
+                addButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick),
+                isLive: () => this.videoEl.duration === Infinity,
+            },
+            options.share === true ? {} : options.share
+        );
+    }
+
+    /** Paylaşım panelini aç (`options.share` gerekir). */
+    openShare(): void {
+        this.share?.open();
+    }
+
+    /** Sesli betimleme — ayar değişince yeniden kurulur. */
+    private async applyAudioDescription(options: HopePlayerOptions): Promise<void> {
+        const key = options.audioDescription ? JSON.stringify(options.audioDescription) : '';
+        if (key === this.audioDescriptionKey) return;
+        this.audioDescriptionKey = key;
+        this.audioDescription?.destroy();
+        this.audioDescription = null;
+        if (!options.audioDescription) return;
+        const { installAudioDescription } = await import('./plugins/audio-description');
+        if (this.audioDescriptionKey !== key) return;
+        this.audioDescription = installAudioDescription(
+            {
+                hostEl: this,
+                videoEl: this.videoEl,
+                i18n: this.i18n,
+                registerSubmenu: (def) => this.controlBar.settingsMenu.registerSubmenu(def),
+                unregisterSubmenu: (k) => this.controlBar.settingsMenu.unregisterSubmenu(k),
+                streamAudio: () => this.streamAudio,
+                setAudioTrack: (i) => this.sourceManager.setAudioTrack(i),
+            },
+            options.audioDescription === true ? {} : options.audioDescription
+        );
+    }
+
+    /** Sesli betimlemeyi aç / kapat (`options.audioDescription` gerekir). */
+    setAudioDescription(enabled: boolean): void {
+        this.audioDescription?.setEnabled(enabled);
+    }
+
     /** Çoklu kamera — kamera listesi / ayar değişince yeniden kurulur. */
     private async applyMultiview(options: HopePlayerOptions): Promise<void> {
         const opts = options.multiview;
@@ -1510,6 +1586,7 @@ export class HopePlayerElement extends HTMLElement {
             {
                 videoEl: this.videoEl,
                 seekBar: this.controlBar.seekBar,
+                i18n: this.i18n,
                 log: (entry) => this.log.add({ source: 'player', ...entry }),
             },
             opts
@@ -1689,7 +1766,13 @@ export class HopePlayerElement extends HTMLElement {
         this.streamAudio = { tracks, active };
         const menu = this.controlBar.settingsMenu;
         const taken = new Set<string>();
-        const labels = new Map(tracks.map((t) => [t.index, this.uniqueLabel(this.streamTrackLabel(t.label, t.lang), String(t.index + 1), taken)]));
+        // Betimleme izi adında belirtilmemişse "(sesli betimleme)" eklenir.
+        const named = (t: StreamAudioTrack): string => {
+            const base = this.streamTrackLabel(t.label, t.lang);
+            return t.description && !/betimleme|description|\bAD\b/i.test(base) ? `${base} (${this.i18n.audioDescriptionTag})` : base;
+        };
+        const labels = new Map(tracks.map((t) => [t.index, this.uniqueLabel(named(t), String(t.index + 1), taken)]));
+        this.audioDescription?.onStreamTracks();
         if (tracks.length <= 1) {
             menu.unregisterSubmenu(STREAM_AUDIO_SUBMENU_KEY);
             return;

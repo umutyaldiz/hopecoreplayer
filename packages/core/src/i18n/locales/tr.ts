@@ -1,7 +1,7 @@
-import type { HopeLocaleStrings } from '../types';
+import type { CoreLocaleStrings } from '../types';
 
 /** Varsayılan dil — mevcut (çeviri öncesi) sabit kodlanmış metinlerle birebir aynı, davranış değişikliği yok. */
-export const tr: HopeLocaleStrings = {
+export const tr: CoreLocaleStrings = {
     play: 'Oynat',
     pause: 'Duraklat',
     mute: 'Sessize al',
@@ -93,32 +93,7 @@ export const tr: HopeLocaleStrings = {
     redirectNowPlaying: 'Video oynatılıyor...',
     redirectUpNext: 'Sıradaki',
     redirectCancelCard: 'Sıradakini iptal et',
-    redirectSuggestions: 'Önerilen videolar',
-    redirectReplay: 'Tekrar izle',
-    redirectCloseSuggestions: 'Önerileri kapat',
-    transcript: 'Transkript',
-    transcriptSearch: 'Transkriptte ara',
-    transcriptClose: 'Transkripti kapat',
-    transcriptTrack: 'Transkript dili',
-    transcriptEmpty: 'Bu video için altyazı yok.',
-    transcriptNoResults: 'Sonuç bulunamadı.',
-    transcriptWaiting: 'Altyazılar yükleniyor…',
-    multiviewLayout: 'Bölünmüş ekran',
-    multiviewCameras: 'Kameralar',
-    multiviewWatching: 'İzleniyor',
-    multiviewSwitch: (label) => `${label} kamerasına geç`,
-    multiviewNotStarted: 'Henüz başlamadı',
-    pipPlaying: 'Resim içinde resim penceresinde oynatılıyor',
-    pipBack: 'Buraya geri al',
-    interactivePoll: 'Anket',
-    interactiveQuiz: 'Soru',
-    interactiveCorrect: 'Doğru!',
-    interactiveWrong: 'Yanlış',
-    interactiveBuy: 'Satın al',
-    interactiveGo: 'Git',
-    interactiveSponsored: 'Sponsorlu',
-    interactiveClose: 'Kapat',
-    interactiveVotes: (percent) => `%${percent}`,
+    audioDescriptionTag: 'sesli betimleme',
     skipIntro: 'İntroyu atla',
     skipRecap: 'Özeti atla',
     skipCredits: 'Jeneriği atla',
