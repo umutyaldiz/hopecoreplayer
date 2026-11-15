@@ -73,7 +73,11 @@ async function testNoPrivacy(browser) {
         await page.evaluate(() => window.__mockIma.adsLoaderInstances[0]?.dispatchEvent?.('adError'));
         await play(page);
         await page.waitForTimeout(2600);
-        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').pause());
+        await page.evaluate(() => {
+            const v = document.getElementById('player').shadowRoot.querySelector('video');
+            v.volume = 0.5; // ses tercihi kaydını kesin tetikler
+            v.pause();
+        });
         await page.waitForTimeout(300);
         const stored = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('hp-history')));
         ok(stored.length > 0, `kayıt yazıldı ${JSON.stringify(stored)}`);
@@ -105,7 +109,11 @@ async function testDeny(browser) {
         ok(p.npa === '1' && p.ltd === '1', `npa=1, ltd=1 ${JSON.stringify(p)}`);
         await play(page);
         await page.waitForTimeout(2600);
-        await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').pause());
+        await page.evaluate(() => {
+            const v = document.getElementById('player').shadowRoot.querySelector('video');
+            v.volume = 0.5; // ses tercihi kaydını kesin tetikler
+            v.pause();
+        });
         await page.waitForTimeout(300);
         const stored = await page.evaluate(() => Object.keys(localStorage).filter((k) => /^(hp|hope)[-_:]/.test(k)));
         ok(stored.length === 0, `localStorage boş ${JSON.stringify(stored)}`);
