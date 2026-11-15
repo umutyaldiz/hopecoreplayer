@@ -30,7 +30,8 @@ export type HopeBridgeCommand =
     | { type: 'pause' }
     | { type: 'seek'; time: number }
     | { type: 'muted'; value: boolean }
-    | { type: 'toggleStats'; force?: boolean };
+    | { type: 'toggleStats'; force?: boolean }
+    | { type: 'call'; method: HopeNativeMethod; args?: unknown[] };
 
 export interface PlayerHtmlConfig {
     /** Başlangıç seçenekleri — JSON'a çevrilebilir olmalı (fonksiyonlar WebView'a taşınamaz). */
@@ -59,7 +60,32 @@ const FORWARDED_EVENTS = [
     'hp:itemchange',
     'hp:pausead',
     'hp:analytics',
+    'hp:paywall',
+    'hp:clip',
+    'hp:watchparty',
+    'hp:reaction',
+    'hp:course',
+    'hp:podcast',
+    'hp:signlanguage',
+    'hp:privacy',
 ];
+
+/** React Native'den `call` komutuyla çağrılabilen player yöntemleri. */
+export const NATIVE_METHODS = [
+    'unlockPaywall',
+    'openClip',
+    'receiveWatchParty',
+    'sendWatchPartySync',
+    'addReaction',
+    'addComment',
+    'toggleCourseNotes',
+    'setSleepTimer',
+    'toggleSignLanguage',
+    'setPrivacy',
+    'openShare',
+    'togglePip',
+] as const;
+export type HopeNativeMethod = (typeof NATIVE_METHODS)[number];
 
 /** Satır/paragraf ayırıcı — JSON'da geçerli, JS string'inde (eski motorlarda) değil. */
 const LINE_SEP = String.fromCharCode(0x2028);
@@ -183,6 +209,9 @@ run = (cmd) => {
         case 'seek': seekTo(cmd.time); break;
         case 'muted': video.muted = !!cmd.value; break;
         case 'toggleStats': el.toggleStats(cmd.force); break;
+        case 'call':
+            if (${inlineJson(NATIVE_METHODS)}.includes(cmd.method) && typeof el[cmd.method] === 'function') el[cmd.method](...(Array.isArray(cmd.args) ? cmd.args : []));
+            break;
     }
 };
 queue.splice(0).forEach(run);

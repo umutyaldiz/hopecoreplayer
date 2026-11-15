@@ -2,6 +2,7 @@ import type { RewardedResult, RewardedUnlockOptions } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { LOCK_SVG } from '../../controls/SettingsMenu';
 import { showGptRewarded } from './gpt';
+import { storageGet, storageSet } from '../../utils/storage';
 
 export interface RewardedUnlockContext {
     hostEl: HTMLElement;
@@ -96,8 +97,8 @@ export class RewardedUnlock {
         const mode = this.unlockFor;
         if (mode === 'video') return !!this.videoUnlockedKey && this.videoUnlockedKey === this.ctx.contentKey();
         try {
-            if (mode === 'session') return sessionStorage.getItem(this.storageKey) === '1';
-            const until = Number(localStorage.getItem(this.storageKey));
+            if (mode === 'session') return storageGet(this.storageKey, true) === '1';
+            const until = Number(storageGet(this.storageKey));
             return Number.isFinite(until) && until > Date.now();
         } catch {
             return false; // depolama kapalı (gizli mod vb.)
@@ -108,8 +109,8 @@ export class RewardedUnlock {
         const mode = this.unlockFor;
         if (mode === 'video') this.videoUnlockedKey = this.ctx.contentKey();
         try {
-            if (mode === 'session') sessionStorage.setItem(this.storageKey, '1');
-            else if (typeof mode === 'number') localStorage.setItem(this.storageKey, String(Date.now() + mode * 60_000));
+            if (mode === 'session') storageSet(this.storageKey, '1', true);
+            else if (typeof mode === 'number') storageSet(this.storageKey, String(Date.now() + mode * 60_000));
         } catch {
             // Depolama yoksa yalnızca bu video için açık kalır.
             this.videoUnlockedKey = this.ctx.contentKey();

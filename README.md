@@ -56,7 +56,7 @@ That's it: HLS, the quality menu, captions and keyboard shortcuts work out of th
 
 > Use the full `…/dist/hope-player.js` path on CDNs — the player loads its plugins as relative chunks next to that file. unpkg (`https://unpkg.com/@hopeplayer/core@1/dist/hope-player.js`) and esm.sh work the same way.
 >
-> **In production, pin an exact version** (`@hopeplayer/core@1.7.2/dist/hope-player.js`): CDNs cache version ranges like `@1` for a while, so a new release can take time to show up, while an exact version URL never changes and is cached for good. Plugin chunks have content hashes in their names (`ads-DPL7m9PV.js`), so a new release never serves a stale chunk.
+> **In production, pin an exact version** (`@hopeplayer/core@1.8.0/dist/hope-player.js`): CDNs cache version ranges like `@1` for a while, so a new release can take time to show up, while an exact version URL never changes and is cached for good. Plugin chunks have content hashes in their names (`ads-DPL7m9PV.js`), so a new release never serves a stale chunk.
 
 ## Install with npm
 
@@ -90,7 +90,7 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 
 ## Features
 
-**Playback** — MP4 / WebM / HLS (hls.js, loaded only for HLS — a light build is optional; native on Safari / iOS) / DASH (dash.js, loaded only for DASH), DRM (Widevine, PlayReady, FairPlay), quality limits and data saver, live streams with a wall clock, fallback sources (`sourcePriority`), quality menu, alternate audio, WebVTT and in-stream captions, sprite thumbnails, chapters and markers, "most watched" heatmap, searchable transcript panel, skip intro / credits buttons, up-next card and end screen, polls / quizzes / shoppable product cards, multi-camera with synced switching and split view, share links that start at the current moment, audio description, playlist and story mode, audio player with vinyl mode, Picture-in-Picture (Document PiP with the player's own controls on Chrome / Edge), Chromecast and AirPlay.
+**Playback** — MP4 / WebM / HLS (hls.js, loaded only for HLS — a light build is optional; native on Safari / iOS) / DASH (dash.js, loaded only for DASH), DRM (Widevine, PlayReady, FairPlay), quality limits and data saver, live streams with a wall clock, fallback sources (`sourcePriority`), quality menu, alternate audio, WebVTT and in-stream captions, sprite thumbnails, chapters and markers, "most watched" heatmap, searchable transcript panel, skip intro / credits buttons, up-next card and end screen, polls / quizzes / shoppable product cards, multi-camera with synced switching and split view, share links that start at the current moment, shareable clips (`?clip=80-105`, looping), watch party sync over your own channel, emoji reactions and timed comments, course mode (no skipping ahead, real watch percentage, timestamped notes), podcast tools (sleep timer, skip silences, waveform), audio description, sign language video in sync, playlist and story mode, audio player with vinyl mode, Picture-in-Picture (Document PiP with the player's own controls on Chrome / Edge), Chromecast and AirPlay.
 
 **Measurement** — built-in QoE analytics and CMCD for CDN logs: startup time, rebuffer ratio, watch time, 25 / 50 / 75 / 100 %, quality switches and errors as `hp:analytics` events, batched to your endpoint (`sendBeacon`) and to GA4.
 
@@ -98,7 +98,9 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 - Google IMA: preroll / midroll / postroll, VMAP, overlay ads, retry and waterfall, OM SDK, SCTE-35 for live, Google DAI.
 - Prebid video header bidding (direct VAST or GAM, with custom `cust_params`), consent (TCF / USP / GPP).
 - Rewarded quality unlock, sponsorship layer from your own API, pause ads, rule-driven Ad Manager out-of-page ads (`adTriggers`).
+- Paywall with a free preview that hooks into your membership system (`checkAccess`, subscribe / sign-in callbacks), and a moving personal watermark against screen-recording piracy.
 - Casting keeps the ads: VAST / VMAP breaks are sent to the TV.
+- Privacy & cookie consent: OneTrust, Cookiebot and IAB TCF v2 connectors (or your own callback) switch ad personalization (`npa` / `ltd`, GPT, Prebid), analytics and on-device storage per category.
 
 **Engineering**
 - **Shadow DOM** — player styles never leak into the page, and the page never breaks the player.

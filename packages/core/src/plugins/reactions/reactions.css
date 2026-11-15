@@ -1,0 +1,144 @@
+/* ── Tepkiler ve zamanlı yorumlar (options.reactions) ── */
+.hp-react-layer {
+    position: absolute;
+    inset: 0;
+    /* Tepsinin (26) üstünde: açıkken basılan emoji görünür; tıklamaları engellemez. */
+    z-index: 27;
+    overflow: hidden;
+    pointer-events: none;
+}
+.hp-react-float {
+    position: absolute;
+    right: 28px;
+    bottom: 70px;
+    font-size: 28px;
+    line-height: 1;
+    animation: hp-react-rise 2.6s ease-out forwards;
+    will-change: transform, opacity;
+}
+@keyframes hp-react-rise {
+    0% {
+        transform: translate(0, 0) scale(0.6);
+        opacity: 0;
+    }
+    12% {
+        transform: translate(0, -14px) scale(1.15);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(var(--hp-react-x, 0), -220px) rotate(var(--hp-react-r, 0)) scale(0.9);
+        opacity: 0;
+    }
+}
+.hp-comment {
+    position: absolute;
+    left: 100%;
+    top: calc(10px + var(--hp-comment-lane, 0) * 30px);
+    max-width: 70%;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    font: 500 14px/1.4 system-ui, -apple-system, sans-serif;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    animation: hp-comment-scroll 8s linear forwards;
+    will-change: transform;
+}
+.hp-comment b {
+    font-weight: 700;
+    opacity: 0.85;
+}
+@keyframes hp-comment-scroll {
+    from {
+        left: 100%;
+        transform: translateX(0);
+    }
+    to {
+        left: 0;
+        transform: translateX(-100%);
+    }
+}
+.hp-react-tray {
+    position: absolute;
+    right: 12px;
+    bottom: calc(var(--hp-chrome-h, 64px) + 8px);
+    z-index: 26;
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--hp-panel-border);
+    border-radius: 14px;
+    background: var(--hp-panel-bg);
+    backdrop-filter: blur(var(--hp-panel-blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--hp-panel-blur)) saturate(160%);
+    color: var(--hp-panel-text);
+    box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+    font: 13px/1.4 system-ui, -apple-system, sans-serif;
+    animation: hp-redirect-fade 0.18s ease-out;
+}
+.hp-react-emojis {
+    display: flex;
+    gap: 2px;
+}
+.hp-react-emoji {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    font-size: 22px;
+    cursor: pointer;
+    transition: transform 0.12s ease;
+}
+.hp-react-emoji:hover {
+    background: color-mix(in srgb, var(--hp-panel-text) 12%, transparent);
+    transform: scale(1.15);
+}
+.hp-react-form {
+    display: flex;
+    gap: 6px;
+}
+.hp-react-form input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 10px;
+    border: 1px solid var(--hp-panel-border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--hp-panel-text) 8%, transparent);
+    color: inherit;
+    font: inherit;
+}
+.hp-react-form button {
+    padding: 6px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--hp-color-accent);
+    color: var(--hp-color-on-accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+.video-area[data-compact] .hp-react-emoji {
+    width: 32px;
+    height: 32px;
+    font-size: 18px;
+}
+.video-area[data-compact] .hp-comment {
+    font-size: 12px;
+    top: calc(6px + var(--hp-comment-lane, 0) * 24px);
+}
+@media (prefers-reduced-motion: reduce) {
+    .hp-react-float {
+        animation: hp-redirect-fade 1.5s ease-out reverse forwards;
+    }
+    .hp-comment {
+        left: 12px;
+        animation: hp-redirect-fade 6s ease-out reverse forwards;
+    }
+}

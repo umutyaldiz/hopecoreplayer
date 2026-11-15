@@ -7,6 +7,8 @@ import { Scte35LiveAdManager } from './scte35';
 import type { AdsOptions, PrebidBreakOptions } from '../../types';
 import type { VideoPrebid } from '../prebid/VideoPrebid';
 import type { PrerollGate } from './PrerollGate';
+import { getPrivacy, privacyReady } from '../../utils/privacy';
+import { privacyAdTag } from '../../utils/privacy-adtag';
 
 export interface AdsPlayerContext {
     videoEl: HTMLVideoElement;
@@ -417,6 +419,10 @@ export class AdsController {
 
     private async requestAd(type: AdBreakType, rawTag: string | string[], attempt = 0, skipUrlProcessing = false): Promise<void> {
         if (!this.adsLoader || !this.ima || this.remote) return;
+        // Gizlilik: CMP'nin ilk yanıtı beklenir; reklam onayı yoksa istek yapılmaz, içerik sürer.
+        await privacyReady();
+        if (!this.adsLoader || !this.ima) return;
+        if (!getPrivacy().ads) return this.resumeContentAfterGiveUp(type, 'privacy: no consent for ads');
         this.currentBreakType = type;
         this.lastRequestIsVmap = skipUrlProcessing;
 
@@ -425,7 +431,8 @@ export class AdsController {
             ? tag
             : generateVastUrl(tag, { includeRefreshCount: !!this.options.retry?.enabled, adRefreshCount: attempt });
 
-        const prebidConfig = skipUrlProcessing ? null : this.getPrebidConfigFor(type);
+        // Kişiselleştirme onayı yoksa header bidding (kullanıcı kimliklerine dayanır) yapılmaz.
+        const prebidConfig = skipUrlProcessing || !getPrivacy().personalizedAds ? null : this.getPrebidConfigFor(type);
         // Prebid custParams: GAM isteğine her durumda gider — auction kazanılsa da (VideoPrebid bu tag'in cust_params'ını
         // buildVideoUrl'e aktarır), kazanılmasa / Prebid yüklenemese / retry'da da (doğrudan bu tag istenir).
         if (prebidConfig?.custParams) vastUrl = mergeCustParams(vastUrl, prebidConfig.custParams);
@@ -441,6 +448,8 @@ export class AdsController {
         }
 
         if (this.ctx.transformTag) vastUrl = await this.ctx.transformTag(vastUrl, type.toLowerCase() as 'preroll' | 'midroll' | 'postroll');
+        // GAM etiketlerine npa=1 (kişiselleştirilmemiş) / ltd=1 (sınırlı reklam).
+        vastUrl = privacyAdTag(vastUrl);
         if (!this.adsLoader || !this.ima) return; // await sırasında destroy() olmuş olabilir
 
         const request = new this.ima.AdsRequest();

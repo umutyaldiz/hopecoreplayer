@@ -2,6 +2,8 @@
 import { createIcon } from '../icons/Icon';
 import { PluginAds } from './PluginAds';
 import type { SettingsSubmenuDef, SettingsSubmenuItem } from '../controls/SettingsMenu';
+import { storageGet, storageSet, storageRemove } from '../utils/storage';
+import { getPrivacy, onPrivacyChange } from '../utils/privacy';
 import {
     PLUGIN_API_VERSION,
     type HopePlugin,
@@ -309,6 +311,9 @@ export class PluginHost {
             get src() {
                 return ctx.currentSrc();
             },
+            get privacy() {
+                return { ...getPrivacy() };
+            },
             play: () => ctx.video.play(),
             pause: () => ctx.video.pause(),
             seek: (time: number) => {
@@ -330,6 +335,11 @@ export class PluginHost {
                 return off;
             },
             onDestroy: (handler) => track(guard(handler, 'onDestroy')),
+            onPrivacyChange: (handler) => {
+                const off = onPrivacyChange((state) => guard(handler, 'onPrivacyChange')({ ...state }));
+                track(off);
+                return off;
+            },
             setTimeout: (handler, ms) => {
                 const id = window.setTimeout(guard(handler, 'setTimeout'), ms);
                 track(() => clearTimeout(id));
@@ -415,7 +425,7 @@ export class PluginHost {
             storage: {
                 get: <T>(key: string, fallback?: T): T | undefined => {
                     try {
-                        const raw = localStorage.getItem(storageKey(name, key));
+                        const raw = storageGet(storageKey(name, key));
                         return raw === null ? fallback : (JSON.parse(raw) as T);
                     } catch {
                         return fallback;
@@ -423,14 +433,14 @@ export class PluginHost {
                 },
                 set: (key, value) => {
                     try {
-                        localStorage.setItem(storageKey(name, key), JSON.stringify(value));
+                        storageSet(storageKey(name, key), JSON.stringify(value));
                     } catch {
                         /* yok say */
                     }
                 },
                 remove: (key) => {
                     try {
-                        localStorage.removeItem(storageKey(name, key));
+                        storageRemove(storageKey(name, key));
                     } catch {
                         /* yok say */
                     }

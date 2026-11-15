@@ -1,0 +1,29 @@
+/* ── Podcast araçları: dalga formu (options.podcast.waveform) ── */
+.hp-waveform {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(50% + 4px);
+    height: var(--hp-waveform-h, 26px);
+    pointer-events: none;
+}
+.hp-waveform svg {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+.hp-waveform-base rect {
+    fill: color-mix(in srgb, var(--hp-color-on-surface) 32%, transparent);
+}
+.hp-waveform-played {
+    clip-path: inset(0 calc(100% - var(--hp-wave-p, 0%)) 0 0);
+}
+.hp-waveform-played rect {
+    fill: var(--hp-color-accent);
+}
+/* Dalga formuna yer aç (ince ses çubuğunda üstü kesilmesin). */
+.hp-seekbar[data-waveform] {
+    margin-top: calc(var(--hp-waveform-h, 26px) + 4px);
+}

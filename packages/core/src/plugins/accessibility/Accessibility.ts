@@ -2,6 +2,8 @@ import type { AccessibilityFilter, AccessibilityOptions, AccessibilityState } fr
 import type { HopeLocaleStrings } from '../../i18n/types';
 import type { SettingsSubmenuDef, SettingsSubmenuItem } from '../../controls/SettingsMenu';
 import { colorBlindFilterUrl } from './colorBlind';
+import { canTapAudio, mediaAudio } from '../../utils/media-audio';
+import { storageGet, storageSet } from '../../utils/storage';
 
 export interface AccessibilityPlayerContext {
     hostEl: HTMLElement;
@@ -337,36 +339,18 @@ export class Accessibility {
 
     // ── Ses (Web Audio) ──
 
-    /**
-     * Web Audio kaynağı başka alan adındaysa ve CORS'la yüklenmediyse tarayıcı sesi sıfırlar — o zaman kapalı kalır.
-     * blob: (hls.js / MSE; hls.js zaten CORS'la indirir) ve aynı origin güvenli.
-     */
     private audioAllowed(): boolean {
-        if (typeof AudioContext === 'undefined') return false;
-        const src = this.ctx.videoEl.currentSrc;
-        if (!src || src.startsWith('blob:') || src.startsWith('data:')) return true;
-        try {
-            if (new URL(src, location.href).origin === location.origin) return true;
-        } catch {
-            return false;
-        }
-        return this.ctx.videoEl.crossOrigin !== null;
+        return canTapAudio(this.ctx.videoEl);
     }
 
     private applyAudio(): void {
         const needed = this.state.mono || this.state.boost !== 1;
         if (!needed && !this.graph) return;
         if (!this.graph) {
-            if (!this.audioAllowed()) return;
-            try {
-                const ctx = new AudioContext();
-                const source = ctx.createMediaElementSource(this.ctx.videoEl);
-                const gain = ctx.createGain();
-                source.connect(gain).connect(ctx.destination);
-                this.graph = { ctx, gain };
-            } catch {
-                return;
-            }
+            // Ortak grafik: sessizlik algılama (podcast) da aynı kaynağı kullanır.
+            const g = mediaAudio(this.ctx.videoEl);
+            if (!g) return;
+            this.graph = { ctx: g.ctx, gain: g.out };
         }
         const { gain, ctx } = this.graph;
         gain.gain.value = this.state.boost;
@@ -386,7 +370,7 @@ export class Accessibility {
     private restore(): void {
         if (this.options.remember === false) return;
         try {
-            const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as Partial<AccessibilityState> | null;
+            const saved = JSON.parse(storageGet(STORAGE_KEY) ?? 'null') as Partial<AccessibilityState> | null;
             if (!saved) return;
             if (saved.filter && this.filters.includes(saved.filter)) this.state.filter = saved.filter;
             if (typeof saved.mono === 'boolean' && this.boostLevels.length) this.state.mono = saved.mono;
@@ -402,7 +386,7 @@ export class Accessibility {
         if (this.options.remember === false) return;
         try {
             const { filter, mono, boost, largeControls } = this.state;
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ filter, mono, boost, largeControls }));
+            storageSet(STORAGE_KEY, JSON.stringify({ filter, mono, boost, largeControls }));
         } catch {
             /* depolama yok — yalnızca bu oturum */
         }

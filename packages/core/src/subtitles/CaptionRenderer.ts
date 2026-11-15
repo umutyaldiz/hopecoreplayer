@@ -1,4 +1,5 @@
 import type { HopeLocaleStrings } from '../i18n/types';
+import { storageGet, storageSet } from '../utils/storage';
 
 export type CaptionFontSize = 'small' | 'normal' | 'large';
 
@@ -40,7 +41,7 @@ interface CueWithHtml extends TextTrackCue {
 
 function readStoredRow(): number {
     try {
-        const raw = window.localStorage.getItem(STORAGE_KEY_ROW);
+        const raw = storageGet(STORAGE_KEY_ROW);
         const n = raw === null ? 0 : Number(raw);
         return Number.isFinite(n) && n >= 0 && n < ROWS ? n : 0;
     } catch {
@@ -50,7 +51,7 @@ function readStoredRow(): number {
 
 function readStoredFontSize(): CaptionFontSize {
     try {
-        const raw = window.localStorage.getItem(STORAGE_KEY_SIZE);
+        const raw = storageGet(STORAGE_KEY_SIZE);
         return raw === 'small' || raw === 'normal' || raw === 'large' ? raw : 'normal';
     } catch {
         return 'normal';
@@ -60,7 +61,7 @@ function readStoredFontSize(): CaptionFontSize {
 function readStoredColor(key: string, presets: readonly string[]): string {
     const fallback = presets[0] ?? '';
     try {
-        const raw = window.localStorage.getItem(key);
+        const raw = storageGet(key);
         return raw !== null && presets.includes(raw) ? raw : fallback;
     } catch {
         return fallback;
@@ -142,7 +143,7 @@ export class CaptionRenderer {
         // hesaplanmazsa balon video'nun tepesinden TAŞABİLİRDİ.
         this.recomputePosition();
         try {
-            window.localStorage.setItem(STORAGE_KEY_SIZE, size);
+            storageSet(STORAGE_KEY_SIZE, size);
         } catch {
             /* gizli mod vb. — sessizce yoksay */
         }
@@ -156,7 +157,7 @@ export class CaptionRenderer {
         this.bgColor = color;
         this.bubbleEl.style.setProperty('--hp-caption-bg', color);
         try {
-            window.localStorage.setItem(STORAGE_KEY_BG_COLOR, color);
+            storageSet(STORAGE_KEY_BG_COLOR, color);
         } catch {
             /* gizli mod vb. — sessizce yoksay */
         }
@@ -170,7 +171,7 @@ export class CaptionRenderer {
         this.textColor = color;
         this.bubbleEl.style.setProperty('--hp-caption-text', color);
         try {
-            window.localStorage.setItem(STORAGE_KEY_TEXT_COLOR, color);
+            storageSet(STORAGE_KEY_TEXT_COLOR, color);
         } catch {
             /* gizli mod vb. — sessizce yoksay */
         }
@@ -277,7 +278,7 @@ export class CaptionRenderer {
         }
 
         try {
-            window.localStorage.setItem(STORAGE_KEY_ROW, String(this.rowIndex));
+            storageSet(STORAGE_KEY_ROW, String(this.rowIndex));
         } catch {
             /* gizli mod vb. — sessizce yoksay */
         }

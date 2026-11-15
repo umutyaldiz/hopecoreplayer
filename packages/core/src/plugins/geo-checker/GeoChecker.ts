@@ -1,5 +1,6 @@
 import type { GeoCheckerOptions } from '../../types';
 import type { GatePlayerContext } from '../shared/GatePlayerContext';
+import { getPrivacy } from '../../utils/privacy';
 
 const EU_COUNTRIES = [
     'EU', 'AD', 'AL', 'AT', 'BA', 'BE', 'BG', 'BY', 'CH', 'CS', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FO', 'FR', 'FX', 'GB', 'GI',
@@ -59,6 +60,8 @@ export class GeoChecker {
     /** Varsayılan geojs: ülke kodu country_code'da (country alanı ülke adı). */
     private async resolveCountry(): Promise<string> {
         if (this.options.getCountry) return String((await this.options.getCountry()) ?? '');
+        // Gizlilik: varsayılan dış konum servisi (IP gönderilir) işlevsel onay ister; yoksa kontrol atlanır (izin verilir).
+        if (!this.options.apiUrl && !getPrivacy().functional) throw new Error('privacy: no consent for the third-party geolocation API');
 
         const response = await fetch(this.options.apiUrl || DEFAULT_API_URL);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);

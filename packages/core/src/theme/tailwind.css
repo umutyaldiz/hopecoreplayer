@@ -2069,3 +2069,10 @@ button.hp-context-menu-item:focus-visible {
         transition: none;
     }
 }
+/* Eklenti parçalarının satır içi SVG ikonları (createIcon('<svg…')) — font ikonlarıyla aynı boyut / renk. */
+.hp-icon-svg > svg {
+    display: block;
+    width: 1em;
+    height: 1em;
+    fill: currentColor;
+}

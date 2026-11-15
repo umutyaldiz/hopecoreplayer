@@ -14,6 +14,28 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-11-15
+
+### Added
+
+- **Paywall (`paywall`):** the first `previewSeconds` play for free (a "Preview · 0:42" badge counts down), then the video stops and a "Subscribe / Sign in" screen appears; seeking past the limit is pulled back (on live streams the watched time counts). Hooks into your membership system: `checkAccess()` is asked when the preview ends (`true` → no wall), `subscribe.onClick` / `login.onClick` open your own dialog and unlock when they return `true`, or `url` sends the viewer to your checkout. `player.unlockPaywall()`, `unlocked: true`, `hp:paywall` (`shown` / `click` — cancelable / `unlock`). Separate chunk.
+- **Personal watermark (`watermark`):** a viewer-specific text (email, user ID) over the video that moves every `moveEvery` seconds, also in fullscreen and Document PiP, hidden during ads; put back if removed or hidden through the developer tools. Separate chunk.
+- **Clips (`clips`):** a scissors button opens a range picker on the seek bar (draggable handles, ±1 s buttons, preview); the `?clip=80-105` link plays only that part on a loop, with a "Watch full video" badge. Copy, chosen networks and the system share sheet; `player.openClip()`, `hp:clip` (`copy` / `share` cancelable). Separate chunk.
+- **Watch party (`watchParty`):** play / pause / seek / speed are sent through your `send` (or `hp:watchparty`) and applied with `player.receiveWatchParty()` — latency compensated, drift corrected (`tolerance`, `heartbeat` sync), no echo, "Ali paused" notices, messages during ads applied afterwards. `player.sendWatchPartySync()`. Separate chunk.
+- **Reactions & timed comments (`reactions`):** an emoji tray whose reactions float up the screen (`hp:reaction`, `local: true` to forward), `player.addReaction()` / `player.addComment()` for incoming ones; comments pinned to a second scroll across the top (VOD), an optional comment box (cancelable for moderation), a settings-menu switch (remembered), reduced-motion support. Text is never HTML. Separate chunk.
+- **Course mode (`course`):** watched ranges are recorded (seeked-over parts do not count), skipping ahead to unwatched parts is blocked (`preventSkip`), `hp:course` at `milestones` and on `completeAt`, watched parts drawn on the seek bar, `maxRate`, a notes panel with timestamped notes marked on the seek bar. Stored per `id`, merged with `initial`; `player.getCourseProgress()`, `player.toggleCourseNotes()`. Separate chunk.
+- **Podcast tools (`podcast`):** sleep timer in the settings menu (minutes or end of episode, the volume fades out), skip silences (Web Audio level detection, plays silent parts at `rate`, time saved shown in the menu; needs CORS for cross-origin audio; unavailable on WebKit — Safari / iOS — where the analysis stops once the speed changes; a fast stretch is capped at 15 s and only starts after real sound has been heard), waveform above the seek bar from `data`, a JSON `src` or the file itself. `player.setSleepTimer()`, `hp:podcast`. Separate chunk.
+- **Sign language video (`signLanguage`):** a second, muted video in a corner kept in sync with the main one (play / pause / seek / speed, drift correction); toggled from the control bar or settings menu (remembered), draggable to another corner, hidden during ads, downloaded only when first turned on. `player.toggleSignLanguage()`, `hp:signlanguage`. Separate chunk.
+- **Privacy & cookie consent (`privacy`):** consent in four categories — `ads`, `personalizedAds`, `analytics`, `functional` — from built-in connectors for **OneTrust** (`OnetrustActiveGroups`, C0002 / C0003 / C0004 by default, `groups` to remap), **Cookiebot** and **IAB TCF v2** (Didomi, Quantcast, Usercentrics…), your own `getConsent()`, or `player.setPrivacy()`; changes are followed live and fire `hp:privacy`. Without personalization consent, Google Ad Manager tags get `npa=1` (and `ltd=1` without storage consent too) on every break, DAI gets the same `adTagParameters`, GPT (pause ads, ad triggers) gets `setPrivacySettings`, and Prebid is skipped. Without analytics consent, QoE / GA4, tracking pixels (sponsorship, ad triggers, markers) and the CMCD session ID are not sent. Without functional consent nothing is written to the browser (preferences stay in memory), the default geolocation service and the Cast SDK are not loaded, and withdrawing it deletes the player's `hp-*` / `hope-*` keys. `ads: false` never loads IMA. Ad requests wait up to `waitMs` for the CMP's first answer; until then `default: 'deny'`. Page-wide; plugins get `player.privacy` / `onPrivacyChange()` and `player.storage` already complies. Separate chunk.
+- **React Native:** the new events reach `onEvent`, and `ref.call(method, ...args)` calls player methods such as `unlockPaywall`, `receiveWatchParty`, `addReaction` or `setSleepTimer` (an allow-list; other names are ignored).
+
+### Changed
+
+- Accessibility (volume boost / mono) and silence detection share one Web Audio graph per media element (`createMediaElementSource` can only be attached once).
+- Every `localStorage` / `sessionStorage` access in the player goes through one consent-aware helper.
+- The control-bar icons of the new features are inline SVG inside their own chunks instead of the shared icon font.
+- The setup code of the eight new features is its own chunk, downloaded only when one of them is configured — the initial load stays under the 80 KB budget.
+
 ## [1.7.2] — 2026-11-14
 
 ### Security

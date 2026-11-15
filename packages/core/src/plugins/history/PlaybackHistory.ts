@@ -2,6 +2,7 @@ import type { HistoryOptions } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { formatTime } from '../../utils/format-time';
 import { seekWhenReady } from '../shared/seekWhenReady';
+import { storageGet, storageSet } from '../../utils/storage';
 
 export interface HistoryPlayerContext {
     hostEl: HTMLElement;
@@ -243,7 +244,7 @@ export class PlaybackHistory {
 
 function read<T>(key: string): T | null {
     try {
-        return JSON.parse(localStorage.getItem(key) ?? 'null') as T | null;
+        return JSON.parse(storageGet(key) ?? 'null') as T | null;
     } catch {
         return null;
     }
@@ -251,7 +252,7 @@ function read<T>(key: string): T | null {
 
 function write(key: string, value: unknown): void {
     try {
-        localStorage.setItem(key, JSON.stringify(value));
+        storageSet(key, JSON.stringify(value));
     } catch {
         /* gizli sekme / kota dolu — geçmiş yalnızca bu oturumda yok */
     }

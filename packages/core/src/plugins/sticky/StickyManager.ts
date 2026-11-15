@@ -1,5 +1,6 @@
 import type { StickyCorner, StickyOptions } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
+import { storageGet, storageSet } from '../../utils/storage';
 
 export interface StickyPlayerContext {
     key: string;
@@ -443,36 +444,26 @@ class StickyManagerImpl {
     private loadDismissState(): void {
         if (this.dismissLoaded) return;
         this.dismissLoaded = true;
-        try {
-            const st = window.localStorage;
-            this.dismissedUntil = Number(st.getItem(STORAGE_KEY) || 0) || 0;
-            this.dismissedForever = st.getItem(STORAGE_KEY_FOREVER) === '1';
-        } catch {
-            /* storage erişilemez (gizli mod vb.) — sessizce yoksay */
-        }
+        this.dismissedUntil = Number(storageGet(STORAGE_KEY) || 0) || 0;
+        this.dismissedForever = storageGet(STORAGE_KEY_FOREVER) === '1';
     }
 
     private applyGlobalDismiss(options: StickyItem['options']): void {
         if (options.dismissMode === 'none') return;
-        const storage = options.storage === 'memory' ? null : options.storage === 'session' ? window.sessionStorage : window.localStorage;
+        // Onay yoksa storageSet zaten yalnızca belleğe yazar.
+        const save = (key: string, value: string): void => {
+            if (options.storage !== 'memory') storageSet(key, value, options.storage === 'session');
+        };
 
         if (options.dismissMode === 'never') {
             this.dismissedForever = true;
-            try {
-                storage?.setItem(STORAGE_KEY_FOREVER, '1');
-            } catch {
-                /* no-op */
-            }
+            save(STORAGE_KEY_FOREVER, '1');
             return;
         }
 
         const until = Date.now() + options.cooldownMinutes * 60000;
         this.dismissedUntil = until;
-        try {
-            storage?.setItem(STORAGE_KEY, String(until));
-        } catch {
-            /* no-op */
-        }
+        save(STORAGE_KEY, String(until));
     }
 }
 

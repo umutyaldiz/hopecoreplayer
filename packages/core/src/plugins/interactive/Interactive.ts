@@ -4,6 +4,7 @@ import { createIcon } from '../../icons/Icon';
 import { adoptStyle } from '../../utils/plugin-style';
 import css from './interactive.css?inline';
 import { isSafeUrl } from '../../utils/safe-url';
+import { storageGet, storageSet } from '../../utils/storage';
 
 export interface InteractivePlayerContext {
     hostEl: HTMLElement;
@@ -118,7 +119,7 @@ export class Interactive {
     private remembered(entry: Entry): boolean {
         if (this.options.rememberAnswers === false || (entry.item.type !== 'poll' && entry.item.type !== 'quiz')) return false;
         try {
-            return localStorage.getItem(STORE + entry.id) !== null;
+            return storageGet(STORE + entry.id) !== null;
         } catch {
             return false;
         }
@@ -127,7 +128,7 @@ export class Interactive {
     private remember(entry: Entry, choice: number): void {
         if (this.options.rememberAnswers === false) return;
         try {
-            localStorage.setItem(STORE + entry.id, String(choice));
+            storageSet(STORE + entry.id, String(choice));
         } catch {
             /* depolama kapalı */
         }

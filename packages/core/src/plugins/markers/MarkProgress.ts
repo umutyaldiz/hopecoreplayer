@@ -2,6 +2,7 @@ import { createIcon } from '../../icons/Icon';
 import type { MarkerItem, MarkerPingOptions, MarkerPopupOptions, MarkersOptions } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { isSafeUrl } from '../../utils/safe-url';
+import { getPrivacy } from '../../utils/privacy';
 
 export interface MarkersPlayerContext {
     videoEl: HTMLVideoElement;
@@ -202,7 +203,7 @@ export class MarkProgress {
     private firePing(m: NormalizedMarker): void {
         const baseUrl = m.pingUrl || this.pingGlobal.url;
         const url = this.resolveUrlTemplate(baseUrl, m);
-        if (!this.pingGlobal.enabled || !url) return;
+        if (!this.pingGlobal.enabled || !url || !getPrivacy().analytics) return;
 
         try {
             if (this.pingGlobal.method === 'POST') {

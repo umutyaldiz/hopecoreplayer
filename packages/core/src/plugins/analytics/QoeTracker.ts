@@ -1,5 +1,6 @@
 // İzleyici deneyimi (QoE) ölçümleri ve izlenme olayları: hp:analytics, onEvent, GA4, toplu gönderim.
 import type { HopeAnalyticsEvent, HopeAnalyticsEventType, HopeAnalyticsOptions, HopeAnalyticsPayload, HopeQoeMetrics } from '../../types';
+import { getPrivacy } from '../../utils/privacy';
 
 export interface AnalyticsPlayerContext {
     hostEl: HTMLElement;
@@ -360,7 +361,8 @@ export class QoeTracker {
     private flush(reason: string): void {
         if (!this.queue.length) return;
         const events = this.queue.splice(0);
-        if (!this.options.endpoint) return;
+        // Gizlilik: analitik onayı yoksa sunucuya hiçbir şey gitmez (hp:analytics olayları sayfada kalır).
+        if (!this.options.endpoint || !getPrivacy().analytics) return;
         const v = this.ctx.videoEl;
         let payload: HopeAnalyticsPayload | false = {
             v: 1,
@@ -391,7 +393,7 @@ export class QoeTracker {
 
     private ga4(name: string, params: Record<string, unknown>): void {
         const mode = this.options.ga4;
-        if (!mode) return;
+        if (!mode || !getPrivacy().analytics) return;
         const w = window as unknown as { gtag?: Gtag; dataLayer?: unknown[] };
         const v = this.ctx.videoEl;
         const data = {
