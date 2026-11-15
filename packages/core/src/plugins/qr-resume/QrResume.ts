@@ -2,6 +2,7 @@ import type { QrResumeOptions } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { buildQrSvg } from './qrSvg';
 import { seekWhenReady } from '../shared/seekWhenReady';
+import { storageGet, storageSet } from '../../utils/storage';
 
 export interface QrResumePlayerContext {
     videoEl: HTMLVideoElement;
@@ -71,7 +72,7 @@ export class QrResume {
     private isDismissedForever(): boolean {
         if (this.options.rememberDismiss === false) return false;
         try {
-            return window.localStorage.getItem(STORAGE_KEY) === '1';
+            return storageGet(STORAGE_KEY) === '1';
         } catch {
             return false;
         }
@@ -79,7 +80,7 @@ export class QrResume {
 
     private setDismissedForever(value: boolean): void {
         try {
-            window.localStorage.setItem(STORAGE_KEY, value ? '1' : '0');
+            storageSet(STORAGE_KEY, value ? '1' : '0');
         } catch {
             /* gizli mod vb. — sessizce yoksay */
         }

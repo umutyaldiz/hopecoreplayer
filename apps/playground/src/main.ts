@@ -208,6 +208,13 @@ if (player) {
                 layout: new URLSearchParams(location.search).get('layout') === 'compact' ? 'compact' : 'full',
             },
         };
+    } else if (feature === 'podcast') {
+        // 1.8 podcast araçları: uyku zamanlayıcısı, sessiz kısımları hızlı geç, dalga formu (dosyadan hesaplanır).
+        player.options = {
+            src: '/sample-audio.mp3',
+            audio: { cover: '/sample-cover.jpg', title: 'Vinyl Sessions', artist: 'HopeCore', layout: 'compact' },
+            podcast: { sleepTimer: true, skipSilence: true, waveform: true },
+        };
     } else if (feature === 'story') {
         player.options = {
             muted: true,
@@ -251,6 +258,23 @@ if (player) {
                           })),
                       }
                     : undefined,
+            // 1.8: ?feature=paywall | watermark | clips | reactions | course | sign-language
+            paywall: feature === 'paywall' ? { previewSeconds: 5, subscribe: { url: '#subscribe' }, login: { url: '#login' } } : undefined,
+            watermark: feature === 'watermark' ? { text: 'demo@hopecoreplayer.dev · #4821', moveEvery: 3 } : undefined,
+            clips: feature === 'clips' ? true : undefined,
+            reactions:
+                feature === 'reactions'
+                    ? {
+                          input: true,
+                          comments: [
+                              { time: 1, text: 'Harika açılış!', author: 'Ayşe' },
+                              { time: 2, text: 'Boğaz manzarası 😍' },
+                              { time: 4, text: 'Bu çay bardağını istiyorum', author: 'Mert' },
+                          ],
+                      }
+                    : undefined,
+            course: feature === 'course' ? { id: 'playground-lesson', milestones: [25, 50, 75, 100] } : undefined,
+            signLanguage: feature === 'sign-language' ? { src: '/sign-demo.mp4', default: true } : undefined,
             // ?feature=share — paylaşım paneli (tüm ağlar).
             share: feature === 'share' ? { networks: ['x', 'whatsapp', 'facebook', 'linkedin', 'telegram', 'reddit', 'email'] } : undefined,
             // ?feature=ad-hls (yayının betimleme izi) | ad-file (ayrı anlatım dosyası).

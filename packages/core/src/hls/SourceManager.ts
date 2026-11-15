@@ -12,6 +12,7 @@ function newId(): string {
 import type { DashEngine } from './dashEngine';
 import type { NativeEme } from '../drm/NativeEme';
 import { hasFatalMediaError } from '../utils/media-error';
+import { getPrivacy } from '../utils/privacy';
 
 
 /**
@@ -276,7 +277,7 @@ export class SourceManager {
         const { DashEngine } = await import('./dashEngine');
         if (this.last?.src !== src) return;
         this.engineInfo = { engine: 'dash.js' };
-        this.dash = new DashEngine(this.video, src, { dash: this.dashOptions, drm: this.drm, autoplay: this.video.autoplay, fitPlayer: !!this.qualityLimit?.fitPlayer, cmcd: this.cmcd ? { ...this.cmcd, sessionId: this.sid } : null }, {
+        this.dash = new DashEngine(this.video, src, { dash: this.dashOptions, drm: this.drm, autoplay: this.video.autoplay, fitPlayer: !!this.qualityLimit?.fitPlayer, cmcd: this.cmcd && getPrivacy().analytics ? { ...this.cmcd, sessionId: this.sid } : null }, {
             onLevels: (levels, active) => this.callbacks.onLevelsChanged(levels, active),
             onAudioTracks: (tracks, active) => this.callbacks.onAudioTracksChanged(tracks, active),
             onFatal: (kind) => this.callbacks.onFatalError(kind),
@@ -468,7 +469,7 @@ export class SourceManager {
         // liveDurationInfinity: hls.js canlıda varsayılan olarak SONLU bir duration verir (kayan pencere sonu) — player
         // canlıyı duration === Infinity ile tanıdığı için canlı rozeti/duvar saati açılmıyor, süre "0:35 / 0:54" görünüyordu.
         const config: Partial<HlsConfig> = { enableWorker: true, renderTextTracksNatively: false, liveDurationInfinity: true, ...(this.qualityLimit?.fitPlayer ? { capLevelToPlayerSize: true } : {}),
-            ...(this.cmcd ? { cmcd: { sessionId: this.sid, contentId: this.cmcd.contentId, useHeaders: this.cmcd.mode === 'header' } } : {}),
+            ...(this.cmcd && getPrivacy().analytics ? { cmcd: { sessionId: this.sid, contentId: this.cmcd.contentId, useHeaders: this.cmcd.mode === 'header' } } : {}),
             ...user,
             ...drmConfig,
         };

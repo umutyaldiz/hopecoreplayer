@@ -4,6 +4,7 @@ import { createIcon } from '../../icons/Icon';
 import { formatTime } from '../../utils/format-time';
 import { adoptStyle } from '../../utils/plugin-style';
 import css from './share.css?inline';
+import { NETWORK_NAMES, networkUrl } from '../shared/shareNetworks';
 
 export interface SharePlayerContext {
     hostEl: HTMLElement;
@@ -15,38 +16,6 @@ export interface SharePlayerContext {
 }
 
 const DEFAULT_NETWORKS: ShareNetwork[] = ['x', 'whatsapp', 'facebook', 'linkedin', 'telegram', 'email'];
-
-const NETWORK_NAMES: Record<ShareNetwork, string> = {
-    x: 'X',
-    whatsapp: 'WhatsApp',
-    facebook: 'Facebook',
-    linkedin: 'LinkedIn',
-    telegram: 'Telegram',
-    reddit: 'Reddit',
-    email: 'Email',
-};
-
-/** Ağın paylaşım adresi. */
-function networkUrl(network: ShareNetwork, url: string, title: string): string {
-    const u = encodeURIComponent(url);
-    const t = encodeURIComponent(title);
-    switch (network) {
-        case 'x':
-            return `https://x.com/intent/post?url=${u}&text=${t}`;
-        case 'whatsapp':
-            return `https://wa.me/?text=${encodeURIComponent(title ? `${title} ${url}` : url)}`;
-        case 'facebook':
-            return `https://www.facebook.com/sharer/sharer.php?u=${u}`;
-        case 'linkedin':
-            return `https://www.linkedin.com/sharing/share-offsite/?url=${u}`;
-        case 'telegram':
-            return `https://t.me/share/url?url=${u}&text=${t}`;
-        case 'reddit':
-            return `https://www.reddit.com/submit?url=${u}&title=${t}`;
-        case 'email':
-            return `mailto:?subject=${t}&body=${u}`;
-    }
-}
 
 /** "90", "1:30", "1:02:03", "1m30s", "1h2m3s" → saniye; geçersizse null. */
 export function parseTimeParam(raw: string | null): number | null {

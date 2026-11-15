@@ -2,6 +2,7 @@ import type { SettingsSubmenuDef } from '../../controls/SettingsMenu';
 import type { StreamAudioTrack } from '../../hls/SourceManager';
 import type { AudioDescriptionOptions } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
+import { storageGet, storageSet } from '../../utils/storage';
 
 export interface AudioDescriptionContext {
     hostEl: HTMLElement;
@@ -38,7 +39,7 @@ export class AudioDescription {
     ) {
         let saved: string | null = null;
         try {
-            saved = localStorage.getItem(STORE);
+            saved = storageGet(STORE);
         } catch {
             /* depolama kapalı */
         }
@@ -69,7 +70,7 @@ export class AudioDescription {
         if (on === this.enabled) return;
         this.enabled = on;
         try {
-            localStorage.setItem(STORE, on ? '1' : '0');
+            storageSet(STORE, on ? '1' : '0');
         } catch {
             /* depolama kapalı */
         }
@@ -91,7 +92,7 @@ export class AudioDescription {
         if (this.enabled && !byUs && (was?.description || wanted?.description) && now && !now.description) {
             this.enabled = false;
             try {
-                localStorage.setItem(STORE, '0');
+                storageSet(STORE, '0');
             } catch {
                 /* depolama kapalı */
             }

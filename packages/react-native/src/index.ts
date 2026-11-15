@@ -1,4 +1,4 @@
 export { HopePlayer } from './HopePlayer';
 export type { HopePlayerProps, HopePlayerHandle, HopePlayerTimeUpdate } from './HopePlayer';
-export { buildPlayerHtml, commandScript, DEFAULT_CORE_URL, HOPE_PLAYER_RN_VERSION } from './playerHtml';
-export type { PlayerHtmlConfig, HopeBridgeCommand, HopeBridgeMessage, HopeNativePlugin, HopeNativeOptions } from './playerHtml';
+export { buildPlayerHtml, commandScript, DEFAULT_CORE_URL, HOPE_PLAYER_RN_VERSION, NATIVE_METHODS } from './playerHtml';
+export type { PlayerHtmlConfig, HopeBridgeCommand, HopeBridgeMessage, HopeNativePlugin, HopeNativeOptions, HopeNativeMethod } from './playerHtml';

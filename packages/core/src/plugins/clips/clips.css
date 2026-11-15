@@ -1,0 +1,207 @@
+/* ── Klip (options.clips) ── */
+.hp-clip {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    z-index: 26;
+    display: grid;
+    gap: 10px;
+    width: min(380px, calc(100% - 24px));
+    max-height: calc(100% - 96px);
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 14px;
+    border: 1px solid var(--hp-panel-border);
+    border-radius: 12px;
+    background: var(--hp-panel-bg);
+    backdrop-filter: blur(var(--hp-panel-blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--hp-panel-blur)) saturate(160%);
+    color: var(--hp-panel-text);
+    box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
+    font: 13px/1.4 system-ui, -apple-system, sans-serif;
+    transform: translateX(-50%);
+    animation: hp-redirect-fade 0.2s ease-out;
+}
+.hp-clip-head,
+.hp-clip-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.hp-clip-title {
+    font-weight: 600;
+    font-size: 15px;
+}
+.hp-clip-icon {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+.hp-clip-icon:hover,
+.hp-clip-net:hover {
+    background: color-mix(in srgb, var(--hp-panel-text) 14%, transparent);
+}
+.hp-clip-times {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.hp-clip-time {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    border: 1px solid var(--hp-panel-border);
+    border-radius: 8px;
+}
+.hp-clip-time small {
+    flex-basis: 100%;
+    opacity: 0.7;
+    font-size: 11px;
+}
+.hp-clip-value {
+    flex: 1;
+    text-align: center;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.hp-clip-time .hp-clip-net {
+    width: 24px;
+    padding: 2px 0;
+}
+.hp-clip-meta span {
+    opacity: 0.8;
+}
+.hp-clip-preview,
+.hp-clip-copy {
+    padding: 6px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--hp-color-accent);
+    color: var(--hp-color-on-accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+.hp-clip-link {
+    display: flex;
+    gap: 6px;
+}
+.hp-clip-link input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    border: 1px solid var(--hp-panel-border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--hp-panel-text) 8%, transparent);
+    color: inherit;
+    font: inherit;
+}
+.hp-clip-networks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.hp-clip-net {
+    padding: 5px 10px;
+    border: 1px solid var(--hp-panel-border);
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+/* Seek bar üzerindeki aralık */
+.hp-clip-range {
+    position: absolute;
+    top: 50%;
+    z-index: 2;
+    height: calc(var(--hp-seek-track-h) + 6px);
+    box-sizing: border-box;
+    border: 2px solid var(--hp-color-accent);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--hp-color-accent) 30%, transparent);
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+.hp-clip-range[data-static] {
+    height: calc(var(--hp-seek-track-h) + 2px);
+    border-width: 1px;
+}
+.hp-clip-handle {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 22px;
+    border-radius: 4px;
+    background: var(--hp-color-accent);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    transform: translate(-50%, -50%);
+    cursor: ew-resize;
+    pointer-events: auto;
+    touch-action: none;
+}
+.hp-clip-handle[data-edge='start'] {
+    left: 0;
+}
+.hp-clip-handle[data-edge='end'] {
+    left: 100%;
+}
+.hp-clip-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 23;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 4px 4px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.62);
+    color: #fff;
+    font: 600 12px/1.4 system-ui, -apple-system, sans-serif;
+}
+.hp-clip-badge button {
+    padding: 3px 10px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.18);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+/* Dar player: kopyala satırı kaydırmadan görünsün. */
+.video-area[data-compact] .hp-clip {
+    top: 6px;
+    gap: 6px;
+    padding: 8px 10px;
+    max-height: calc(100% - 64px);
+}
+.video-area[data-compact] .hp-clip-title {
+    font-size: 13px;
+}
+.video-area[data-compact] .hp-clip-time {
+    padding: 2px 6px;
+}
+.video-area[data-compact] .hp-clip-time small,
+.video-area[data-compact] .hp-clip-networks {
+    display: none;
+}
+.video-area[data-compact] .hp-clip-preview,
+.video-area[data-compact] .hp-clip-copy {
+    padding: 4px 10px;
+}
+.video-area[data-compact] .hp-clip-link input {
+    padding: 4px 8px;
+}

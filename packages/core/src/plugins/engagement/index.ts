@@ -1,0 +1,206 @@
+import type { HopePlayerOptions } from '../../types';
+import type { HopeLocaleStrings } from '../../i18n/types';
+import type { ControlBar } from '../../controls/ControlBar';
+import type { Paywall } from '../paywall';
+import type { Watermark } from '../watermark';
+import type { Clips } from '../clips';
+import type { WatchParty } from '../watch-party';
+import type { Reactions } from '../reactions';
+import type { Course } from '../course';
+import type { Podcast } from '../podcast';
+import type { SignLanguage } from '../sign-language';
+
+export interface EngagementHost {
+    hostEl: HTMLElement;
+    videoEl: HTMLVideoElement;
+    videoArea: HTMLElement;
+    i18n: HopeLocaleStrings;
+    controlBar: ControlBar;
+    isAdPlaying(): boolean;
+    blockChrome(key: string): void;
+    unblockChrome(key: string): void;
+    holdChrome(key: string, hold: boolean): void;
+    log(message: string): void;
+}
+
+/** Fonksiyonları atıp karşılaştırma anahtarı üretir (callback değişince eklenti yeniden kurulmaz). */
+function optionKey(value: unknown): string {
+    return value ? JSON.stringify(value, (_k, v: unknown) => (typeof v === 'function' ? undefined : v)) : '';
+}
+
+
+/**
+ * 1.8 eklentileri (ödeme duvarı, filigran, klip, birlikte izle, tepkiler, eğitim modu, podcast, işaret dili): seçenek
+ * değişince ilgili eklenti yeniden kurulur. Ana pakete girmesin diye ayrı parça.
+ */
+export class EngagementController {
+    paywall: Paywall | null = null;
+    watermark: Watermark | null = null;
+    clips: Clips | null = null;
+    watchParty: WatchParty | null = null;
+    reactions: Reactions | null = null;
+    course: Course | null = null;
+    podcast: Podcast | null = null;
+    signLanguage: SignLanguage | null = null;
+    private keys: Record<string, string> = {};
+
+    constructor(private readonly h: EngagementHost) {}
+
+    private changed(name: string, key: string): boolean {
+        if (this.keys[name] === key) return false;
+        this.keys[name] = key;
+        return true;
+    }
+
+    async apply(options: HopePlayerOptions): Promise<void> {
+        const h = this.h;
+        const base = { hostEl: h.hostEl, videoEl: h.videoEl, overlayEl: h.videoArea, i18n: h.i18n };
+        const isLive = (): boolean => h.videoEl.duration === Infinity;
+        const isAdActive = (): boolean => h.isAdPlaying();
+        const addButton = (label: string, icon: string, onClick: () => void) => h.controlBar.addButton(label, icon, onClick);
+        const menu = h.controlBar.settingsMenu;
+        const registerToggle = (row: { key: string; label: string; getValueLabel(): string; onToggle(): void }): void => menu.registerToggle(row.key, row);
+        const unregisterToggle = (k: string): void => menu.unregisterToggle(k);
+        const seekBar = h.controlBar.seekBar;
+
+        // Ödeme duvarı — callback'ler (onClick, checkAccess) anahtara girmez, setOptions ile güncellenir.
+        const pw = options.paywall && options.paywall.previewSeconds > 0 ? options.paywall : null;
+        const pwKey = optionKey(pw);
+        if (this.changed('paywall', pwKey)) {
+            this.paywall?.destroy();
+            this.paywall = null;
+            if (pw) {
+                const { installPaywall } = await import('../paywall');
+                if (this.keys.paywall === pwKey)
+                    this.paywall = installPaywall({ ...base, isLive, isAdActive, blockChrome: () => h.blockChrome('paywall'), unblockChrome: () => h.unblockChrome('paywall') }, pw);
+            }
+        } else if (pw) this.paywall?.setOptions(pw);
+
+        const wm = options.watermark?.text ? options.watermark : null;
+        const wmKey = optionKey(wm);
+        if (this.changed('watermark', wmKey)) {
+            this.watermark?.destroy();
+            this.watermark = null;
+            if (wm) {
+                const { installWatermark } = await import('../watermark');
+                if (this.keys.watermark === wmKey) this.watermark = installWatermark({ videoEl: h.videoEl, overlayEl: h.videoArea, isAdActive }, wm);
+            }
+        }
+
+        const cl = options.clips ? (options.clips === true ? {} : options.clips) : null;
+        const clKey = optionKey(cl);
+        if (this.changed('clips', clKey)) {
+            this.clips?.destroy();
+            this.clips = null;
+            if (cl) {
+                const { installClips } = await import('../clips');
+                if (this.keys.clips === clKey)
+                    this.clips = installClips(
+                        { ...base, seekBarEl: seekBar.el, ratioAtClientX: (x) => seekBar.ratioAtClientX(x), addButton, isLive, holdChrome: (hold) => h.holdChrome('clips', hold) },
+                        cl
+                    );
+            }
+        }
+
+        const wp = options.watchParty ?? null;
+        const wpKey = wp ? optionKey(wp) || '{}' : '';
+        if (this.changed('watchParty', wpKey)) {
+            this.watchParty?.destroy();
+            this.watchParty = null;
+            if (wp) {
+                const { installWatchParty } = await import('../watch-party');
+                if (this.keys.watchParty === wpKey) this.watchParty = installWatchParty({ ...base, isAdActive }, wp);
+            }
+        } else if (wp) this.watchParty?.setOptions(wp);
+
+        const re = options.reactions ? (options.reactions === true ? {} : options.reactions) : null;
+        const reKey = optionKey(re);
+        if (this.changed('reactions', reKey)) {
+            this.reactions?.destroy();
+            this.reactions = null;
+            if (re) {
+                const { installReactions } = await import('../reactions');
+                if (this.keys.reactions === reKey)
+                    this.reactions = installReactions({ ...base, addButton, registerToggle, unregisterToggle, isAdActive, holdChrome: (hold) => h.holdChrome('reactions', hold) }, re);
+            }
+        }
+
+        const co = options.course?.id ? options.course : null;
+        const coKey = optionKey(co);
+        if (this.changed('course', coKey)) {
+            this.course?.destroy();
+            this.course = null;
+            if (co) {
+                const { installCourse } = await import('../course');
+                if (this.keys.course === coKey)
+                    this.course = installCourse(
+                        {
+                            ...base,
+                            seekBarEl: seekBar.el,
+                            addSeekBarMarker: (ratio, cls, label) => seekBar.addMarker(ratio, cls, label),
+                            addButton,
+                            isAdActive,
+                            isLive,
+                            holdChrome: (hold) => h.holdChrome('course', hold),
+                        },
+                        co
+                    );
+            }
+        }
+
+        const pc = options.podcast ? (options.podcast === true ? {} : options.podcast) : null;
+        const pcKey = optionKey(pc);
+        if (this.changed('podcast', pcKey)) {
+            this.podcast?.destroy();
+            this.podcast = null;
+            if (pc) {
+                const { installPodcast } = await import('../podcast');
+                if (this.keys.podcast === pcKey)
+                    this.podcast = installPodcast(
+                        {
+                            ...base,
+                            seekBarEl: seekBar.el,
+                            registerSubmenu: (def) => menu.registerSubmenu(def),
+                            unregisterSubmenu: (k) => menu.unregisterSubmenu(k),
+                            registerToggle,
+                            unregisterToggle,
+                            log: (message) => h.log(message),
+                        },
+                        pc
+                    );
+            }
+        }
+
+        const sl = options.signLanguage?.src ? options.signLanguage : null;
+        const slKey = optionKey(sl);
+        if (this.changed('signLanguage', slKey)) {
+            this.signLanguage?.destroy();
+            this.signLanguage = null;
+            if (sl) {
+                const { installSignLanguage } = await import('../sign-language');
+                if (this.keys.signLanguage === slKey) this.signLanguage = installSignLanguage({ ...base, addButton, registerToggle, unregisterToggle, isAdActive }, sl);
+            }
+        }
+    }
+
+    /** Reklam başladı / bitti: filigran gizlenir / döner, bekleyen "birlikte izle" durumu uygulanır. */
+    onAdPhase(): void {
+        this.watermark?.refresh();
+        if (!this.h.isAdPlaying()) this.watchParty?.flush();
+    }
+
+    refreshLabels(): void {
+        this.paywall?.refreshLabels();
+        this.clips?.refreshLabels();
+        this.reactions?.refreshLabels();
+        this.course?.refreshLabels();
+        this.podcast?.refreshLabels();
+        this.signLanguage?.refreshLabels();
+    }
+
+    destroy(): void {
+        for (const p of [this.paywall, this.watermark, this.clips, this.watchParty, this.reactions, this.course, this.podcast, this.signLanguage]) p?.destroy();
+        this.paywall = this.watermark = this.clips = this.watchParty = this.reactions = this.course = this.podcast = this.signLanguage = null;
+        this.keys = {};
+    }
+}

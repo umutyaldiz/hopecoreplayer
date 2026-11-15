@@ -1,5 +1,6 @@
 import { loadDaiSdk } from './loadDaiSdk';
 import type { DaiOptions } from '../../types';
+import { getPrivacy } from '../../utils/privacy';
 
 export interface DaiPlayerContext {
     videoEl: HTMLVideoElement;
@@ -48,7 +49,10 @@ export class DaiController {
         const request = new dai.api.LiveStreamRequest();
         request.assetKey = this.options.assetKey;
         if (this.options.apiKey) request.apiKey = this.options.apiKey;
-        if (this.options.adTagParameters) request.adTagParameters = this.options.adTagParameters;
+        const privacy = getPrivacy();
+        // Gizlilik: kişiselleştirme onayı yoksa npa=1, depolama izni de yoksa ltd=1.
+        const params = { ...this.options.adTagParameters, ...(privacy.personalizedAds ? {} : { npa: '1', ...(privacy.functional ? {} : { ltd: '1' }) }) };
+        if (Object.keys(params).length) request.adTagParameters = params;
 
         this.attachMetadataForwarding();
         this.streamManager.requestStream(request);

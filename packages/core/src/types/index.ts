@@ -863,6 +863,236 @@ export interface AudioDescriptionOptions {
     volume?: number;
 }
 
+/** Ödeme duvarı butonu (abone ol / giriş yap). */
+export interface PaywallAction {
+    /** Buton metni. Varsayılan dil dosyasındaki metin. */
+    label?: string;
+    /** Açılacak adres (http(s) ya da göreli). Verilmezse yalnızca `hp:paywall` olayı gelir. */
+    url?: string;
+    /**
+     * Sitenizin kendi abonelik / giriş akışı (ör. modal pencere). Verilirse adres açılmaz. `true` döndürür ya da `true`
+     * ile çözülürse (abone oldu / giriş yaptı) kilit açılır ve video kaldığı yerden sürer.
+     */
+    onClick?: () => boolean | void | Promise<boolean | void>;
+}
+
+export interface PaywallOptions {
+    /** Ücretsiz önizleme süresi (sn). VOD'da videonun o saniyesi, canlıda izlenen süre. */
+    previewSeconds: number;
+    /** Önizleme bitince çıkan ekranın başlığı ve metni. */
+    title?: string;
+    text?: string;
+    /** Ana buton ("Abone ol"). */
+    subscribe?: PaywallAction;
+    /** İkinci buton ("Giriş yap"); `false` gizler. */
+    login?: PaywallAction | false;
+    /** Ekranın arka plan görseli (verilmezse video karesi bulanık görünür). */
+    image?: string;
+    /** Önizleme sırasında köşede kalan süre rozeti. Varsayılan true. */
+    badge?: boolean;
+    /** true → kilit açık (abone / giriş yapmış): duvar hiç devreye girmez. */
+    unlocked?: boolean;
+    /**
+     * Önizleme bitince sitenizin üyelik sistemine sorulur (oturum, token…): `true` → erişim var, duvar çıkmaz ve kilit
+     * açılır. Yanıt gelene kadar video durur.
+     */
+    checkAccess?: () => boolean | Promise<boolean>;
+}
+
+export interface WatermarkOptions {
+    /** Gösterilecek metin — ör. kullanıcının e-postası, kimliği ya da oturum kodu. */
+    text: string;
+    /** Opaklık (0–1). Varsayılan 0.3. */
+    opacity?: number;
+    /** Kaç saniyede bir yer değiştirsin. Varsayılan 15; 0 → sabit (`position`). */
+    moveEvery?: number;
+    /** Sabit konum (`moveEvery: 0` iken). Varsayılan 'bottom-right'. */
+    position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center';
+    /** Yazı boyutu (px). Varsayılan 14. */
+    fontSize?: number;
+    /** Yazı rengi. Varsayılan beyaz. */
+    color?: string;
+}
+
+export interface ClipOptions {
+    /** En kısa / en uzun klip (sn). Varsayılan 3 / 60. */
+    minDuration?: number;
+    maxDuration?: number;
+    /** Klip açılınca seçilen uzunluk (sn). Varsayılan 15. */
+    defaultDuration?: number;
+    /** Paylaşılacak adres. Varsayılan: canonical, yoksa sayfa adresi. */
+    url?: string;
+    /** Paylaşım metni. Varsayılan sayfa başlığı. */
+    title?: string;
+    /** Paneldeki ağlar. Varsayılan ['x', 'whatsapp', 'telegram', 'email']; [] → yalnızca kopyala. */
+    networks?: ShareNetwork[];
+    /** Adres parametresi (`?clip=80-105`). Varsayılan 'clip'. */
+    param?: string;
+    /** Sayfa `?clip=` ile açılınca klibi oynat. Varsayılan true. */
+    readParam?: boolean;
+    /** Klip sonunda başa dön. Varsayılan true. */
+    loop?: boolean;
+    /** Kontrol çubuğu butonu. Varsayılan true (`player.openClip()` ile de açılır). */
+    button?: boolean;
+}
+
+/** Birlikte izle mesajı — player'lar arasında sizin kanalınızla (WebSocket, Firebase…) taşınır. */
+export interface WatchPartyMessage {
+    type: 'play' | 'pause' | 'seek' | 'rate' | 'sync';
+    /** Mesaj anındaki video saniyesi. */
+    time: number;
+    paused: boolean;
+    rate: number;
+    /** Gönderildiği an (Date.now()) — gecikme telafisi için. */
+    at: number;
+    /** Gönderen (`name`). */
+    from?: string;
+}
+
+export interface WatchPartyOptions {
+    /** Bu izleyicinin adı (diğerlerinin bildirimlerinde görünür). */
+    name?: string;
+    /** Yerel değişiklik olunca çağrılır — mesajı kanalınıza gönderin. `hp:watchparty` (`send`) olayı da gelir. */
+    send?: (message: WatchPartyMessage) => void;
+    /** Bu kadar saniyeden fazla fark varsa hizala. Varsayılan 1. */
+    tolerance?: number;
+    /** Oynarken kaç saniyede bir `sync` gönderilsin. Varsayılan 5; 0 → yalnızca değişikliklerde. */
+    heartbeat?: number;
+    /** "Ali durdurdu" gibi bildirimler. Varsayılan true. */
+    notify?: boolean;
+}
+
+/** Zamanlı yorum (VOD: o saniyede ekrandan akar). */
+export interface TimedComment {
+    time: number;
+    text: string;
+    author?: string;
+}
+
+export interface ReactionsOptions {
+    /** Tepki tepsisindeki emojiler. Varsayılan ['👍', '❤️', '😂', '😮', '👏', '🔥']. */
+    emojis?: string[];
+    /** Videoya bağlı yorumlar — o saniyede ekranın üstünden akar. */
+    comments?: TimedComment[];
+    /** Tepsiye yorum yazma kutusu. Varsayılan false. */
+    input?: boolean;
+    /** Ekranda aynı anda en fazla yorum. Varsayılan 6. */
+    maxComments?: number;
+    /** Yorumlar başlangıçta açık (ayarlar menüsünden kapatılabilir). Varsayılan true. */
+    showComments?: boolean;
+    /** Kontrol çubuğu butonu. Varsayılan true. */
+    button?: boolean;
+}
+
+/** Eğitim modunda zamana bağlı not. */
+export interface CourseNote {
+    id: string;
+    time: number;
+    text: string;
+}
+
+export interface CourseProgress {
+    /** İzlenen benzersiz süre (sn) ve süreye oranı (0–100). */
+    watched: number;
+    percent: number;
+    completed: boolean;
+    /** İzlenen aralıklar [başlangıç, bitiş]. */
+    ranges: Array<[number, number]>;
+    notes: CourseNote[];
+}
+
+export interface CourseOptions {
+    /** Ders kimliği — ilerleme ve notlar bu anahtarla bu tarayıcıda saklanır. */
+    id: string;
+    /** İzlenmemiş kısma ileri sarmayı engelle. Varsayılan true. */
+    preventSkip?: boolean;
+    /** Tamamlandı sayılma oranı (0–1). Varsayılan 0.9. */
+    completeAt?: number;
+    /** `hp:course` `progress` olayının geldiği yüzdeler. Varsayılan [25, 50, 75, 100]. */
+    milestones?: number[];
+    /** Seek bar'da izlenen kısımlar. Varsayılan true. */
+    showWatched?: boolean;
+    /** Not paneli (zamana bağlı notlar ve yer imleri). Varsayılan true. */
+    notes?: boolean;
+    /** En yüksek oynatma hızı (ör. 1.5). Varsayılan sınırsız. */
+    maxRate?: number;
+    /** Önceden kaydedilmiş ilerleme (ör. sunucunuzdan) — yereldekiyle birleştirilir. */
+    initial?: Partial<Pick<CourseProgress, 'ranges' | 'notes'>>;
+}
+
+export interface PodcastOptions {
+    /** Uyku zamanlayıcısı (ayarlar menüsü). Varsayılan true; dakika listesi verilebilir (varsayılan [5, 15, 30, 45, 60]). */
+    sleepTimer?: boolean | { minutes?: number[] };
+    /**
+     * Sessiz kısımları hızlı geç (ayarlar menüsünde açılır). Sesi Web Audio ile dinler — kaynak başka alan adındaysa CORS
+     * gerekir. `threshold`: sessizlik eşiği (dB, varsayılan -45), `minDuration`: en kısa sessizlik (sn, 0.5),
+     * `rate`: sessizlikte hız (varsayılan 3).
+     */
+    skipSilence?: boolean | { threshold?: number; minDuration?: number; rate?: number; default?: boolean };
+    /**
+     * Seek bar yerine dalga formu. `data`: hazır tepe değerleri; `src`: o değerlerin JSON adresi; `true` → ses dosyası
+     * indirilip hesaplanır (CORS gerekir, büyük dosyalarda önerilmez). `bars`: çubuk sayısı (varsayılan 120).
+     */
+    waveform?: boolean | { data?: number[]; src?: string; bars?: number };
+}
+
+/** Gizlilik onayı kategorileri — bkz. `privacy`. */
+export interface PrivacyConsent {
+    /** Reklam gösterilsin mi; false → hiç reklam isteği yapılmaz (IMA, Prebid, DAI, duraklatma reklamı, tetikleyiciler). */
+    ads?: boolean;
+    /** Kişiselleştirilmiş (hedefli) reklam; false → GAM etiketlerine npa=1, GPT nonPersonalizedAds, Prebid açık artırması yok. */
+    personalizedAds?: boolean;
+    /** Ölçüm: QoE / GA4 analitiği, izleme pikselleri (sponsorluk, reklam tetikleyici, işaretler), CMCD oturum kimliği. */
+    analytics?: boolean;
+    /** İşlevsel: tercihlerin / ilerlemenin cihazda saklanması (localStorage), konum API'si, Cast SDK. */
+    functional?: boolean;
+}
+
+/** OneTrust kategori kimlikleri (Cookie Consent'te "Category ID"); bir kategoriye birden fazla grup verilebilir. */
+export interface PrivacyGroupMap {
+    personalizedAds?: string | string[];
+    analytics?: string | string[];
+    functional?: string | string[];
+    ads?: string | string[];
+}
+
+export interface PrivacyOptions extends PrivacyConsent {
+    /**
+     * Onay kaynağı: 'onetrust' (OnetrustActiveGroups), 'cookiebot' (Cookiebot.consent), 'tcf' (IAB TCF v2 — __tcfapi;
+     * Didomi, Quantcast, Usercentrics, OneTrust TCF modu…). Verilmezse yalnızca bu seçenekteki değerler ve
+     * `getConsent` / `player.setPrivacy()` kullanılır.
+     */
+    source?: 'onetrust' | 'cookiebot' | 'tcf';
+    /** OneTrust grup eşlemesi. Varsayılan: analytics C0002, functional C0003, personalizedAds C0004. */
+    groups?: PrivacyGroupMap;
+    /** Kendi onay sisteminiz: başlangıçta çağrılır, sonucu uygulanır (değişince `player.setPrivacy()`). */
+    getConsent?: () => PrivacyConsent | Promise<PrivacyConsent>;
+    /**
+     * Onay yanıtı gelene kadar varsayılan: 'deny' (varsayılan — kişiselleştirme, analitik ve kayıt kapalı; reklam
+     * kişiselleştirilmeden gösterilebilir) ya da 'grant'.
+     */
+    default?: 'deny' | 'grant';
+    /** Reklam isteği ilk onay yanıtını en fazla bu kadar bekler (ms). Varsayılan 2000. */
+    waitMs?: number;
+}
+
+export interface SignLanguageOptions {
+    /** İşaret dili videosu (MP4 / WebM; Safari'de HLS de). Ana videoyla eş zamanlı, sessiz oynar. */
+    src: string;
+    /** Ayarlar menüsündeki ad. Varsayılan dil dosyasındaki metin. */
+    label?: string;
+    /** Köşe. Varsayılan 'bottom-right' (izleyici sürükleyip başka köşeye bırakabilir). */
+    position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+    /** Genişlik (player genişliğine oran, 0.15–0.5). Varsayılan 0.28. */
+    size?: number;
+    /** Başlangıçta açık (izleyicinin kayıtlı tercihi yoksa). Varsayılan false. */
+    default?: boolean;
+    /** İşaret dili videosu ana videoya göre kaç saniye kaydırılsın. Varsayılan 0. */
+    offset?: number;
+    /** Kontrol çubuğu butonu. Varsayılan true. */
+    button?: boolean;
+}
+
 export interface MultiviewSource {
     /** Kamera kimliği (olaylarda ve `switchCamera()`'da). */
     id: string;
@@ -1370,6 +1600,28 @@ export interface HopePlayerOptions {
      * kullanır; `{ src }` ayrı bir anlatım dosyasını videoyla eş zamanlı, orijinal sesin üstüne karıştırır.
      */
     audioDescription?: boolean | AudioDescriptionOptions;
+    /** Ödeme duvarı: ilk N saniye ücretsiz, sonra "Abone ol / Giriş yap" ekranı. */
+    paywall?: PaywallOptions;
+    /** Kişiye özel, yer değiştiren filigran (ör. kullanıcı e-postası) — ekran kaydıyla korsanı caydırır. */
+    watermark?: WatermarkOptions;
+    /** Klip oluştur ve paylaş: izleyici bir aralık seçer, bağlantı yalnızca o kısmı oynatır (`?clip=80-105`). */
+    clips?: boolean | ClipOptions;
+    /** Birlikte izle: oynat / durdur / sarma birden fazla player arasında eşitlenir (kanal sizde). */
+    watchParty?: WatchPartyOptions;
+    /** Uçan emoji tepkileri ve videoya bağlı (zamanlı) yorumlar. */
+    reactions?: boolean | ReactionsOptions;
+    /** Eğitim modu: izlenmemiş kısma sarma engeli, gerçek izlenme oranı, zamana bağlı notlar. */
+    course?: CourseOptions;
+    /** Podcast araçları: uyku zamanlayıcısı, sessiz kısımları hızlı geçme, dalga formu. */
+    podcast?: boolean | PodcastOptions;
+    /** İşaret dili videosu: köşede, ana videoyla eş zamanlı oynar. */
+    signLanguage?: SignLanguageOptions;
+    /**
+     * Gizlilik onayı (KVKK / GDPR): reklam kişiselleştirme, analitik ve cihazda saklama onaya göre açılıp kapanır.
+     * OneTrust / Cookiebot / TCF bağlayıcıları ya da kendi sisteminiz (`getConsent`, `player.setPrivacy()`). Sayfa
+     * genelidir — tüm player'lar aynı onayı kullanır.
+     */
+    privacy?: PrivacyOptions;
     /**
      * Kontrol çubuğundaki tam ekran butonu. Varsayılan true; `false` gizler. Yalnızca buton: `F` kısayolu ve
      * `tapGestures`'taki `toggleFullscreen` çalışmaya devam eder.
@@ -1611,4 +1863,26 @@ export type HopePlayerEventMap = {
     /** İzleyici bir erişilebilirlik ayarını değiştirdi (`changed`: hangi alan) — tüm güncel durumla. */
     'hp:accessibility': CustomEvent<AccessibilityState & { changed: keyof AccessibilityState }>;
     'hp:skip': CustomEvent<{ state: 'shown' | 'skip'; type: SkipSegmentType; start: number; end: number; reason?: 'click' | 'auto' }>;
+    /**
+     * Ödeme duvarı: `shown` (önizleme bitti), `click` (`action`: subscribe | login — iptal edilebilir: `preventDefault()`
+     * → adres açılmaz, kendi giriş pencerenizi açın), `unlock` (`unlockPaywall()` ya da `unlocked: true`).
+     */
+    'hp:paywall': CustomEvent<{ state: 'shown' | 'click' | 'unlock'; action?: 'subscribe' | 'login'; time: number }>;
+    /** Klip: `open` (seçici açıldı), `copy` / `share` (iptal edilebilir), `play` (sayfa ?clip= ile açıldı), `exit`. */
+    'hp:clip': CustomEvent<{ state: 'open' | 'copy' | 'share' | 'play' | 'exit'; start: number; end: number; url: string; network?: ShareNetwork | 'native' }>;
+    /** Birlikte izle: `send` (kanalınıza gönderin), `receive` (uzaktan mesaj uygulandı), `drift` (hizalandı, `diff` sn). */
+    'hp:watchparty': CustomEvent<{ state: 'send' | 'receive' | 'drift'; message: WatchPartyMessage; diff?: number }>;
+    /** Tepki ya da yorum: `local` = bu izleyici gönderdi (sunucunuza iletin); yerel yorum iptal edilebilir. */
+    'hp:reaction': CustomEvent<{ type: 'reaction' | 'comment'; emoji?: string; text?: string; author?: string; time: number; local: boolean }>;
+    /**
+     * Eğitim modu: `progress` (`milestone` yüzdesi geçildi), `complete`, `blocked` (izlenmemiş yere sarma engellendi,
+     * `time` hedef), `note` (not eklendi / silindi). Her olayda güncel ilerleme.
+     */
+    'hp:course': CustomEvent<{ state: 'progress' | 'complete' | 'blocked' | 'note'; milestone?: number; time?: number; progress: CourseProgress }>;
+    /** Podcast: uyku zamanlayıcısı kuruldu / bitti, sessizlik atlama açıldı / kapandı (`saved`: kazanılan sn). */
+    'hp:podcast': CustomEvent<{ state: 'sleep' | 'sleepend' | 'silence'; minutes?: number | 'end'; enabled?: boolean; saved?: number }>;
+    /** Gizlilik onayı değişti (`source`: onetrust | cookiebot | tcf | getConsent | api | options | default). */
+    'hp:privacy': CustomEvent<{ consent: Required<PrivacyConsent>; source: string }>;
+    /** İşaret dili videosu açıldı / kapandı ya da başka köşeye taşındı. */
+    'hp:signlanguage': CustomEvent<{ state: 'on' | 'off' | 'move'; position?: SignLanguageOptions['position'] }>;
 };

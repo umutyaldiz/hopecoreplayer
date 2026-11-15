@@ -201,6 +201,9 @@ export interface PlayerApi {
     emit(event: string, detail?: unknown): void;
     onSourceChange(handler: (src: string | null) => void): () => void;
     onLocaleChange(handler: (locale: string) => void): () => void;
+    /** Gizlilik onayı (`privacy`): reklam, kişiselleştirilmiş reklam, analitik, işlevsel. Onaysız ölçüm / kayıt yapmayın. */
+    readonly privacy: Readonly<{ ads: boolean; personalizedAds: boolean; analytics: boolean; functional: boolean }>;
+    onPrivacyChange(handler: (privacy: { ads: boolean; personalizedAds: boolean; analytics: boolean; functional: boolean }) => void): () => void;
     onDestroy(handler: () => void): void;
 
     /** Eklenti kaldırılınca iptal edilen zamanlayıcılar. */

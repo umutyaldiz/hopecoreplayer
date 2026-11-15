@@ -1,3 +1,4 @@
+import { getPrivacy } from '../../utils/privacy';
 /** Önbellek kırıcı makroları (IAB VAST: [CACHEBUSTING], yaygın: [timestamp], %%CACHEBUSTER%%…). */
 const CACHE_MACROS = /\[(?:CACHEBUSTING|CACHEBUSTER|cachebuster|timestamp|TIMESTAMP)\]|%%CACHEBUSTER%%/g;
 
@@ -8,6 +9,8 @@ const CACHE_MACROS = /\[(?:CACHEBUSTING|CACHEBUSTER|cachebuster|timestamp|TIMEST
  * Adreste makro varsa o doldurulur, yoksa `hp_cb` parametresi eklenir.
  */
 export function firePixels(urls: string[] | undefined): void {
+    // Gizlilik: ölçüm onayı yoksa takip pikseli gönderilmez.
+    if (!getPrivacy().analytics) return;
     for (const u of urls ?? []) {
         const cb = `${Date.now()}${Math.floor(Math.random() * 1e6)}`;
         let url = u;

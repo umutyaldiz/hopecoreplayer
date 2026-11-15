@@ -1,5 +1,5 @@
 import tailwindCss from './theme/tailwind.css?inline';
-import type { HopeSourceOption, AdsOptions, HopePlayerOptions, HopeQoeMetrics } from './types';
+import type { HopeSourceOption, AdsOptions, HopePlayerOptions, HopeQoeMetrics, WatchPartyMessage, CourseProgress, PrivacyConsent } from './types';
 import type Hls from 'hls.js';
 import { SourceManager, type HlsQualityLevel, type PlaybackEngineInfo, type StreamAudioTrack, type StreamTextTrack } from './hls/SourceManager';
 import { cannotPlay, groupSources, sourceFormat, type SourceGroup } from './hls/sourceGroups';
@@ -51,6 +51,8 @@ import type { Interactive } from './plugins/interactive';
 import type { Multiview } from './plugins/multiview';
 import type { Share } from './plugins/share';
 import type { AudioDescription } from './plugins/audio-description';
+import type { EngagementController } from './plugins/engagement';
+import { getPrivacy, onPrivacyChange, privacyReady, setPrivacyPending, updatePrivacy, type PrivacyState } from './utils/privacy';
 import type { PluginHost } from './plugin-api/PluginHost';
 import type { HopePlugin, PluginEntry, PluginInstanceHandle, PluginLoader } from './plugin-api/types';
 import { globalPluginEntries, onGlobalPluginsChange, registerPlugin } from './plugin-api/registry';
@@ -220,6 +222,11 @@ export class HopePlayerElement extends HTMLElement {
     private shareKey = '';
     private audioDescription: AudioDescription | null = null;
     private audioDescriptionKey = '';
+    private privacyKey = '';
+    private offPrivacy: (() => void) | null = null;
+    private disconnectCmp: (() => void) | null = null;
+    /** 1.8 eklentileri (ödeme duvarı, klip, eğitim modu…) — biri açılınca indirilir. */
+    private engagement: EngagementController | null = null;
     /** Eklentileri çalıştıran taraf — yalnızca bir eklenti kullanılınca indirilir (plugin-api/PluginHost). */
     private pluginHost: PluginHost | null = null;
     /** Seçenekler uygulanırken eklenti senkronu bitince çözülür (reklam tag dönüşümü bekler). */
@@ -598,6 +605,13 @@ export class HopePlayerElement extends HTMLElement {
         this.multiview?.destroy();
         this.share?.destroy();
         this.audioDescription?.destroy();
+        this.engagement?.destroy();
+        this.engagement = null;
+        this.offPrivacy?.();
+        this.offPrivacy = null;
+        this.disconnectCmp?.();
+        this.disconnectCmp = null;
+        this.privacyKey = '';
         this.pluginHost?.destroy();
         this.pluginHost = null;
         this.offGlobalPlugins?.();
@@ -887,7 +901,54 @@ export class HopePlayerElement extends HTMLElement {
             if (this.lastSynced?.options === this._options && this.lastSynced.attrs === attrs) return;
             this.lastSynced = { options: this._options, attrs };
         }
+        this.setupPrivacy(this._options.privacy);
         void this.applyOptions({ ...attrOptions, ...this._options });
+    }
+
+    /** `privacy` değişince: başlangıç değerleri, CMP bağlantısı ve ilk yanıt beklemesi (reklam isteği bunu bekler). */
+    private setupPrivacy(o: HopePlayerOptions['privacy']): void {
+        const key = o ? JSON.stringify(o, (_k, v: unknown) => (typeof v === 'function' ? 'fn' : v)) : '';
+        if (key === this.privacyKey) return;
+        this.privacyKey = key;
+        this.disconnectCmp?.();
+        this.disconnectCmp = null;
+        if (!o) return;
+        this.listenPrivacy();
+        setPrivacyPending(
+            import('./plugins/privacy')
+                .then((m) => m.startPrivacy(o, (off) => (this.privacyKey === key ? (this.disconnectCmp = off) : off())))
+                .catch(() => undefined)
+        );
+    }
+
+    private listenPrivacy(): void {
+        this.offPrivacy ??= onPrivacyChange((state, source) => this.onPrivacyChanged(state, source));
+    }
+
+    /** Onay değişti: olay yayılır; reklam onayı geri çekilirse sayfa içi reklamlar kalkar, verilirse kurulur. */
+    private onPrivacyChanged(state: Readonly<PrivacyState>, source: string): void {
+        this.dispatchEvent(new CustomEvent('hp:privacy', { detail: { consent: { ...state }, source } }));
+        const o = this._options;
+        if (!state.ads) {
+            this.pauseAd?.destroy();
+            this.pauseAd = null;
+            this.adTriggers?.destroy();
+            this.adTriggers = null;
+        } else if (this.isConnected) {
+            if (o.ads && !this.adsController) void this.installAdsOnce(o);
+            void this.applyAdTriggers(o);
+        }
+    }
+
+    /** Gizlilik onayını değiştir (kendi onay sisteminiz) — yalnızca verilen alanlar; sayfadaki tüm player'lar etkilenir. */
+    setPrivacy(consent: PrivacyConsent): void {
+        this.listenPrivacy();
+        updatePrivacy(consent ?? {}, 'api');
+    }
+
+    /** Geçerli gizlilik onayı. */
+    getPrivacy(): PrivacyState {
+        return { ...getPrivacy() };
     }
 
     private queuePluginApply(options: HopePlayerOptions): Promise<void> {
@@ -983,6 +1044,7 @@ export class HopePlayerElement extends HTMLElement {
         this.multiview?.refreshLabels();
         this.share?.refreshLabels();
         this.audioDescription?.refreshLabels();
+        this.engagement?.refreshLabels();
         this.pluginHost?.refreshLabels();
         this.accessibility?.refreshLabels();
         this.playbackHistory?.refreshLabels();
@@ -1233,6 +1295,7 @@ export class HopePlayerElement extends HTMLElement {
         await this.applyMultiview(options);
         await this.applyShare(options);
         await this.applyAudioDescription(options);
+        await this.applyEngagementPlugins(options);
         // Document PiP parçası önceden yüklenir — tıklamada (kullanıcı hareketi süresi içinde) pencere hemen açılsın.
         if (this.docPipOptions && !this.docPip) {
             const { installDocumentPip } = await import('./plugins/doc-pip');
@@ -1356,7 +1419,7 @@ export class HopePlayerElement extends HTMLElement {
             this.tapGestures.setGestures(options.tapGestures === true ? DEFAULT_TAP_GESTURES : options.tapGestures || []);
         }
 
-        if (options.pauseAd?.adUnitPath && !this.pauseAd) {
+        if (options.pauseAd?.adUnitPath && !this.pauseAd && getPrivacy().ads) {
             const { installPauseAd } = await import('./plugins/pause-ad');
             this.pauseAd = installPauseAd(
                 { videoEl: this.videoEl, hostEl: this, videoArea: this.videoArea, i18n: this.i18n, isBlocked: () => this.isChromeBlocked },
@@ -1471,6 +1534,69 @@ export class HopePlayerElement extends HTMLElement {
             },
             options.share === true ? {} : options.share
         );
+    }
+
+    /** Reklam başladı / bitti — 1.8 eklentilerine haber ver. */
+    private onAdPhase(): void {
+        this.engagement?.onAdPhase();
+    }
+
+    /** 1.8 eklentileri: ödeme duvarı, filigran, klip, birlikte izle, tepkiler, eğitim modu, podcast, işaret dili. */
+    private async applyEngagementPlugins(options: HopePlayerOptions): Promise<void> {
+        const o = options;
+        if (!(o.paywall || o.watermark || o.clips || o.watchParty || o.reactions || o.course || o.podcast || o.signLanguage) && !this.engagement) return;
+        if (!this.engagement) {
+            const { EngagementController } = await import('./plugins/engagement');
+            this.engagement ??= new EngagementController({
+                hostEl: this,
+                videoEl: this.videoEl,
+                videoArea: this.videoArea,
+                i18n: this.i18n,
+                controlBar: this.controlBar,
+                isAdPlaying: () => this.isAdPlaying(),
+                blockChrome: (key) => this.blockChrome(key),
+                unblockChrome: (key) => this.unblockChrome(key),
+                holdChrome: (key, hold) => this.holdChrome(key, hold),
+                log: (message) => this.log.add({ source: 'player', message }),
+            });
+        }
+        await this.engagement.apply(options);
+    }
+
+    /** Ödeme duvarının kilidini aç (abone oldu / giriş yaptı) — video kaldığı yerden sürer. */
+    declare unlockPaywall: () => void;
+    /** Klip seçiciyi aç (`options.clips` gerekir). */
+    declare openClip: () => void;
+    /** Birlikte izle: kanalınızdan gelen mesajı uygula. */
+    declare receiveWatchParty: (message: WatchPartyMessage) => void;
+    /** Birlikte izle: o anki durumu `sync` olarak gönder (ör. odaya yeni biri katılınca). */
+    declare sendWatchPartySync: () => void;
+    /** Uzaktan gelen emoji tepkisini göster (`options.reactions`). */
+    declare addReaction: (emoji: string) => void;
+    /** Uzaktan gelen yorumu hemen akıt (`options.reactions`). */
+    declare addComment: (comment: { text: string; author?: string }) => void;
+    /** Eğitim modu ilerlemesi (izlenen süre, yüzde, aralıklar, notlar); `course` yoksa null. */
+    declare getCourseProgress: () => CourseProgress | null;
+    /** Eğitim modu not panelini aç / kapat. */
+    declare toggleCourseNotes: (force?: boolean) => void;
+    /** Uyku zamanlayıcısı: dakika, 'end' (bölüm sonunda) ya da null (kapat). */
+    declare setSleepTimer: (value: number | 'end' | null) => void;
+    /** İşaret dili videosunu aç / kapat. */
+    declare toggleSignLanguage: (force?: boolean) => void;
+
+    // 1.8 yöntemleri tek tablodan: "yöntem eklenti işlev" — eklenti kurulu değilse null döner.
+    static {
+        for (const row of 'unlockPaywall paywall unlock,openClip clips open,receiveWatchParty watchParty receive,sendWatchPartySync watchParty sendSync,addReaction reactions addReaction,addComment reactions addComment,getCourseProgress course getProgress,toggleCourseNotes course toggleNotes,setSleepTimer podcast setSleep,toggleSignLanguage signLanguage toggle'.split(',')) {
+            const [m, plugin, fn] = row.split(' ') as [string, string, string];
+            Object.defineProperty(HopePlayerElement.prototype, m, {
+                value(this: HopePlayerElement, ...args: unknown[]) {
+                    const target = (this.engagement as unknown as Record<string, Record<string, (...a: unknown[]) => unknown> | null> | null)?.[plugin];
+                    return target ? target[fn]!(...args) : null;
+                },
+                writable: true,
+                configurable: true,
+            });
+        }
     }
 
     /** Paylaşım panelini aç (`options.share` gerekir). */
@@ -2080,7 +2206,7 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     private async applyAdTriggers(options: HopePlayerOptions): Promise<void> {
-        const opts = options.adTriggers;
+        const opts = getPrivacy().ads ? options.adTriggers : undefined;
         if (!opts?.endpoint && !opts?.config) {
             this.adTriggers?.destroy();
             this.adTriggers = null;
@@ -2482,6 +2608,19 @@ export class HopePlayerElement extends HTMLElement {
         this.setChromeOpacity('1');
     }
 
+    /** Açık panel (klip seçici, notlar…) varken kontroller otomatik gizlenmez. */
+    private readonly chromeHolds = new Set<string>();
+    private holdChrome(key: string, hold: boolean): void {
+        if (hold) {
+            this.chromeHolds.add(key);
+            if (this.hideTimer) clearTimeout(this.hideTimer);
+            this.hideTimer = null;
+            if (!this.isChromeBlocked) this.showChrome();
+        } else if (this.chromeHolds.delete(key)) {
+            this.scheduleAutoHide();
+        }
+    }
+
     /** Chrome görünürlüğünün tek giriş noktası — altyazı da haberdar olur (kontroller gizlenince en alta iner). */
     private setChromeOpacity(value: '0' | '1'): void {
         this.chromeEl.style.opacity = value;
@@ -2505,7 +2644,9 @@ export class HopePlayerElement extends HTMLElement {
      * 'reduced' (ads): yalnızca oynat/duraklat + ses kalır. Merkez buton her modda gizli.
      */
     blockChrome(key: string, mode: 'hidden' | 'reduced' = 'hidden'): void {
+        const adStart = key === 'ads' && !this.chromeBlockers.has('ads');
         this.chromeBlockers.set(key, mode);
+        if (adStart) this.onAdPhase();
         this.updateMiniProgress();
         if (this.hideTimer) clearTimeout(this.hideTimer);
         this.centerPlayButton.style.opacity = '0';
@@ -2522,7 +2663,9 @@ export class HopePlayerElement extends HTMLElement {
 
     /** Bloklayan plugin işini bitirince çağırır — başka bir blocker hâlâ aktifse chrome açılmaz. */
     unblockChrome(key: string): void {
+        const adEnd = key === 'ads' && this.chromeBlockers.has('ads');
         this.chromeBlockers.delete(key);
+        if (adEnd) this.onAdPhase();
         this.updateMiniProgress();
         this.controlBar.setAdMode(this.chromeBlockers.get('ads') === 'reduced');
         if (this.isChromeBlocked) {
@@ -2644,6 +2787,13 @@ export class HopePlayerElement extends HTMLElement {
             this.adsInstall = (async () => {
                 // Reklamsız entegrasyonlarda bu import hiç tetiklenmez — bkz. plan:
                 // "eklenmeyen plugin yük bindirmemeli" (dinamik import = ayrı chunk).
+                await privacyReady();
+                if (!getPrivacy().ads) {
+                    // Gizlilik: reklam onayı yok — içerik reklamsız başlar; onay gelirse onPrivacyChanged kurar.
+                    this.prerollGate.release(true);
+                    this.adsInstall = null;
+                    return;
+                }
                 const { installAds } = await import('./plugins/ads');
                 this.adsController = await installAds(
                     {
@@ -2729,7 +2879,7 @@ export class HopePlayerElement extends HTMLElement {
         if (this.audioMode) return;
         this.hideTimer = setTimeout(() => {
             // Duraklatılmışken, yüklenirken, fare kontrollerin üzerindeyken ya da ayarlar menüsü açıkken gizleme.
-            if (this.audioMode || this.videoEl.paused || this.loadingActive || this.pointerOverControls || this.controlBar.settingsMenu.isOpen) return;
+            if (this.audioMode || this.videoEl.paused || this.loadingActive || this.pointerOverControls || this.controlBar.settingsMenu.isOpen || this.chromeHolds.size) return;
             this.setChromeOpacity('0');
         }, this.lastPointerType === 'mouse' ? this.autoHideDelayMs : Math.max(this.autoHideDelayMs, TOUCH_AUTO_HIDE_DELAY_MS));
     };

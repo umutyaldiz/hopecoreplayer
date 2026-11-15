@@ -3,7 +3,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent, WebViewProps } from 'react-native-webview';
 import type { HopeAnalyticsEvent, HopePlayerOptions, HopeQoeMetrics } from '@hopeplayer/core';
-import { buildPlayerHtml, commandScript, type HopeBridgeCommand, type HopeBridgeMessage, type HopeNativeOptions, type HopeNativePlugin } from './playerHtml';
+import { buildPlayerHtml, commandScript, type HopeBridgeCommand, type HopeBridgeMessage, type HopeNativeMethod, type HopeNativeOptions, type HopeNativePlugin } from './playerHtml';
 
 export interface HopePlayerTimeUpdate {
     currentTime: number;
@@ -64,6 +64,8 @@ export interface HopePlayerHandle {
     toggleStats(force?: boolean): void;
     /** Eklentiye veri gönderir; eklentide `player.on('<eklenti>:native', (e) => e.detail)`. */
     postToPlugin(plugin: string, data?: unknown): void;
+    /** Player yöntemi çağırır, ör. `call('unlockPaywall')`, `call('receiveWatchParty', message)`. */
+    call(method: HopeNativeMethod, ...args: unknown[]): void;
 }
 
 const NATIVE_PROP_KEYS = [
@@ -142,6 +144,7 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
             setMuted: (value) => send({ type: 'muted', value }),
             toggleStats: (force) => send({ type: 'toggleStats', force }),
             postToPlugin: (plugin, data) => send({ type: 'pluginMessage', plugin, data }),
+            call: (method, ...args) => send({ type: 'call', method, args }),
         }),
         [send]
     );

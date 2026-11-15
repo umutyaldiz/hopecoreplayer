@@ -179,6 +179,23 @@ try {
     ok(styledReady && accent === 'rgb(1, 2, 3)' && !cssPwned, `css uygulandı (accent: ${accent}, enjeksiyon: ${cssPwned})`);
     await styled.close();
 
+    console.log('\n[7a] call komutu: izinli yöntemler çalışıyor (unlockPaywall), izinsiz olanlar yok sayılıyor; 1.8 olayları RN\'e geliyor');
+    pages.set('/paywall.html', buildPlayerHtml({ coreUrl: `${BASE}/core/hope-player.js`, options: { src: '/media/sample.mp4', muted: true, paywall: { previewSeconds: 1 } } }));
+    const pw = await browser.newPage();
+    await pw.addInitScript(MOCK_RN);
+    await pw.goto(`${BASE}/paywall.html`);
+    await waitFor(pw, 'ready');
+    await waitFor(pw, 'loadedmetadata');
+    await send(pw, { type: 'seek', time: 3 });
+    ok(await waitFor(pw, 'paywall'), '"paywall" olayı RN\'e geldi');
+    await send(pw, { type: 'call', method: 'destroy' });
+    await send(pw, { type: 'call', method: 'unlockPaywall' });
+    await pw.waitForTimeout(300);
+    const states = (await messages(pw, 'paywall')).map((m) => m.data.state);
+    const alive = await pw.evaluate(() => !!document.getElementById('hope-player').shadowRoot.querySelector('video'));
+    ok(states.join(',') === 'shown,unlock' && alive, `call('unlockPaywall') çalıştı, izinsiz 'destroy' yok sayıldı ${JSON.stringify(states)}`);
+    await pw.close();
+
     console.log('\n[7] backgroundColor: geçerli renk uygulanıyor, "</style>" içeren değer reddediliyor');
     const bg = (backgroundColor) => buildPlayerHtml({ coreUrl: `${BASE}/core/hope-player.js`, options: { src: '/media/sample.mp4' }, backgroundColor });
     const good = bg('rgb(10, 20, 30)');

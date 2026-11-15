@@ -4,6 +4,7 @@ import { setIconName } from '../../icons/Icon';
 import { loadCastSdk, type CastApi, type CastContextLike, type CastMediaInfo, type CastSessionLike, type RemotePlayerControllerLike, type RemotePlayerLike } from './castSdk';
 import { RemoteMediaProxy, nativeGet } from './RemoteMediaProxy';
 import { seekWhenReady } from '../shared/seekWhenReady';
+import { getPrivacy, onPrivacyChange, privacyReady } from '../../utils/privacy';
 
 /** TV'ye gönderilecek içerik — player o anki duruma göre hazırlar. */
 export interface CastMedia {
@@ -117,6 +118,22 @@ export class CastController {
         btn.setAttribute('part', 'cast-button');
         this.castBtn = btn;
         this.castIcon = icon;
+        // Gizlilik: Google Cast SDK (dış betik) işlevsel onayla yüklenir; onay sonradan gelirse o zaman.
+        await privacyReady();
+        if (this.destroyed) return;
+        if (!getPrivacy().functional) {
+            const off = onPrivacyChange((p) => {
+                if (!p.functional || this.destroyed) return;
+                off();
+                void this.loadSdk();
+            });
+            this.ctx.log({ message: 'Google Cast SDK waits for functional consent (privacy)' });
+            return;
+        }
+        await this.loadSdk();
+    }
+
+    private async loadSdk(): Promise<void> {
         const api = await loadCastSdk();
         if (!api || this.destroyed) {
             if (!api) this.ctx.log({ message: 'Google Cast is not available in this browser (Chrome / Edge over HTTPS needed)' });

@@ -122,6 +122,60 @@ export interface HopeLocaleStrings {
     shareEmail: string;
     /** Isı haritası tepe noktası. */
     heatmapPeak: string;
+    /** Ödeme duvarı. */
+    paywallTitle: string;
+    paywallText: string;
+    paywallSubscribe: string;
+    paywallLogin: string;
+    paywallPreview: (time: string) => string;
+    /** Klip. */
+    clip: string;
+    clipTitle: string;
+    clipStart: string;
+    clipEnd: string;
+    clipLength: (time: string) => string;
+    clipPreview: string;
+    clipCopy: string;
+    clipCopied: string;
+    clipClose: string;
+    clipMore: string;
+    clipBadge: (time: string) => string;
+    clipWatchAll: string;
+    /** Birlikte izle bildirimleri. */
+    partyPlayed: (name: string) => string;
+    partyPaused: (name: string) => string;
+    partySeeked: (name: string, time: string) => string;
+    partySomeone: string;
+    /** Tepkiler ve yorumlar. */
+    reactions: string;
+    reactionsComment: string;
+    reactionsSend: string;
+    reactionsShowComments: string;
+    reactionsOn: string;
+    reactionsOff: string;
+    /** Eğitim modu. */
+    courseNotes: string;
+    courseAddNote: string;
+    courseNotePlaceholder: string;
+    courseNoNotes: string;
+    courseDeleteNote: string;
+    courseBlocked: string;
+    courseCompleted: string;
+    courseProgress: (percent: number) => string;
+    /** Podcast araçları. */
+    sleepTimer: string;
+    sleepOff: string;
+    sleepMinutes: (minutes: number) => string;
+    sleepEndOfEpisode: string;
+    sleepStopped: string;
+    skipSilence: string;
+    skipSilenceOn: string;
+    skipSilenceOff: string;
+    skipSilenceUnavailable: string;
+    /** İşaret dili. */
+    signLanguage: string;
+    signLanguageOn: string;
+    signLanguageOff: string;
     /** Sesli betimleme (ayarlar menüsü). */
     audioDescription: string;
     audioDescriptionOn: string;
@@ -264,7 +318,51 @@ export type PluginStringKey =
     | 'interactiveGo'
     | 'interactiveSponsored'
     | 'interactiveClose'
-    | 'interactiveVotes';
+    | 'interactiveVotes'
+    | PaywallStringKey
+    | ClipStringKey
+    | PartyStringKey
+    | ReactionsStringKey
+    | CourseStringKey
+    | PodcastStringKey
+    | SignLanguageStringKey;
+
+export type PaywallStringKey = 'paywallTitle' | 'paywallText' | 'paywallSubscribe' | 'paywallLogin' | 'paywallPreview';
+export type ClipStringKey =
+    | 'clip'
+    | 'clipTitle'
+    | 'clipStart'
+    | 'clipEnd'
+    | 'clipLength'
+    | 'clipPreview'
+    | 'clipCopy'
+    | 'clipCopied'
+    | 'clipClose'
+    | 'clipMore'
+    | 'clipBadge'
+    | 'clipWatchAll';
+export type PartyStringKey = 'partyPlayed' | 'partyPaused' | 'partySeeked' | 'partySomeone';
+export type ReactionsStringKey = 'reactions' | 'reactionsComment' | 'reactionsSend' | 'reactionsShowComments' | 'reactionsOn' | 'reactionsOff';
+export type CourseStringKey =
+    | 'courseNotes'
+    | 'courseAddNote'
+    | 'courseNotePlaceholder'
+    | 'courseNoNotes'
+    | 'courseDeleteNote'
+    | 'courseBlocked'
+    | 'courseCompleted'
+    | 'courseProgress';
+export type PodcastStringKey =
+    | 'sleepTimer'
+    | 'sleepOff'
+    | 'sleepMinutes'
+    | 'sleepEndOfEpisode'
+    | 'sleepStopped'
+    | 'skipSilence'
+    | 'skipSilenceOn'
+    | 'skipSilenceOff'
+    | 'skipSilenceUnavailable';
+export type SignLanguageStringKey = 'signLanguage' | 'signLanguageOn' | 'signLanguageOff';
 
 /** Ana pakete giren yerleşik sözlük (tr / en). */
 export type CoreLocaleStrings = Omit<HopeLocaleStrings, PluginStringKey>;

@@ -1,3 +1,4 @@
+import { getPrivacy, onPrivacyChange } from '../../utils/privacy';
 /** Google Publisher Tag (GPT) için kullanılan minimal yüzey. */
 export interface GptSlot {
     addService(service: unknown): GptSlot;
@@ -16,6 +17,7 @@ export interface GptPubAds {
     removeEventListener?(type: 'slotRenderEnded', listener: (e: GptSlotRenderEndedEvent) => void): void;
     refresh(slots: GptSlot[]): void;
     isInitialLoadDisabled(): boolean;
+    setPrivacySettings?(settings: { nonPersonalizedAds?: boolean; limitedAds?: boolean }): void;
 }
 
 export interface GoogleTag {
@@ -37,6 +39,17 @@ declare global {
 
 const GPT_SRC = 'https://securepubads.g.doubleclick.net/tag/js/gpt.js';
 let loading: Promise<GoogleTag> | null = null;
+let watching = false;
+
+/** Gizlilik onayını GPT'ye uygula: kişiselleştirme yoksa nonPersonalizedAds, depolama izni de yoksa limitedAds. */
+function applyGptPrivacy(gt: GoogleTag): void {
+    const p = getPrivacy();
+    try {
+        gt.pubads().setPrivacySettings?.({ nonPersonalizedAds: !p.personalizedAds, limitedAds: !p.personalizedAds && !p.functional });
+    } catch {
+        /* eski GPT */
+    }
+}
 
 /** GPT'yi bir kez yükler; sayfada zaten varsa onu kullanır. Komutlar googletag.cmd kuyruğuyla çalışır. */
 export function loadGpt(): Promise<GoogleTag> {
@@ -44,7 +57,14 @@ export function loadGpt(): Promise<GoogleTag> {
     window.googletag = window.googletag || ({ cmd: [] } as unknown as GoogleTag);
     loading = new Promise((resolve, reject) => {
         const ready = (): void => {
-            window.googletag!.cmd.push(() => resolve(window.googletag!));
+            window.googletag!.cmd.push(() => {
+                applyGptPrivacy(window.googletag!);
+                if (!watching) {
+                    watching = true;
+                    onPrivacyChange(() => applyGptPrivacy(window.googletag!));
+                }
+                resolve(window.googletag!);
+            });
         };
         if (document.querySelector(`script[src="${GPT_SRC}"]`)) return ready();
         const script = document.createElement('script');
