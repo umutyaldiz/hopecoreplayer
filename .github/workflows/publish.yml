@@ -56,6 +56,9 @@ jobs:
       - name: Build @hopeplayer/react-native
         run: npm run build:react-native
 
+      - name: Published types resolve under node16 / nodenext / bundler
+        run: npm run test:types
+
       - name: Publish @hopeplayer/core
         working-directory: packages/core
         # Sürüm npm'de zaten varsa atlanır — yarıda kalan bir çalışma güvenle yeniden çalıştırılabilsin.

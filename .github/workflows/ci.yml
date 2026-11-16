@@ -52,6 +52,9 @@ jobs:
       - name: Build @hopeplayer/react-native
         run: npm run build:react-native
 
+      - name: Published types resolve under node16 / nodenext / bundler
+        run: npm run test:types
+
       - name: Typecheck all workspaces
         run: npm run typecheck
 
