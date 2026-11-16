@@ -39,6 +39,8 @@ const WEIGHTS = {
     'react-native': 3,
 };
 const DEFAULT_WEIGHT = 30;
+// Takılan bir takım CI işini sessizce kilitlemesin: süre dolunca öldürülür ve başarısız sayılır (HOPE_SUITE_TIMEOUT_MIN ile değişir).
+const SUITE_TIMEOUT_MS = (Number(process.env.HOPE_SUITE_TIMEOUT_MIN) || 10) * 60_000;
 
 function shard(index, count) {
     const loads = Array.from({ length: count }, () => ({ total: 0, names: [] }));
@@ -118,7 +120,14 @@ function runSuite(name) {
         };
         collect(child.stdout, process.stdout, false);
         collect(child.stderr, process.stderr, true);
+        const timer = setTimeout(() => {
+            problems.push(`${section || name} → zaman aşımı: ${SUITE_TIMEOUT_MS / 60_000} dk içinde bitmedi, takım durduruldu (son başlık bu bölüm)`);
+            console.log(`
+✗ ${name}: zaman aşımı — takım durduruluyor`);
+            child.kill('SIGKILL');
+        }, SUITE_TIMEOUT_MS);
         child.on('close', (code, signal) => {
+            clearTimeout(timer);
             if (code !== 0 && !problems.length) problems.push(`${section} → çıkış kodu ${code ?? signal} (çıktıda FAIL / hata satırı yok)`);
             done({ code: code ?? 1, problems });
         });

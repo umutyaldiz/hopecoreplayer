@@ -702,6 +702,7 @@ async function testContextMenu(browser) {
         let prevented;
         const pending = page.evaluate(() => new Promise((r) => {
             document.getElementById('player').addEventListener('contextmenu', (e) => setTimeout(() => r(e.defaultPrevented)), { once: true });
+            setTimeout(() => r('olay gelmedi'), 5000);
         }));
         await page.mouse.click(center.x, center.y, { button: 'right' });
         prevented = await pending;
@@ -732,11 +733,13 @@ async function testContextMenu(browser) {
 
         await setOptions({ contextMenu: false });
         await page.waitForTimeout(200);
-        const pending2 = page.evaluate(() => new Promise((r) => {
-            document.getElementById('player').addEventListener('contextmenu', (e) => setTimeout(() => r(e.defaultPrevented)), { once: true });
-        }));
-        await page.mouse.click(center.x, center.y, { button: 'right' });
-        prevented = await pending2;
+        // Gerçek sağ tık burada tarayıcı menüsünü açar; Linux CI'da bu adım takılıyordu — olay doğrudan gönderilir.
+        prevented = await page.evaluate(() => {
+            const el = document.getElementById('player');
+            const e = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, composed: true, button: 2 });
+            el.shadowRoot.querySelector('video').dispatchEvent(e);
+            return e.defaultPrevented;
+        });
         ok(prevented === false && !(await menu()).open, 'contextMenu: false → tarayıcının kendi menüsü (olay engellenmedi)');
     } finally {
         await page.close();
