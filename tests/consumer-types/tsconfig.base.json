@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": [],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": false
+  },
+  "files": ["fixtures/core.ts", "fixtures/react.tsx", "fixtures/vue.ts", "fixtures/react-native.tsx", "shims/react-native.d.ts"]
+}

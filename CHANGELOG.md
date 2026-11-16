@@ -14,6 +14,12 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.8.1] — 2026-11-16
+
+### Fixed
+
+- **Types under `moduleResolution: "node16"` / `"nodenext"`** ([#16](https://github.com/umutyaldiz/hopecoreplayer/issues/16)): the published `.d.ts` files of all four packages used extensionless relative imports, so in projects using Node's ESM resolution (the `tsc --init` default since TypeScript 5.9) every type silently became `any` — unknown options were not caught, `definePlugin` callbacks failed strict checks, and with `skipLibCheck: false` `TS2834` errors appeared inside the package. The declarations now use explicit `.js` / `/index.js` specifiers. Bundler-resolution projects (Vite, Next.js, Nuxt, …) were not affected. CI and the release workflow now type-check a consumer project against the built packages under `node16`, `nodenext` and `bundler` with `skipLibCheck: false`.
+
 ## [1.8.0] — 2026-11-15
 
 ### Added
