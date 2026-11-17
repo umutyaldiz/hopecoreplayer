@@ -60,6 +60,7 @@ const FORWARDED_EVENTS = [
     'hp:itemchange',
     'hp:pausead',
     'hp:analytics',
+    'hp:agegate',
     'hp:paywall',
     'hp:clip',
     'hp:watchparty',

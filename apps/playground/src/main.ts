@@ -258,6 +258,8 @@ if (player) {
                           })),
                       }
                     : undefined,
+            // ?feature=age-gate — 18+ yaş ekranı (sonuç hatırlanmaz, her açılışta sorar).
+            ageGate: feature === 'age-gate' ? { minAge: 18, remember: false, retry: true, image: '/sample-cover.jpg' } : undefined,
             // 1.8: ?feature=paywall | watermark | clips | reactions | course | sign-language
             paywall: feature === 'paywall' ? { previewSeconds: 5, subscribe: { url: '#subscribe' }, login: { url: '#login' } } : undefined,
             watermark: feature === 'watermark' ? { text: 'demo@hopecoreplayer.dev · #4821', moveEvery: 3 } : undefined,

@@ -1,0 +1,524 @@
+/* ── Yaş doğrulama (options.ageGate) ── */
+.hp-age {
+    --hp-age-accent: var(--hp-color-accent, #6ee7b7);
+    --hp-age-deny: #f87171;
+    position: absolute;
+    inset: 0;
+    z-index: 45;
+    display: grid;
+    place-items: safe center;
+    padding: 16px;
+    /* Işık katmanı taşar (inset: -40%) — kaydırma çubuğu çıkmasın. */
+    overflow: hidden;
+    container-type: size;
+    background: rgba(6, 8, 12, 0.72);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    color: #fff;
+    font: 14px/1.45 system-ui, -apple-system, sans-serif;
+    text-align: center;
+    animation: hp-age-fade 0.35s ease-out both;
+}
+.hp-age-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.28;
+    filter: blur(6px);
+    transform: scale(1.06);
+}
+.hp-age-aurora {
+    position: absolute;
+    inset: -40%;
+    background:
+        radial-gradient(closest-side at 30% 35%, color-mix(in srgb, var(--hp-age-accent) 30%, transparent), transparent 70%),
+        radial-gradient(closest-side at 70% 65%, color-mix(in srgb, var(--hp-age-accent) 18%, #6366f1 14%), transparent 70%);
+    filter: blur(20px);
+    opacity: 0.75;
+    animation: hp-age-aurora 14s ease-in-out infinite alternate;
+    pointer-events: none;
+}
+.hp-age[data-state='denied'] .hp-age-aurora {
+    background: radial-gradient(closest-side at 50% 45%, rgba(248, 113, 113, 0.28), transparent 70%);
+}
+.hp-age-card {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    width: min(380px, 100%);
+    padding: 26px 24px 22px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 22px;
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03));
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    animation: hp-age-in 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+}
+
+/* Rozet: çizilen halka + "18+", başarıda onay, retçe kilit */
+.hp-age-badge {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 74px;
+    height: 74px;
+    margin-bottom: 4px;
+    border-radius: 999px;
+    color: var(--hp-age-accent);
+    background: color-mix(in srgb, var(--hp-age-accent) 12%, transparent);
+    animation: hp-age-halo 2.6s ease-in-out 0.9s infinite;
+}
+.hp-age-ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+.hp-age-ring circle {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-dasharray: 283;
+    stroke-dashoffset: 283;
+    animation: hp-age-draw 0.9s cubic-bezier(0.65, 0, 0.35, 1) 0.15s forwards;
+}
+.hp-age-num {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: #fff;
+    animation: hp-age-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) 0.45s both;
+}
+.hp-age-mark,
+.hp-age-lock {
+    position: absolute;
+    width: 34px;
+    height: 34px;
+    opacity: 0;
+}
+.hp-age-mark path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 24;
+    stroke-dashoffset: 24;
+}
+.hp-age-title {
+    margin: 2px 0 0;
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1.25;
+    animation: hp-age-rise 0.45s ease-out 0.25s both;
+}
+.hp-age-text {
+    margin: 0;
+    opacity: 0.8;
+    animation: hp-age-rise 0.45s ease-out 0.32s both;
+}
+
+/* Form */
+.hp-age-form {
+    display: grid;
+    gap: 10px;
+    width: 100%;
+    margin-top: 10px;
+}
+.hp-age-form[data-invalid] {
+    animation: hp-age-shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+.hp-age-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.5fr;
+    gap: 8px;
+}
+.hp-age-field {
+    display: grid;
+    gap: 4px;
+    text-align: left;
+    animation: hp-age-rise 0.45s ease-out both;
+    animation-delay: calc(0.4s + var(--i, 0) * 0.07s);
+}
+.hp-age-field span {
+    padding-left: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.65;
+}
+.hp-age-field input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 11px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.35);
+    color: #fff;
+    font: 600 16px/1.2 system-ui, -apple-system, sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.08em;
+    text-align: center;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s, transform 0.2s;
+}
+.hp-age-field input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+.hp-age-field input:focus {
+    border-color: var(--hp-age-accent);
+    background: rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--hp-age-accent) 22%, transparent);
+    transform: translateY(-1px);
+}
+.hp-age-field input.filled {
+    border-color: color-mix(in srgb, var(--hp-age-accent) 55%, rgba(255, 255, 255, 0.18));
+}
+.hp-age-form[data-invalid] input {
+    border-color: var(--hp-age-deny);
+}
+.hp-age-error {
+    min-height: 0;
+    margin: 0;
+    color: var(--hp-age-deny);
+    font-size: 13px;
+}
+.hp-age-error:empty {
+    display: none;
+}
+.hp-age-error:not(:empty) {
+    animation: hp-age-rise 0.25s ease-out both;
+}
+.hp-age-submit {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px 18px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--hp-age-accent);
+    color: var(--hp-color-on-accent, #062b1f);
+    font: 700 15px/1.2 system-ui, -apple-system, sans-serif;
+    cursor: pointer;
+    overflow: hidden;
+    animation: hp-age-rise 0.45s ease-out 0.62s both;
+    transition: transform 0.15s, filter 0.15s;
+}
+.hp-age-submit::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.45) 50%, transparent 70%);
+    transform: translateX(-100%);
+    animation: hp-age-shine 3.2s ease-in-out 1.4s infinite;
+}
+.hp-age-submit:hover {
+    filter: brightness(1.08);
+}
+.hp-age-submit:active {
+    transform: scale(0.98);
+}
+.hp-age-submit:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 3px;
+}
+.hp-age-submit.secondary {
+    margin-top: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    background: transparent;
+    color: #fff;
+}
+.hp-age-submit.secondary::after {
+    display: none;
+}
+.hp-age-spin {
+    display: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 999px;
+    animation: hp-age-spin 0.7s linear infinite;
+}
+.hp-age-form[data-busy] .hp-age-spin {
+    display: inline-block;
+}
+.hp-age-form[data-busy] .hp-age-submit {
+    pointer-events: none;
+    opacity: 0.85;
+}
+.hp-age-note {
+    margin: 6px 0 0;
+    font-size: 11.5px;
+    opacity: 0.55;
+}
+
+/* Başarı: halka dolar, sayı kaybolur, onay çizilir, ekran büyüyerek söner */
+.hp-age[data-state='passed'] .hp-age-num {
+    animation: hp-age-vanish 0.25s ease-in forwards;
+}
+.hp-age[data-state='passed'] .hp-age-mark {
+    opacity: 1;
+}
+.hp-age[data-state='passed'] .hp-age-mark path {
+    animation: hp-age-check 0.35s ease-out 0.15s forwards;
+}
+.hp-age[data-state='passed'] .hp-age-badge {
+    animation: hp-age-burst 0.6s ease-out;
+    background: color-mix(in srgb, var(--hp-age-accent) 22%, transparent);
+}
+.hp-age[data-state='passed'] .hp-age-text,
+.hp-age[data-state='passed'] .hp-age-note,
+.hp-age[data-state='passed'] .hp-age-form {
+    animation: hp-age-vanish 0.25s ease-in forwards;
+    pointer-events: none;
+}
+.hp-age[data-state='passed'] {
+    animation: hp-age-out 0.4s ease-in 0.5s forwards;
+}
+
+/* Ret: kırmızı halka, kilit, sallanma */
+.hp-age[data-state='denied'] .hp-age-badge {
+    color: var(--hp-age-deny);
+    background: rgba(248, 113, 113, 0.12);
+    animation: hp-age-shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) 0.5s;
+}
+.hp-age[data-state='denied'] .hp-age-num {
+    display: none;
+}
+.hp-age[data-state='denied'] .hp-age-lock {
+    opacity: 1;
+    width: 28px;
+    height: 28px;
+    animation: hp-age-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) 0.45s both;
+}
+
+/* Alçak player: açıklama ve not gizlenir, rozet küçülür */
+@container (max-height: 380px) {
+    .hp-age-card {
+        gap: 6px;
+        padding: 16px 18px 14px;
+    }
+    .hp-age-badge {
+        width: 52px;
+        height: 52px;
+        margin-bottom: 0;
+    }
+    .hp-age-num {
+        font-size: 17px;
+    }
+    .hp-age-title {
+        font-size: 16px;
+    }
+    .hp-age-text,
+    .hp-age-note {
+        display: none;
+    }
+    .hp-age[data-state='denied'] .hp-age-text {
+        display: block;
+    }
+    .hp-age-form {
+        margin-top: 4px;
+    }
+}
+
+/* Küçük player (mobil, kart içi): rozet ve etiketler gizlenir, alanlar ve buton tek satır */
+@container (max-height: 250px) or (max-width: 380px) {
+    .hp-age {
+        padding: 8px;
+    }
+    .hp-age-card {
+        gap: 6px;
+        padding: 12px;
+        border-radius: 14px;
+    }
+    .hp-age-badge,
+    .hp-age-field span,
+    .hp-age-text,
+    .hp-age-note {
+        display: none;
+    }
+    .hp-age-title {
+        font-size: 14px;
+    }
+    .hp-age-form {
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 6px;
+        margin-top: 2px;
+    }
+    .hp-age-error {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        font-size: 12px;
+    }
+    .hp-age-fields {
+        gap: 5px;
+    }
+    .hp-age-field input {
+        padding: 8px 4px;
+        border-radius: 10px;
+    }
+    .hp-age-submit {
+        width: auto;
+        padding: 9px 14px;
+        font-size: 14px;
+    }
+    .hp-age-submit.secondary {
+        margin-top: 4px;
+    }
+    .hp-age[data-state='denied'] .hp-age-text {
+        display: block;
+        font-size: 12px;
+    }
+}
+
+/* Çok küçük player (≈ 256×144): hata satırı dahil sığsın */
+@container (max-height: 160px) {
+    .hp-age-card {
+        gap: 4px;
+        padding: 8px 10px;
+    }
+    .hp-age-title {
+        font-size: 13px;
+    }
+    .hp-age-field input {
+        padding: 6px 4px;
+        font-size: 14px;
+    }
+    .hp-age-submit {
+        padding: 7px 12px;
+        font-size: 13px;
+    }
+    .hp-age-error {
+        font-size: 11px;
+        line-height: 1.2;
+    }
+}
+
+@keyframes hp-age-fade {
+    from {
+        opacity: 0;
+    }
+}
+@keyframes hp-age-in {
+    from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.94);
+    }
+}
+@keyframes hp-age-rise {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+}
+@keyframes hp-age-draw {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+@keyframes hp-age-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.4);
+    }
+}
+@keyframes hp-age-halo {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 35%, transparent);
+    }
+    50% {
+        box-shadow: 0 0 0 12px transparent;
+    }
+}
+@keyframes hp-age-aurora {
+    from {
+        transform: translate(-4%, -3%) rotate(0deg);
+    }
+    to {
+        transform: translate(4%, 3%) rotate(25deg);
+    }
+}
+@keyframes hp-age-shake {
+    10%,
+    90% {
+        transform: translateX(-2px);
+    }
+    20%,
+    80% {
+        transform: translateX(4px);
+    }
+    30%,
+    50%,
+    70% {
+        transform: translateX(-7px);
+    }
+    40%,
+    60% {
+        transform: translateX(7px);
+    }
+}
+@keyframes hp-age-shine {
+    0%,
+    60% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+@keyframes hp-age-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+@keyframes hp-age-vanish {
+    to {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+}
+@keyframes hp-age-check {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+@keyframes hp-age-burst {
+    0% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 55%, transparent);
+    }
+    100% {
+        box-shadow: 0 0 0 26px transparent;
+    }
+}
+@keyframes hp-age-out {
+    to {
+        opacity: 0;
+        transform: scale(1.04);
+        backdrop-filter: blur(0);
+        -webkit-backdrop-filter: blur(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hp-age,
+    .hp-age *,
+    .hp-age *::after {
+        animation: none !important;
+        transition: none !important;
+    }
+    .hp-age-ring circle {
+        stroke-dashoffset: 0;
+    }
+}

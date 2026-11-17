@@ -122,6 +122,20 @@ export interface HopeLocaleStrings {
     shareEmail: string;
     /** Isı haritası tepe noktası. */
     heatmapPeak: string;
+    /** Yaş doğrulama. */
+    ageGateTitle: (age: number) => string;
+    ageGateText: string;
+    ageGateDay: string;
+    ageGateMonth: string;
+    ageGateYear: string;
+    /** Alanların yer tutucusu, `/` ile: "GG/AA/YYYY". */
+    ageGateFormat: string;
+    ageGateSubmit: string;
+    ageGateInvalid: string;
+    ageGateDeniedTitle: string;
+    ageGateDenied: (age: number) => string;
+    ageGateRetry: string;
+    ageGatePassed: string;
     /** Ödeme duvarı. */
     paywallTitle: string;
     paywallText: string;
@@ -319,6 +333,7 @@ export type PluginStringKey =
     | 'interactiveSponsored'
     | 'interactiveClose'
     | 'interactiveVotes'
+    | AgeGateStringKey
     | PaywallStringKey
     | ClipStringKey
     | PartyStringKey
@@ -327,6 +342,19 @@ export type PluginStringKey =
     | PodcastStringKey
     | SignLanguageStringKey;
 
+export type AgeGateStringKey =
+    | 'ageGateTitle'
+    | 'ageGateText'
+    | 'ageGateDay'
+    | 'ageGateMonth'
+    | 'ageGateYear'
+    | 'ageGateFormat'
+    | 'ageGateSubmit'
+    | 'ageGateInvalid'
+    | 'ageGateDeniedTitle'
+    | 'ageGateDenied'
+    | 'ageGateRetry'
+    | 'ageGatePassed';
 export type PaywallStringKey = 'paywallTitle' | 'paywallText' | 'paywallSubscribe' | 'paywallLogin' | 'paywallPreview';
 export type ClipStringKey =
     | 'clip'

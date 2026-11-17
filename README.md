@@ -56,7 +56,7 @@ That's it: HLS, the quality menu, captions and keyboard shortcuts work out of th
 
 > Use the full `…/dist/hope-player.js` path on CDNs — the player loads its plugins as relative chunks next to that file. unpkg (`https://unpkg.com/@hopeplayer/core@1/dist/hope-player.js`) and esm.sh work the same way.
 >
-> **In production, pin an exact version** (`@hopeplayer/core@1.8.1/dist/hope-player.js`): CDNs cache version ranges like `@1` for a while, so a new release can take time to show up, while an exact version URL never changes and is cached for good. Plugin chunks have content hashes in their names (`ads-DPL7m9PV.js`), so a new release never serves a stale chunk.
+> **In production, pin an exact version** (`@hopeplayer/core@1.9.0/dist/hope-player.js`): CDNs cache version ranges like `@1` for a while, so a new release can take time to show up, while an exact version URL never changes and is cached for good. Plugin chunks have content hashes in their names (`ads-DPL7m9PV.js`), so a new release never serves a stale chunk.
 
 ## Install with npm
 
@@ -100,6 +100,7 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 - Rewarded quality unlock, sponsorship layer from your own API, pause ads, rule-driven Ad Manager out-of-page ads (`adTriggers`).
 - Paywall with a free preview that hooks into your membership system (`checkAccess`, subscribe / sign-in callbacks), and a moving personal watermark against screen-recording piracy.
 - Casting keeps the ads: VAST / VMAP breaks are sent to the TV.
+- Age verification: an animated date-of-birth screen; content and ads load only after the viewer passes the age limit, with `checkAge` / `onSubmit` callbacks and an `hp:agegate` event that carries the age group, never the birth date.
 - Privacy & cookie consent: OneTrust, Cookiebot and IAB TCF v2 connectors (or your own callback) switch ad personalization (`npa` / `ltd`, GPT, Prebid), analytics and on-device storage per category.
 
 **Engineering**
