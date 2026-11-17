@@ -14,6 +14,12 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.9.0] — 2026-11-18
+
+### Added
+
+- **Age verification (`ageGate`):** an animated date-of-birth screen (drawn ring badge, day / month / year fields that advance on their own and accept a pasted date, shake on an invalid date, a check-mark exit or a locked "Access restricted" screen; prefers-reduced-motion respected, fits small players on one row). Until the viewer passes `minAge` (default 18) the video source is not loaded, no ad is requested and autoplay is not attempted. `checkAge()` skips the screen for viewers your site already verified; `onSubmit({ dateOfBirth, age, ageGroup, passed })` hands the date to your own system and can reject with `false`. The `hp:agegate` event (`shown` / `passed` / `denied`, `source`) carries only the age and an age group such as `25-34` — never the date of birth — for analytics / dataLayer. The result (age only) is remembered for the tab, a number of days or not at all (`remember`), and follows the privacy consent: without functional consent nothing is written to the browser. `retry` lets a rejected viewer correct the date. Separate chunk.
+
 ## [1.8.1] — 2026-11-16
 
 ### Fixed

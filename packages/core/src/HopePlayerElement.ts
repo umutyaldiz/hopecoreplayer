@@ -42,6 +42,7 @@ import type { MarkProgress } from './plugins/markers';
 import type { Segments } from './plugins/segments';
 import type { SpriteThumbnails } from './plugins/sprite-thumbnails';
 import type { CountdownScreen } from './plugins/countdown-screen';
+import type { AgeGate } from './plugins/age-gate';
 import type { GeoChecker } from './plugins/geo-checker';
 import type { RedirectScreen } from './plugins/redirect-screen';
 import type { Transcript } from './plugins/transcript';
@@ -205,6 +206,7 @@ export class HopePlayerElement extends HTMLElement {
     private segments: Segments | null = null;
     private spriteThumbnails: SpriteThumbnails | null = null;
     private countdownScreen: CountdownScreen | null = null;
+    private ageGate: AgeGate | null = null;
     private geoChecker: GeoChecker | null = null;
     private redirectScreen: RedirectScreen | null = null;
     private redirectKey = '';
@@ -269,12 +271,8 @@ export class HopePlayerElement extends HTMLElement {
     /** Seçili altyazı — yayın izleri sonradan gelince seçim korunur. */
     private activeCaptionLabel: string | null = null;
     private streamAudio: { tracks: StreamAudioTrack[]; active: number } = { tracks: [], active: -1 };
-    /**
-     * countdownScreen varken gerçek init (kaynak + içerik plugin'leri) ertelenir; en güncel options snapshot'ı.
-     * onComplete kaydı tek sefer yapılır (bkz. playbackInitRegistered) — init birden fazla kez tetiklenmesin.
-     */
+    /** Kapı (geri sayım / yaş) açıkken ertelenen init'in en güncel options'ı — ilk tamamlanma tüketir, init bir kez koşar. */
     private pendingPlaybackOptions: HopePlayerOptions | null = null;
-    private playbackInitRegistered = false;
     /**
      * countdownScreen gibi alanlar yalnızca .options ile gelir. connectedCallback'teki ilk (options'suz) geçiş chrome'u
      * bir an açıp player'ı gösteriyordu; 'boot' bloklayıcısı gerçek options gelene kadar bekletir.
@@ -596,6 +594,7 @@ export class HopePlayerElement extends HTMLElement {
         this.segments?.destroy();
         this.spriteThumbnails?.destroy();
         this.countdownScreen?.destroy();
+        this.ageGate?.destroy();
         this.geoChecker?.destroy();
         this.redirectScreen?.destroy();
         this.transcript?.destroy();
@@ -1037,6 +1036,7 @@ export class HopePlayerElement extends HTMLElement {
         this.playlistRunner?.refreshLabels();
         this.hopeStory?.refreshLabels();
         this.countdownScreen?.refreshLabels();
+        this.ageGate?.refreshLabels();
         this.geoChecker?.refreshLabels();
         this.redirectScreen?.refreshLabels();
         this.transcript?.refreshLabels();
@@ -1078,7 +1078,7 @@ export class HopePlayerElement extends HTMLElement {
             }
             preconnectAdHosts();
             // IMA SDK + reklam isteği kaynak yüklemesiyle PARALEL başlasın (countdown varken reklam sonra istenir).
-            if (!options.countdownScreen) void this.installAdsOnce(options);
+            if (!options.countdownScreen && !options.ageGate) void this.installAdsOnce(options);
         }
 
         await this.applyAudioMode(options);
@@ -1086,11 +1086,11 @@ export class HopePlayerElement extends HTMLElement {
         // Gate plugin'leri (countdown/geo) KAYNAK YÜKLENMEDEN/autoplay denenmeden
         // ÖNCE kuruluyor ki blockChrome() + 'play' dinleyicisi zaten takılı olsun
         // — aksi halde autoplay bir an için gerçekten oynamaya başlayabilirdi.
-        const gateCtx = () => ({
+        const gateCtx = (key = 'countdown-geo') => ({
             videoEl: this.videoEl,
             overlayContainerEl: this.videoArea,
-            blockChrome: () => this.blockChrome('countdown-geo'),
-            unblockChrome: () => this.unblockChrome('countdown-geo'),
+            blockChrome: () => this.blockChrome(key),
+            unblockChrome: () => this.unblockChrome(key),
             i18n: this.i18n,
         });
 
@@ -1104,21 +1104,26 @@ export class HopePlayerElement extends HTMLElement {
             this.geoChecker = installGeoChecker(gateCtx(), options.geoChecker);
         }
 
+        if (options.ageGate && !this.ageGate) {
+            const { installAgeGate } = await import('./plugins/age-gate');
+            this.ageGate = installAgeGate({ ...gateCtx('age'), hostEl: this }, options.ageGate);
+        } else this.ageGate?.setOptions(options.ageGate);
+
         this.unblockChrome('boot');
 
-        if (this.countdownScreen && !this.countdownScreen.isComplete()) {
-            this.pendingPlaybackOptions = options;
-            if (!this.playbackInitRegistered) {
-                this.playbackInitRegistered = true;
-                this.countdownScreen.onComplete(() => {
-                    const pending = this.pendingPlaybackOptions;
-                    this.pendingPlaybackOptions = null;
-                    if (pending) void this.initPlayback(pending);
-                });
-            }
-        } else {
-            await this.initPlayback(options);
-        }
+        await this.playAfterGates(options);
+    }
+
+    /** Kapılar (geri sayım, yaş) geçilene kadar kaynak / reklam / autoplay ertelenir. */
+    private async playAfterGates(options: HopePlayerOptions): Promise<void> {
+        const gate = [this.countdownScreen, this.ageGate].find((g) => g && !g.isComplete());
+        if (!gate) return this.initPlayback(options);
+        this.pendingPlaybackOptions = options;
+        gate.onComplete(() => {
+            const pending = this.pendingPlaybackOptions;
+            this.pendingPlaybackOptions = null;
+            if (pending) void this.playAfterGates(pending);
+        });
     }
 
     private async initPlayback(options: HopePlayerOptions): Promise<void> {

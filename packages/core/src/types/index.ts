@@ -813,6 +813,45 @@ export interface CountdownScreenOptions {
     imageChangeInterval?: number;
 }
 
+/** Yaş grubu — analitik için ham doğum tarihi yerine bu kullanılır. */
+export type AgeGroup = '0-12' | '13-17' | '18-24' | '25-34' | '35-44' | '45-54' | '55-64' | '65+';
+
+/** Yaş ekranında girilen değerin sonucu (`ageGate.onSubmit`). */
+export interface AgeGateSubmit {
+    /** Girilen doğum tarihi, `YYYY-AA-GG`. Yalnızca `onSubmit`'e verilir — `hp:agegate` olayına ve analitiğe girmez. */
+    dateOfBirth: string;
+    age: number;
+    ageGroup: AgeGroup;
+    /** `minAge` ve üzeri mi. */
+    passed: boolean;
+}
+
+export interface AgeGateOptions {
+    /** Asgari yaş. Varsayılan 18. */
+    minAge?: number;
+    /** Başlık ve açıklama; verilmezse dil dosyasındaki metin ("Bu içerik 18 yaş ve üzeri içindir"). */
+    title?: string;
+    text?: string;
+    /** Butonun altındaki küçük not (ör. gizlilik açıklamanız). */
+    note?: string;
+    /** Arka plan görseli; verilmezse poster bulanık görünür. */
+    image?: string;
+    /**
+     * Sonucu hatırla: `'session'` (sekme kapanana kadar, varsayılan), gün sayısı ya da `false` (her açılışta sor).
+     * İşlevsel çerez onayı yoksa (`privacy`) yalnızca bu sayfa açıkken hatırlanır.
+     */
+    remember?: 'session' | number | false;
+    /** Reddedilen izleyici yeni bir tarih girebilir mi. Varsayılan false — sonuç hatırlanırken yeniden sorulmaz. */
+    retry?: boolean;
+    /** Sitenizin kendi doğrulaması (ör. yaşı bilinen, giriş yapmış üye): `true` → ekran hiç çıkmaz. */
+    checkAge?: () => boolean | Promise<boolean>;
+    /**
+     * Tarih gönderilince çağrılır — kendi sisteminize / dataLayer'a yazmak için. `false` döndürür ya da `false` ile
+     * çözülürse izleyici reddedilir (ör. sunucunuz kabul etmedi). Yanıt gelene kadar buton bekler.
+     */
+    onSubmit?: (result: AgeGateSubmit) => boolean | void | Promise<boolean | void>;
+}
+
 export interface GeoCheckerOptions {
     allowedCountries?: string[];
     region?: 'EU' | 'MENA';
@@ -1738,6 +1777,8 @@ export interface HopePlayerOptions {
     countdownScreen?: CountdownScreenOptions;
     /** Oynatıcı yüklenmeden önce IP-coğrafya tabanlı erişim kontrolü. */
     geoChecker?: GeoCheckerOptions;
+    /** Yaş doğrulama: içerik ve reklam, izleyici doğum tarihini girip `minAge`'i geçene kadar yüklenmez. */
+    ageGate?: boolean | AgeGateOptions;
     /** İçerik bitince "N saniye içinde sıradaki video" ekranı. */
     redirectScreen?: RedirectScreenOptions;
     /** Yeterince izlenmiş bir noktada duraklatılınca "telefonundan devam et" QR kodu. */
@@ -1867,6 +1908,11 @@ export type HopePlayerEventMap = {
      * Ödeme duvarı: `shown` (önizleme bitti), `click` (`action`: subscribe | login — iptal edilebilir: `preventDefault()`
      * → adres açılmaz, kendi giriş pencerenizi açın), `unlock` (`unlockPaywall()` ya da `unlocked: true`).
      */
+    /**
+     * Yaş doğrulama: `shown` (ekran açıldı), `passed`, `denied`. `source`: `input` (izleyici girdi), `remembered`
+     * (önceki sonuç), `check` (`checkAge`). Doğum tarihi olayda yoktur; `age` / `ageGroup` yalnızca `input`'ta gelir.
+     */
+    'hp:agegate': CustomEvent<{ state: 'shown' | 'passed' | 'denied'; source?: 'input' | 'remembered' | 'check'; minAge: number; age?: number; ageGroup?: AgeGroup }>;
     'hp:paywall': CustomEvent<{ state: 'shown' | 'click' | 'unlock'; action?: 'subscribe' | 'login'; time: number }>;
     /** Klip: `open` (seçici açıldı), `copy` / `share` (iptal edilebilir), `play` (sayfa ?clip= ile açıldı), `exit`. */
     'hp:clip': CustomEvent<{ state: 'open' | 'copy' | 'share' | 'play' | 'exit'; start: number; end: number; url: string; network?: ShareNetwork | 'native' }>;
