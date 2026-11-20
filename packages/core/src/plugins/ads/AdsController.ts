@@ -1,3 +1,4 @@
+import { markLinearAd } from '../shared/adOverlays';
 import { AdSurfaceGuard, type AdSurfaceGuardContext } from './AdSurfaceGuard';
 import { loadImaSdk } from './loadImaSdk';
 import { generateVastUrl, mergeCustParams, toCustRecord } from './generateVastUrl';
@@ -668,6 +669,7 @@ export class AdsController {
         }
         // iPhone native tam ekranı / PiP'te reklam görünmez — önce çık.
         this.surfaceGuard?.onBreakStart();
+        markLinearAd(this.ctx.hostEl, this.ctx.adLayerEl, true);
         this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:adstart', { detail: { type: this.activeBreak } }));
     };
 
@@ -679,6 +681,7 @@ export class AdsController {
         if (this.linearBreakActive) {
             this.linearBreakActive = false;
             this.surfaceGuard?.onBreakEnd(finished !== 'postroll');
+            markLinearAd(this.ctx.hostEl, this.ctx.adLayerEl, false);
             this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:adend', { detail: { type: finished } }));
         }
         // Reklam IMA tarafında doğal yoldan (ALL_ADS_COMPLETED) bitti — SCTE-35
@@ -924,6 +927,7 @@ export class AdsController {
         if (this.linearBreakActive) {
             this.linearBreakActive = false;
             this.surfaceGuard?.onBreakEnd(false);
+            markLinearAd(this.ctx.hostEl, this.ctx.adLayerEl, false);
             this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:adend', { detail: { type: this.activeBreak } }));
         }
     }

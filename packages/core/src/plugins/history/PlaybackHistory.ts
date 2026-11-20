@@ -46,6 +46,9 @@ export class PlaybackHistory {
     private lastSaveAt = 0;
     private noticeEl: HTMLDivElement | null = null;
     private noticeTimer: ReturnType<typeof setTimeout> | null = null;
+    private noticeTime = 0;
+    /** Reklam sırasında bekleyen bildirim (sn) — reklam bitince gösterilir. */
+    private noticeAfterAd: number | null = null;
     private skipNextRestore: boolean;
     private readonly position: boolean;
     private readonly volume: boolean;
@@ -75,6 +78,8 @@ export class PlaybackHistory {
             v.addEventListener('ended', this.onEnded);
             window.addEventListener('pagehide', this.savePosition);
             document.addEventListener('visibilitychange', this.onVisibility);
+            ctx.hostEl.addEventListener('hp:adstart', this.onAdStart);
+            ctx.hostEl.addEventListener('hp:adend', this.onAdEnd);
             if (v.readyState >= 1) this.onLoadedMetadata();
         }
     }
@@ -90,6 +95,8 @@ export class PlaybackHistory {
         v.removeEventListener('ended', this.onEnded);
         window.removeEventListener('pagehide', this.savePosition);
         document.removeEventListener('visibilitychange', this.onVisibility);
+        this.ctx.hostEl.removeEventListener('hp:adstart', this.onAdStart);
+        this.ctx.hostEl.removeEventListener('hp:adend', this.onAdEnd);
         this.hideNotice();
     }
 
@@ -197,9 +204,28 @@ export class PlaybackHistory {
 
     // ── Bildirim ──
 
+    /** Doğrusal reklam başladı: bildirim reklamın üstünde kalmaz, reklam bitince yeniden çıkar. */
+    private readonly onAdStart = (e: Event): void => {
+        if ((e as CustomEvent<{ linear?: boolean }>).detail?.linear === false || !this.noticeEl) return;
+        this.noticeAfterAd = this.noticeTime;
+        this.hideNotice();
+    };
+
+    private readonly onAdEnd = (e: Event): void => {
+        if ((e as CustomEvent<{ linear?: boolean }>).detail?.linear === false) return;
+        const t = this.noticeAfterAd;
+        this.noticeAfterAd = null;
+        if (t !== null) this.showNotice(t);
+    };
+
     private showNotice(time: number): void {
         if (this.options.notice === false) return;
         this.hideNotice();
+        if (this.ctx.isAdActive()) {
+            this.noticeAfterAd = time;
+            return;
+        }
+        this.noticeTime = time;
         const t = this.ctx.i18n;
         const el = document.createElement('div');
         el.className = 'hp-history-notice';
@@ -220,6 +246,7 @@ export class PlaybackHistory {
                 this.store(all);
             }
             this.emit('restart', 0);
+            this.noticeAfterAd = null;
             this.hideNotice();
         });
         el.append(text, restart);

@@ -2,7 +2,7 @@
   "expo": {
     "name": "HopePlayer RN",
     "slug": "hopeplayer-react-native-example",
-    "version": "1.9.0",
+    "version": "1.9.1",
     "orientation": "default",
     "userInterfaceStyle": "dark",
     "ios": {

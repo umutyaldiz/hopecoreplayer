@@ -1,0 +1,4 @@
+/* Doğrusal reklam süresince (host[data-ad]) video alanında yalnızca medya, kontrol çubuğu ve izinli öğeler kalır. */
+:host([data-ad]) .video-area > :not(.media-layer, .hp-chrome, [part='center-play-button'], [part='unmute-badge'], [part='caption-layer'], [part='tooltip'], [part='context-menu'], [part='error-screen'], [part='seek-feedback'], [part='cast-overlay'], [part='sticky-close-button'], [part^='rewarded'], [part='multiview']) {
+    visibility: hidden !important;
+}
