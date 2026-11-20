@@ -258,6 +258,8 @@ if (player) {
                           })),
                       }
                     : undefined,
+            // ?feature=resume — kaldığı yerden devam (testte konum önceden yazılır; reklamla birlikte: &ads=preroll).
+            history: feature === 'resume' ? { id: 'resume-demo', minWatched: 2, endMargin: 2 } : undefined,
             // ?feature=age-gate — 18+ yaş ekranı (sonuç hatırlanmaz, her açılışta sorar).
             ageGate: feature === 'age-gate' ? { minAge: 18, remember: false, retry: true, image: '/sample-cover.jpg' } : undefined,
             // 1.8: ?feature=paywall | watermark | clips | reactions | course | sign-language

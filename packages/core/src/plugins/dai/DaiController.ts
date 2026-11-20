@@ -1,3 +1,4 @@
+import { markLinearAd } from '../shared/adOverlays';
 import { loadDaiSdk } from './loadDaiSdk';
 import type { DaiOptions } from '../../types';
 import { getPrivacy } from '../../utils/privacy';
@@ -82,10 +83,12 @@ export class DaiController {
             }
             case Type.AD_BREAK_STARTED:
                 this.ctx.disableSeeking();
+                markLinearAd(this.ctx.hostEl, this.ctx.videoEl, true);
                 this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:adstart', { detail: { type: 'midroll' } }));
                 break;
             case Type.AD_BREAK_ENDED:
                 this.ctx.enableSeeking();
+                markLinearAd(this.ctx.hostEl, this.ctx.videoEl, false);
                 this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:adend', { detail: { type: 'midroll' } }));
                 break;
             default:

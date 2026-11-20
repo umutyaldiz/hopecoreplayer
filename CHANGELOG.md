@@ -14,6 +14,12 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.9.1] — 2026-11-20
+
+### Fixed
+
+- **Nothing sits on top of a video ad except the control bar.** With a saved position and a preroll, the "Resumed from 10:00 · Start over" notice stayed on top of the ad. During a linear ad (IMA or DAI) the player now carries a `data-ad` attribute and hides every layer in the video area except the control bar and the ad itself — the resume notice, plugin overlays and any future plugin layer. The resume notice is held during the ad and shown again when it ends. `hope-player[data-ad]` can also be used in your page CSS.
+
 ## [1.9.0] — 2026-11-18
 
 ### Added
