@@ -14,6 +14,14 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+### Changed
+
+- **Mobile: a crowded top-right control group collapses** (YouTube mobile style). In the compact layout (player narrower than 480 px), when more than one button besides settings sits in the top-right group (share, clips, reactions, transcript, cast…), the group shows only settings and a "‹" button; tapping it reveals every button and turns into "›" to collapse again (`aria-expanded`, labels `moreControls` / `close`). Buttons that plugins show or hide later are counted automatically. Desktop is unchanged.
+
+### Internal
+
+- Cast ad-tag building moved from the main bundle into the cast chunk (about 0.9 KB gzip less on initial load).
+
 ## [1.9.1] — 2026-11-20
 
 ### Fixed

@@ -80,6 +80,9 @@ export class ControlBar {
     private readonly playButton: HTMLButtonElement;
     private readonly playIcon: HTMLElement;
     private readonly pipButton: HTMLButtonElement;
+    /** Kompakt düzende kalabalık sağ grubu daraltan / açan ok ("‹" ↔ "›"). */
+    private readonly moreBtn: HTMLButtonElement;
+    private moreOpen = false;
     private readonly skipBack: { btn: HTMLButtonElement; num: HTMLSpanElement };
     private readonly skipForward: { btn: HTMLButtonElement; num: HTMLSpanElement };
     /** Etkin sarma süreleri (sn); null = buton gizli. */
@@ -238,6 +241,20 @@ export class ControlBar {
         this.pipButton.addEventListener('click', () => this.togglePip());
         rightGroup.appendChild(this.pipButton);
 
+        const more = iconButton(labels.moreControls, 'chevron-left');
+        this.moreBtn = more.btn;
+        this.moreBtn.classList.add('hp-more');
+        this.moreBtn.hidden = true;
+        this.moreBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.moreOpen = !this.moreOpen;
+            this.updateOverflow();
+        });
+        rightGroup.appendChild(this.moreBtn);
+        this.settingsMenu.el.classList.add('hp-settings');
+        // Eklentiler butonlarını sonradan gösterip gizliyor (ör. Cast cihaz bulunca) — sayım güncel kalsın.
+        new MutationObserver(() => this.updateOverflow()).observe(rightGroup, { childList: true, subtree: true, attributeFilter: ['style', 'hidden'] });
+
         const fullscreen = iconButton(labels.fullscreenEnter, 'fullscreen-enter', 'F');
         this.fullscreenButton = fullscreen.btn;
         this.fullscreenIcon = fullscreen.icon;
@@ -291,6 +308,24 @@ export class ControlBar {
             this.bottomRow.insertBefore(this.rightGroup, this.fullscreenSlot);
             this.fullscreenSlot.style.display = 'none';
         }
+        this.moreOpen = false;
+        this.updateOverflow();
+    }
+
+    /** Kompakt düzende ayarlar dışında birden fazla buton varsa grup daralır: ayarlar + "‹"; açınca hepsi + "›". */
+    private updateOverflow(): void {
+        const g = this.rightGroup;
+        const visible = Array.from(g.children as HTMLCollectionOf<HTMLElement>).filter(
+            (c) => c !== this.moreBtn && c !== this.settingsMenu.el && !c.hidden && c.style.display !== 'none'
+        ).length;
+        const show = this.compact && visible > 1;
+        const open = show && this.moreOpen;
+        if (this.moreBtn.hidden === show) this.moreBtn.hidden = !show;
+        if (g.hasAttribute('data-collapsed') !== (show && !open)) g.toggleAttribute('data-collapsed', show && !open);
+        if (this.moreBtn.hasAttribute('data-open') === open) return;
+        this.moreBtn.toggleAttribute('data-open', open);
+        this.moreBtn.setAttribute('aria-expanded', String(open));
+        setButtonLabel(this.moreBtn, open ? this.labels.close : this.labels.moreControls);
     }
 
     /**
@@ -386,6 +421,9 @@ export class ControlBar {
         this.renderPlayState();
         this.renderSkipButtons();
         setButtonLabel(this.pipButton, this.labels.pip);
+        // Etiket yenilensin diye durum bir an ters çevrilir; updateOverflow doğrusunu yazar.
+        this.moreBtn.toggleAttribute('data-open', !this.moreBtn.hasAttribute('data-open'));
+        this.updateOverflow();
         setButtonLabel(this.liveBadge, this.labels.goToLive);
         this.liveText.textContent = this.labels.live;
         this.setFullscreenState(this.callbacks.isFullscreen());

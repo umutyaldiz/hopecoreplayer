@@ -471,6 +471,27 @@ button.hp-chip:active {
 .hp-top-bar > * {
     pointer-events: auto;
 }
+/* Kalabalık sağ grup (ControlBar.updateOverflow): daralınca ayarlar + "‹"; açılınca hepsi + "›", sığmazsa alt satıra. */
+.hp-top-bar {
+    max-width: calc(100% - 16px);
+}
+.hp-top-bar > .hp-group {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    flex-shrink: 1;
+    min-width: 0;
+}
+.hp-group[data-collapsed] > :not(.hp-more, .hp-settings),
+.hp-more[hidden] {
+    display: none !important;
+}
+/* Açıkken "‹" dönerek "›" olur (fontta ayrı ikon yok). */
+.hp-more .hp-icon {
+    transition: transform 0.2s;
+}
+.hp-more[data-open] .hp-icon {
+    transform: rotate(180deg);
+}
 
 /* Story "tüm videolar" butonu: sağ üstte, kompakt düzende üst bara taşınan ayarlar/PiP grubunun (top 8px + buton + iç boşluk) altında. */
 .hp-story-list-btn {

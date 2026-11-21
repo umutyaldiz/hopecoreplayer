@@ -8,6 +8,8 @@ export interface HopeLocaleStrings {
     seekBar: string;
     settings: string;
     pip: string;
+    /** Kompakt düzende gizlenen kontrolleri açan buton. */
+    moreControls: string;
     skipBack: (seconds: number) => string;
     skipForward: (seconds: number) => string;
     /** Sarma bildirimindeki saniye kısaltması ("+15 sn"). */

@@ -9,4 +9,7 @@ export async function installAds(ctx: AdsPlayerContext, options: AdsOptions): Pr
 }
 
 export { AdsController };
+// Cast (TV tag'leri) ve DAI (reklam işareti) bunları buradan, gerektiğinde yükler — preroll yolunda ayrı parça olmasın.
+export { generateVastUrl, mergeCustParams, toCustRecord } from './generateVastUrl';
+export { markLinearAd } from '../shared/adOverlays';
 export type { AdsPlayerContext };
