@@ -1,4 +1,3 @@
-import { markLinearAd } from '../shared/adOverlays';
 import { loadDaiSdk } from './loadDaiSdk';
 import type { DaiOptions } from '../../types';
 import { getPrivacy } from '../../utils/privacy';
@@ -66,6 +65,11 @@ export class DaiController {
         this.streamManager?.reset();
     }
 
+    /** Doğrusal reklam arası: player'a data-ad (bkz. shared/adOverlays) — yardımcı reklam parçasından gelir. */
+    private markAd(active: boolean): void {
+        void import('../ads').then((m) => m.markLinearAd(this.ctx.hostEl, this.ctx.videoEl, active));
+    }
+
     private readonly onStreamEvent = (event: google.ima.dai.api.StreamEvent): void => {
         if (!this.dai) return;
         const Type = this.dai.api.StreamEvent.Type;
@@ -83,12 +87,12 @@ export class DaiController {
             }
             case Type.AD_BREAK_STARTED:
                 this.ctx.disableSeeking();
-                markLinearAd(this.ctx.hostEl, this.ctx.videoEl, true);
+                this.markAd(true);
                 this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:adstart', { detail: { type: 'midroll' } }));
                 break;
             case Type.AD_BREAK_ENDED:
                 this.ctx.enableSeeking();
-                markLinearAd(this.ctx.hostEl, this.ctx.videoEl, false);
+                this.markAd(false);
                 this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:adend', { detail: { type: 'midroll' } }));
                 break;
             default:

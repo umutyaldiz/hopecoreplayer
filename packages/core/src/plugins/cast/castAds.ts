@@ -1,11 +1,12 @@
 import type { AdsOptions, CastOptions } from '../../types';
-import { generateVastUrl, mergeCustParams, toCustRecord } from '../ads/generateVastUrl';
 
 export type CastAdTags = { vmap?: string; preroll?: string; midroll?: string; midrollIntervalSeconds?: number; postroll?: string } | null;
 
 /** TV'ye gidecek reklam tag'leri (makrolar doldurulmuş) — `cast.ads` ya da player'ın `ads` seçeneğinden; null = reklamsız. */
-export function castAdTags(cast: CastOptions['ads'], adsOpts: AdsOptions | null): CastAdTags {
+export async function castAdTags(cast: CastOptions['ads'], adsOpts: AdsOptions | null): Promise<CastAdTags> {
     if (cast === false) return null;
+    // Yardımcılar reklam parçasında — statik import onları ayrı parçaya bölerdi (preroll yolunda fazladan istek).
+    const { generateVastUrl, mergeCustParams, toCustRecord } = await import('../ads');
     // TV de aynı GAM birimini ister — Prebid custParams'ı (preroll / midroll) TV tag'lerine de eklenir.
     const prebid = adsOpts?.prebid;
     const preCust = prebid?.custParams;

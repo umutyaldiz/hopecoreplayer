@@ -30,6 +30,8 @@ async function withPage(browser, scenario, fn) {
         const el = document.getElementById('player');
         return !!(el && el.shadowRoot && el.shadowRoot.querySelector('video'));
     });
+    // Reklam modülü ayrı parça — kurulup IMA'yı ayarlayana kadar bekle (yavaş CI'da video öğesinden sonra gelir).
+    await page.waitForFunction(() => window.__adsLog.length > 0, null, { timeout: 5000 }).catch(() => {});
     try {
         await fn(page);
     } finally {
@@ -41,6 +43,9 @@ async function withPage(browser, scenario, fn) {
 async function testPreroll(browser) {
     console.log('\n[1] Preroll: requestAds doğru VAST URL ile çağrılıyor mu?');
     await withPage(browser, 'preroll', async (page) => {
+        // Reklam modülü ayrı parça: yavaş makinede (CI) istek video öğesinden biraz sonra gelir.
+        await page.waitForFunction(() => window.__adsLog.some((e) => e.ev === 'requestAds'), null, { timeout: 8000 }).catch(() => {});
+        await page.waitForTimeout(300);
         const log = await page.evaluate(() => window.__adsLog);
         const reqEvents = log.filter((e) => e.ev === 'requestAds');
         ok(reqEvents.length === 1, `tam 1 requestAds çağrısı (${reqEvents.length})`);

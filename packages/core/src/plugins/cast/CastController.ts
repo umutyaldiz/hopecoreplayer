@@ -1,5 +1,5 @@
 import type { AdsOptions, CastOptions } from '../../types';
-import { castAdTags, type CastAdTags } from './castAds';
+import type { CastAdTags } from './castAds';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { setIconName } from '../../icons/Icon';
 import { loadCastSdk, type CastApi, type CastContextLike, type CastMediaInfo, type CastSessionLike, type RemotePlayerControllerLike, type RemotePlayerLike } from './castSdk';
@@ -283,7 +283,8 @@ export class CastController {
             if (s.default) activeTrackIds.push(i + 1);
             return t;
         });
-        const ads = castAdTags(media.ads.cast, media.ads.options);
+        // Tag'ler reklam parçasındaki yardımcılarla, yalnızca TV'ye yüklerken üretilir.
+        const ads = media.ads.cast === false || (!media.ads.cast && !media.ads.options) ? null : await (await import('./castAds')).castAdTags(media.ads.cast, media.ads.options);
         this.applyAds(info, ads, media.live);
         const req = new m.LoadRequest(info);
         req.currentTime = media.live ? undefined : currentTime;
