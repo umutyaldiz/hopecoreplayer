@@ -1,7 +1,7 @@
 {
   "name": "hopeplayer-vue-example",
   "private": true,
-  "version": "1.9.1",
+  "version": "1.10.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@hopeplayer/core": "^1.9.1",
-    "@hopeplayer/vue": "^1.9.1",
+    "@hopeplayer/core": "^1.10.0",
+    "@hopeplayer/vue": "^1.10.0",
     "vue": "^3.5.0"
   },
   "devDependencies": {
