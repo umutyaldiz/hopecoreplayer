@@ -699,13 +699,14 @@ async function testContextMenu(browser) {
         await setOptions({});
         await page.waitForTimeout(200);
         // Sağ tıktan ÖNCE dinleyici kur; olayın tarayıcı menüsünü engelleyip engellemediğini döndürür.
-        let prevented;
-        const pending = page.evaluate(() => new Promise((r) => {
-            document.getElementById('player').addEventListener('contextmenu', (e) => setTimeout(() => r(e.defaultPrevented)), { once: true });
-            setTimeout(() => r('olay gelmedi'), 5000);
-        }));
+        // Dinleyici tıktan önce kurulsun (beklenmeyen evaluate yavaş CI'da tıkla yarışıyordu).
+        await page.evaluate(() => {
+            window.__ctxPrevented = 'olay gelmedi';
+            document.getElementById('player').addEventListener('contextmenu', (e) => setTimeout(() => (window.__ctxPrevented = e.defaultPrevented)), { once: true });
+        });
         await page.mouse.click(center.x, center.y, { button: 'right' });
-        prevented = await pending;
+        await page.waitForFunction(() => window.__ctxPrevented !== 'olay gelmedi', null, { timeout: 5000 }).catch(() => {});
+        let prevented = await page.evaluate(() => window.__ctxPrevented);
         let m = await menu();
         ok(prevented === true && m.open && JSON.stringify(m.items) === JSON.stringify([`HopeCorePlayerv${version}`]), `varsayılan: tarayıcı menüsü yerine ad + sürüm (${version}) ${JSON.stringify(m)}`);
         await page.keyboard.press('Escape');
