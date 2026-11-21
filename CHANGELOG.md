@@ -14,6 +14,8 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.11.1] — 2026-11-22
+
 ### Fixed
 
 - **History: a QR resume link (`?vtime=`) no longer gets a brief jump to the saved position first.** When the history chunk was installed after the video's metadata was ready, the same load was handled twice (once at install, once on `loadedmetadata`): the first call used up the link's priority, the second sought to the saved position and showed the resume notice before the link time was applied. Each load is now handled once, and metadata from a source that is being replaced is ignored.
