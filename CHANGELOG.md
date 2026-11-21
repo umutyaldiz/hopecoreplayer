@@ -14,9 +14,15 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.10.0] — 2026-11-21
+
 ### Changed
 
 - **Mobile: a crowded top-right control group collapses** (YouTube mobile style). In the compact layout (player narrower than 480 px), when more than one button besides settings sits in the top-right group (share, clips, reactions, transcript, cast…), the group shows only settings and a "‹" button; tapping it reveals every button and turns into "›" to collapse again (`aria-expanded`, labels `moreControls` / `close`). Buttons that plugins show or hide later are counted automatically. Desktop is unchanged.
+
+### Fixed
+
+- **The preroll request no longer waits for extra chunks.** The ads chunk pulled two small shared chunks before calling IMA (VAST helpers shared with cast, the style helper of the ad-overlay rule), adding a network round trip before the preroll. The ads chunk now depends only on the player chunk; cast and DAI load these helpers lazily.
 
 ### Internal
 
