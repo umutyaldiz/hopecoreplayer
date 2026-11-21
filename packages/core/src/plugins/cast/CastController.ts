@@ -1,4 +1,5 @@
-import type { CastOptions } from '../../types';
+import type { AdsOptions, CastOptions } from '../../types';
+import { castAdTags, type CastAdTags } from './castAds';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { setIconName } from '../../icons/Icon';
 import { loadCastSdk, type CastApi, type CastContextLike, type CastMediaInfo, type CastSessionLike, type RemotePlayerControllerLike, type RemotePlayerLike } from './castSdk';
@@ -17,8 +18,8 @@ export interface CastMedia {
     /** Ses modu: TV'de müzik parçası olarak (kapak, sanatçı). */
     music: boolean;
     subtitles: Array<{ src: string; label: string; lang: string; default?: boolean }>;
-    /** TV'de oynatılacak reklamlar (makroları doldurulmuş tag'ler); null = reklamsız. */
-    ads: { vmap?: string; preroll?: string; midroll?: string; midrollIntervalSeconds?: number; postroll?: string } | null;
+    /** TV reklamlarının kaynağı (`cast.ads` ve player'ın `ads` seçeneği) — tag'ler yüklemede üretilir. */
+    ads: { cast: CastOptions['ads']; options: AdsOptions | null };
 }
 
 export interface CastPlayerContext {
@@ -282,7 +283,8 @@ export class CastController {
             if (s.default) activeTrackIds.push(i + 1);
             return t;
         });
-        this.applyAds(info, media);
+        const ads = castAdTags(media.ads.cast, media.ads.options);
+        this.applyAds(info, ads, media.live);
         const req = new m.LoadRequest(info);
         req.currentTime = media.live ? undefined : currentTime;
         req.autoplay = autoplay;
@@ -291,7 +293,7 @@ export class CastController {
         this.loadedContent = this.ctx.contentKey();
         try {
             await session.loadMedia(req);
-            this.ctx.log({ message: 'Cast: media loaded on the TV', details: { src: media.src, ads: media.ads ? (media.ads.vmap ? 'vmap' : 'vast') : 'none' } });
+            this.ctx.log({ message: 'Cast: media loaded on the TV', details: { src: media.src, ads: ads ? (ads.vmap ? 'vmap' : 'vast') : 'none' } });
         } catch (err) {
             this.ctx.log({ message: `Cast: the TV could not load the media: ${String(err)}`, fatal: true, details: { src: media.src } });
         }
@@ -301,8 +303,7 @@ export class CastController {
      * Reklamlar TV'de: VMAP verilmişse receiver tüm araları kendisi planlar (vmapAdsRequest); yoksa VAST tag'leri
      * ara olarak eklenir — preroll (0), aralıklı midroll'lar, postroll (-1). Reklamları receiver oynatır ve sayar.
      */
-    private applyAds(info: CastMediaInfo, media: CastMedia): void {
-        const ads = media.ads;
+    private applyAds(info: CastMediaInfo, ads: CastAdTags, live: boolean): void {
         const m = this.api!.chrome.media;
         if (!ads) return;
         if (ads.vmap) {
@@ -324,11 +325,11 @@ export class CastController {
         if (ads.preroll) add('pre', ads.preroll, 0);
         const every = ads.midrollIntervalSeconds ?? 0;
         const duration = this.proxy?.current.duration ?? NaN;
-        if (ads.midroll && every > 0 && !media.live && Number.isFinite(duration)) {
+        if (ads.midroll && every > 0 && !live && Number.isFinite(duration)) {
             // Bitişe çok yakın midroll olmasın (orada postroll var).
             for (let t = every, i = 1; t < duration - MIDROLL_END_MARGIN_S && i <= MAX_INTERVAL_BREAKS; t += every, i++) add(`mid-${i}`, ads.midroll, t);
         }
-        if (ads.postroll && !media.live) add('post', ads.postroll, -1);
+        if (ads.postroll && !live) add('post', ads.postroll, -1);
         if (clips.length) {
             info.breakClips = clips as CastMediaInfo['breakClips'];
             info.breaks = breaks;

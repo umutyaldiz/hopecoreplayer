@@ -10,6 +10,7 @@ export const tr: CoreLocaleStrings = {
     seekBar: 'Video konumu',
     settings: 'Ayarlar',
     pip: 'Resim içinde resim',
+    moreControls: 'Diğer kontroller',
     skipBack: (seconds) => `${seconds} saniye geri`,
     skipForward: (seconds) => `${seconds} saniye ileri`,
     secondsShort: 'sn',

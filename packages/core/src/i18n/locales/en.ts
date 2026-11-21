@@ -9,6 +9,7 @@ export const en: CoreLocaleStrings = {
     seekBar: 'Seek',
     settings: 'Settings',
     pip: 'Picture-in-picture',
+    moreControls: 'More controls',
     skipBack: (seconds) => `Back ${seconds} seconds`,
     skipForward: (seconds) => `Forward ${seconds} seconds`,
     secondsShort: 's',

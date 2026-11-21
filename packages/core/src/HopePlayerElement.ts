@@ -64,7 +64,6 @@ import type { QrResume } from './plugins/qr-resume';
 import type { PauseAd } from './plugins/pause-ad';
 import type { AdTriggers } from './plugins/ad-triggers';
 import type { CastController, CastMedia } from './plugins/cast';
-import { generateVastUrl, mergeCustParams, toCustRecord } from './plugins/ads/generateVastUrl';
 import type { Dubbing } from './plugins/dubbing';
 import type { LiveWallClock } from './plugins/live';
 import type { DaiController } from './plugins/dai';
@@ -2168,35 +2167,6 @@ export class HopePlayerElement extends HTMLElement {
         const format = sourceFormat({ src: source.src, type: source.type, label: '' });
         const audio = typeof o.audio === 'object' ? o.audio : null;
         const image = c.metadata?.image ?? audio?.cover ?? o.poster;
-        const adsOpts = typeof o.ads === 'object' ? o.ads : null;
-        // TV de aynı GAM birimini ister — Prebid custParams'ı (preroll / midroll) TV tag'lerine de eklenir.
-        const prebid = adsOpts?.prebid;
-        const preCust = prebid?.custParams;
-        const midCust = prebid ? { ...toCustRecord(prebid.custParams), ...toCustRecord(prebid.midroll?.custParams) } : undefined;
-        const tag = (t: string | string[] | undefined, cust?: Parameters<typeof mergeCustParams>[1]): string | undefined => {
-            const first = Array.isArray(t) ? t[0] : t;
-            return first ? mergeCustParams(generateVastUrl(first), cust) : undefined;
-        };
-        const ads =
-            c.ads === false
-                ? null
-                : typeof c.ads === 'object'
-                  ? {
-                        vmap: c.ads.vmap ? generateVastUrl(c.ads.vmap) : undefined,
-                        preroll: tag(c.ads.preroll),
-                        midroll: tag(c.ads.midroll),
-                        midrollIntervalSeconds: c.ads.midrollIntervalSeconds,
-                        postroll: tag(c.ads.postroll),
-                    }
-                  : adsOpts
-                    ? {
-                          vmap: adsOpts.adTagVmap ? generateVastUrl(adsOpts.adTagVmap) : undefined,
-                          preroll: tag(adsOpts.adTagPreroll, preCust),
-                          midroll: tag(adsOpts.adTagMidroll, midCust),
-                          midrollIntervalSeconds: adsOpts.midrollIntervalSeconds,
-                          postroll: tag(adsOpts.adTagPostroll),
-                      }
-                    : null;
         return {
             src: abs(source.src),
             contentType: source.type || CAST_MIME[format] || 'video/mp4',
@@ -2206,7 +2176,8 @@ export class HopePlayerElement extends HTMLElement {
             image: image ? abs(image) : undefined,
             music: !!o.audio,
             subtitles: (o.subtitles ?? []).map((s) => ({ src: abs(s.src), label: s.label, lang: s.srclang, default: s.default })),
-            ads: ads && (ads.vmap || ads.preroll || ads.midroll || ads.postroll) ? ads : null,
+            // Tag'ler Cast parçasında üretilir (castAds.ts) — VAST yardımcıları ana pakete girmesin.
+            ads: { cast: c.ads, options: typeof o.ads === 'object' ? o.ads : null },
         };
     }
 
