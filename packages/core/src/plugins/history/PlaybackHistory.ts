@@ -50,6 +50,8 @@ export class PlaybackHistory {
     /** Reklam sırasında bekleyen bildirim (sn) — reklam bitince gösterilir. */
     private noticeAfterAd: number | null = null;
     private skipNextRestore: boolean;
+    /** Bu yüklemenin meta verisi işlendi — kurulumdaki çağrı ile ardından gelen olay ikinci kez sarmasın. */
+    private handled = false;
     private readonly position: boolean;
     private readonly volume: boolean;
     private readonly minWatched: number;
@@ -71,6 +73,7 @@ export class PlaybackHistory {
             v.addEventListener('volumechange', this.saveVolume);
         }
         if (this.position) {
+            v.addEventListener('loadstart', this.onLoadStart);
             v.addEventListener('loadedmetadata', this.onLoadedMetadata);
             v.addEventListener('timeupdate', this.onTimeUpdate);
             v.addEventListener('pause', this.savePosition);
@@ -88,6 +91,7 @@ export class PlaybackHistory {
         const v = this.ctx.videoEl;
         this.savePosition();
         v.removeEventListener('volumechange', this.saveVolume);
+        v.removeEventListener('loadstart', this.onLoadStart);
         v.removeEventListener('loadedmetadata', this.onLoadedMetadata);
         v.removeEventListener('timeupdate', this.onTimeUpdate);
         v.removeEventListener('pause', this.savePosition);
@@ -119,11 +123,17 @@ export class PlaybackHistory {
         }
     }
 
+    private readonly onLoadStart = (): void => {
+        this.handled = false;
+    };
+
     private readonly onLoadedMetadata = (): void => {
         const v = this.ctx.videoEl;
         this.key = this.videoKey();
         this.lastSaveAt = 0;
-        if (!this.key || !Number.isFinite(v.duration)) return;
+        if (!this.key || !Number.isFinite(v.duration) || this.isStaleSource()) return;
+        if (this.handled) return;
+        this.handled = true;
         // Link ile gelen konum (QR ile devam) yalnızca bu açılışta kazanır.
         if (this.skipNextRestore) {
             this.skipNextRestore = false;
@@ -137,6 +147,19 @@ export class PlaybackHistory {
         this.showNotice(entry.t);
         this.emit('resumed', entry.t);
     };
+
+    /** Meta veri, yerine yenisi istenmiş eski kaynağa ait (ör. seçenekler sayfa açıldıktan sonra verildi). */
+    private isStaleSource(): boolean {
+        const playing = this.ctx.videoEl.currentSrc;
+        const wanted = this.ctx.currentSrc();
+        // MSE (HLS / DASH) adresi blob: — karşılaştırılamaz.
+        if (!playing || !wanted || playing.startsWith('blob:')) return false;
+        try {
+            return new URL(wanted, location.href).href !== playing;
+        } catch {
+            return false;
+        }
+    }
 
     private readonly onTimeUpdate = (): void => {
         if (Date.now() - this.lastSaveAt < SAVE_EVERY_MS) return;
