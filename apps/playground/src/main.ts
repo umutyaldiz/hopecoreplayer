@@ -57,6 +57,10 @@ const adsOptionsByScenario: Record<string, import('@hopeplayer/core').AdsOptions
     // requestWhen testleri.
     'preroll-load': { adTagPreroll: 'https://example.com/vast/preroll', requestWhen: 'load' },
     'preroll-play': { adTagPreroll: 'https://example.com/vast/preroll', requestWhen: 'play' },
+    // ads.notices: yükleniyor / reklam yok / geri sayım + geçiş.
+    notices: { adTagPreroll: 'https://example.com/vast/preroll', requestWhen: 'play', notices: true },
+    'notices-timeout': { adTagPreroll: 'https://example.com/vast/preroll', requestWhen: 'play', prerollTimeoutMs: 800, notices: true },
+    'notices-custom': { adTagPreroll: 'https://example.com/vast/preroll', requestWhen: 'play', notices: { countdown: 2, transition: 'wipe', position: 'top-left' } },
     vmap: { adTagPreroll: 'https://example.com/vast/preroll', adTagVmap: 'https://example.com/vmap/full' },
     vmaponly: { adTagVmap: 'https://example.com/vmap/full' },
     postroll: { adTagPostroll: 'https://example.com/vast/postroll' },

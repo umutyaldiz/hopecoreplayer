@@ -77,6 +77,11 @@ export class PrerollGate {
         this.onWaitChange?.(false);
     }
 
+    /** Preroll hazır, geri sayımda: zaman aşımı durur (reklam artık gelmiş). */
+    hold(): void {
+        this.clearTimer();
+    }
+
     /** Preroll sonuçlandı. `resume`: oynatma istenmişse içerik şimdi başlasın (reklam yok / hata / zaman aşımı). */
     release(resume: boolean): void {
         if (!this.armed) return;

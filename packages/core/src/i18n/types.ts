@@ -46,6 +46,10 @@ export interface HopeLocaleStrings {
     adLabel: string;
     adReturnFullscreen: string;
     adReturnPip: string;
+    /** ads.notices: reklam durum bildirimleri. */
+    adNoticeLoading: string;
+    adNoticeEmpty: (preroll: boolean) => string;
+    adNoticeCountdown: (seconds: number) => string;
     audioVinyl: string;
     captionSettings: string;
     rewardedButton: string;
@@ -336,6 +340,7 @@ export type PluginStringKey =
     | 'interactiveClose'
     | 'interactiveVotes'
     | AgeGateStringKey
+    | AdNoticeStringKey
     | PaywallStringKey
     | ClipStringKey
     | PartyStringKey
@@ -357,6 +362,7 @@ export type AgeGateStringKey =
     | 'ageGateDenied'
     | 'ageGateRetry'
     | 'ageGatePassed';
+export type AdNoticeStringKey = 'adNoticeLoading' | 'adNoticeEmpty' | 'adNoticeCountdown';
 export type PaywallStringKey = 'paywallTitle' | 'paywallText' | 'paywallSubscribe' | 'paywallLogin' | 'paywallPreview';
 export type ClipStringKey =
     | 'clip'

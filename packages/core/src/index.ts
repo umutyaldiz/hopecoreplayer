@@ -43,6 +43,7 @@ export type {
     HopePlayerEventMap,
     AdsOptions,
     AdsRetryOptions,
+    AdNoticesOptions,
     PrebidOptions,
     PrebidBreakOptions,
     PrebidBidderConfig,

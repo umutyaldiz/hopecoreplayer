@@ -5,6 +5,8 @@ import { generateVastUrl, mergeCustParams, toCustRecord } from './generateVastUr
 import { RetryController, type AdBreakType } from './RetryController';
 import { initConsentAware } from './consent';
 import { Scte35LiveAdManager } from './scte35';
+import { AdNotice, resolveNotices } from './AdNotice';
+import type { HopeLocaleStrings } from '../../i18n/types';
 import type { AdsOptions, PrebidBreakOptions } from '../../types';
 import type { VideoPrebid } from '../prebid/VideoPrebid';
 import type { PrerollGate } from './PrerollGate';
@@ -36,6 +38,8 @@ export interface AdsPlayerContext {
     audioPoster?: string;
     /** Eklentilerin `ads.transformTag` dönüşümleri. */
     transformTag?(url: string, type: 'preroll' | 'midroll' | 'postroll'): Promise<string>;
+    /** Player'ın dil sözlüğü (ads.notices metinleri). */
+    labels?(): HopeLocaleStrings;
 }
 
 /** Bir IMA hatasının ayrıntıları — hp:aderror olayı ve hata ayıklama kaydı için. */
@@ -120,6 +124,8 @@ export class AdsController {
     private resizeFrame = 0;
     /** Açık overlay creative'inin yüksekliği — yeniden boyutlandırmada şerit yüksekliği için. */
     private nonLinearCreativeHeight = 0;
+    /** ads.notices: yükleniyor / reklam yok / geri sayım bildirimi (kapalıysa null). */
+    private readonly notice: AdNotice | null;
 
     constructor(
         private readonly ctx: AdsPlayerContext,
@@ -128,6 +134,9 @@ export class AdsController {
         this.retry = new RetryController(options.retry ?? {});
         this.prebidIdSuffix = ctx.hostEl.id || Math.random().toString(36).slice(2, 8);
         this.surfaceGuard = ctx.surface ? new AdSurfaceGuard(ctx.surface) : null;
+        const notices = resolveNotices(options.notices);
+        const area = ctx.adLayerEl.closest<HTMLElement>('.video-area');
+        this.notice = notices && area && ctx.labels ? new AdNotice(area, ctx.adLayerEl.parentElement!, ctx.labels, notices) : null;
     }
 
     async install(): Promise<void> {
@@ -285,6 +294,8 @@ export class AdsController {
         this.lastMidrollTime = 0;
         this.prerollAbandoned = false;
         this.prerollStartPending = false;
+        this.notice?.hide();
+        this.notice?.reveal();
         if (newPrerollTag !== undefined) this.options.adTagPreroll = newPrerollTag;
         // Yeni öğe kullanıcı etkileşimiyle (playlist / story) geldiği için reklam hemen istenir.
         this.initialRequestFired = true;
@@ -307,6 +318,7 @@ export class AdsController {
         this.visibilityObserver?.disconnect();
         this.visibilityObserver = null;
         this.stopAdProgress();
+        this.notice?.destroy();
         this.ctx.videoEl.removeEventListener('play', this.initializeDisplayContainerOnce);
         this.ctx.videoEl.removeEventListener('ended', this.onContentEnded);
         this.ctx.videoEl.removeEventListener('timeupdate', this.onTimeUpdateForMidroll);
@@ -350,6 +362,8 @@ export class AdsController {
         this.adsManager?.destroy();
         this.adsManager = null;
         this.hideAdLayer();
+        this.notice?.empty(false);
+        this.notice?.reveal();
         if (this.ctx.videoEl.paused) this.ctx.videoEl.play().catch(() => {});
     }
 
@@ -426,6 +440,7 @@ export class AdsController {
         if (!getPrivacy().ads) return this.resumeContentAfterGiveUp(type, 'privacy: no consent for ads');
         this.currentBreakType = type;
         this.lastRequestIsVmap = skipUrlProcessing;
+        if (this.userAwaits(type)) this.notice?.loading();
 
         const tag = Array.isArray(rawTag) ? rawTag[0]! : rawTag;
         let vastUrl = skipUrlProcessing
@@ -541,6 +556,7 @@ export class AdsController {
             // Yalnızca VMAP: 0 noktasında reklam yoksa preroll yok — içerik beklemesin, aralar normal zamanlanır.
             const cuePoints = this.adsManager.getCuePoints?.() ?? [];
             if (cuePoints.length > 0 && !cuePoints.includes(0)) {
+                this.notice?.empty(true);
                 gate.release(true);
                 this.startAdsManager();
                 return;
@@ -548,11 +564,46 @@ export class AdsController {
             if (!gate.hasPlayIntent) {
                 // Reklam hazır; içerik oynatılmak istenince (onPrerollPlayIntent) anında başlar.
                 this.prerollStartPending = true;
+                this.notice?.hide();
                 return;
             }
         }
-        this.startAdsManager();
+        this.startAfterCountdown();
     };
+
+    /** Bu istekte kullanıcı reklamı bekliyor mu: preroll'da oynat'a basıldıysa; VMAP takip isteği hariç. */
+    private userAwaits(type: AdBreakType): boolean {
+        if (type === 'Midroll') return !this.lastRequestIsVmap;
+        if (type === 'Postroll') return true;
+        const gate = this.ctx.prerollGate;
+        return !gate?.isArmed || gate.isWaiting;
+    }
+
+    /** ads.notices: reklam dolu geldi — geri sayım + geçiş, sonra başlar. VMAP'in kendi araları ve SCTE-35 beklemez. */
+    private startAfterCountdown(): void {
+        const n = this.notice;
+        if (!n || this.scte35BreakActive || (this.lastRequestIsVmap && this.currentBreakType === 'Midroll')) {
+            n?.hide();
+            return this.startAdsManager();
+        }
+        const preroll = this.currentBreakType === 'Preroll';
+        if (preroll) this.ctx.prerollGate?.hold();
+        const gate = this.ctx.prerollGate;
+        // Geri sayımda duraklat'a basıldı: reklam hazırda bekler, oynatınca yeniden sayar.
+        const cancelled = (): boolean => {
+            if (!preroll || !gate?.isArmed || gate.hasPlayIntent) return false;
+            this.prerollStartPending = true;
+            n.reveal();
+            return true;
+        };
+        n.countdown(
+            () => {
+                if (!this.adsManager) return n.reveal();
+                if (!cancelled()) this.startAdsManager();
+            },
+            cancelled
+        );
+    }
 
     private startAdsManager(): void {
         if (!this.adsManager || !this.ima) return;
@@ -572,7 +623,11 @@ export class AdsController {
             this.fireInitialRequest();
             return;
         }
-        if (!this.prerollStartPending) return;
+        if (!this.prerollStartPending) {
+            // İstek sürüyor: kullanıcı artık bekliyor.
+            if (!this.adsManager && !this.prerollAbandoned) this.notice?.loading();
+            return;
+        }
         this.prerollStartPending = false;
         // Hazırdaki reklam çok eskiyse (teklif / VAST bayatlamış olabilir) at ve taze iste — kapı bekler.
         if (Date.now() - this.prerollRequestedAt > PREROLL_MAX_AGE_MS) {
@@ -583,7 +638,7 @@ export class AdsController {
             this.fireInitialRequest();
             return;
         }
-        this.startAdsManager();
+        this.startAfterCountdown();
     };
 
     /** Preroll süresinde gelmedi: bekleyen istekleri bırak, içerik reklamsız başlasın (kapı kendisi açılır). */
@@ -596,6 +651,7 @@ export class AdsController {
             this.adsManager = null;
         }
         const timeoutMs = this.options.prerollTimeoutMs ?? 8000;
+        this.notice?.empty(true);
         this.ctx.log?.({ message: `Preroll did not arrive within ${timeoutMs} ms — content started without it`, details: { prerollTimeoutMs: timeoutMs } });
         this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:aderror', { detail: { message: 'preroll-timeout', breakType: 'preroll' } }));
         // VMAP split: preroll'dan vazgeçildi — VMAP (midroll/postroll) yine bir kez istenir.
@@ -667,6 +723,7 @@ export class AdsController {
             clearTimeout(this.scte35BreakTimeout);
             this.scte35BreakTimeout = null;
         }
+        this.notice?.hide();
         // iPhone native tam ekranı / PiP'te reklam görünmez — önce çık.
         this.surfaceGuard?.onBreakStart();
         markLinearAd(this.ctx.hostEl, this.ctx.adLayerEl, true);
@@ -720,6 +777,7 @@ export class AdsController {
         layer.classList.remove('hp:hidden');
         layer.classList.add('hp:block');
         this.resizeAd();
+        this.notice?.reveal();
         if (this.currentBreakType === 'Preroll') this.ctx.prerollGate?.release(true);
         this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:adstart', { detail: { type: this.breakTypeOf(event), linear: false } }));
     };
@@ -826,6 +884,7 @@ export class AdsController {
             this.podTotal = 1;
         }
         this.stopAdProgress();
+        this.notice?.reveal();
         this.reportAdProgress();
         this.progressTimer = setInterval(this.reportAdProgress, AD_PROGRESS_INTERVAL_MS);
         // Ses reklamı: IMA'nın (görüntüsüz, siyah) video yüzeyi şeffaf olur, altındaki player görünür
@@ -874,6 +933,8 @@ export class AdsController {
 
     private resumeContentAfterGiveUp(type: AdBreakType, message?: string): void {
         this.hideAdLayer();
+        this.notice?.reveal();
+        this.notice?.empty(type === 'Preroll');
         const last = this.lastAdError;
         this.lastAdError = null;
         this.ctx.hostEl.dispatchEvent(
@@ -917,6 +978,8 @@ export class AdsController {
         if (!on) return;
         this.stopAdProgress();
         this.endNonLinear();
+        this.notice?.hide();
+        this.notice?.reveal();
         this.adsManager?.destroy();
         this.adsManager = null;
         this.ctx.prerollGate?.release(false);

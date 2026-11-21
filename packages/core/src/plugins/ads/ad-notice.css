@@ -1,0 +1,183 @@
+/* ── ads.notices: reklam durum bildirimi + reklama geçiş perdesi ── */
+.hp-ad-notice {
+    position: absolute;
+    z-index: 24;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100% - 32px);
+    padding: 6px 14px 6px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: rgba(14, 14, 18, 0.78);
+    color: #fff;
+    font: 600 13px/1.25 system-ui, -apple-system, sans-serif;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 10px 28px -12px rgba(0, 0, 0, 0.8);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+    transition:
+        opacity 0.25s,
+        transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+        bottom 0.25s;
+}
+.hp-ad-notice[data-visible] {
+    opacity: 1;
+    transform: none;
+}
+.hp-ad-notice[data-position='bottom-right'] {
+    right: 16px;
+    bottom: 76px;
+}
+.hp-ad-notice[data-position='bottom-left'] {
+    left: 16px;
+    bottom: 76px;
+}
+.hp-ad-notice[data-position='top-right'] {
+    right: 16px;
+    top: 16px;
+}
+.hp-ad-notice[data-position='top-left'] {
+    left: 16px;
+    top: 16px;
+}
+.video-area[data-chrome-hidden] .hp-ad-notice[data-position^='bottom'] {
+    bottom: 16px;
+}
+.video-area[data-compact] .hp-ad-notice {
+    gap: 8px;
+    font-size: 12px;
+}
+.video-area[data-compact] .hp-ad-notice[data-position^='bottom'] {
+    bottom: 56px;
+}
+.video-area[data-compact] .hp-ad-notice[data-position^='top'] {
+    top: 52px;
+}
+.video-area[data-compact][data-chrome-hidden] .hp-ad-notice[data-position^='bottom'] {
+    bottom: 12px;
+}
+
+/* İşaret: yükleniyor → dönen yay, reklam yok → nokta, geri sayım → boşalan halka + sayı. */
+.hp-ad-notice-mark {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+}
+.hp-ad-notice-mark svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+    fill: none;
+    stroke-width: 3;
+}
+.hp-ad-notice-mark circle:first-child {
+    stroke: rgba(255, 255, 255, 0.2);
+}
+.hp-ad-notice-mark circle:last-child {
+    stroke: var(--hp-color-accent, #ffcc00);
+    stroke-linecap: round;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+}
+.hp-ad-notice-mark b {
+    position: relative;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+.hp-ad-notice[data-kind='loading'] circle:last-child {
+    stroke-dashoffset: 72;
+}
+.hp-ad-notice[data-kind='loading'] svg {
+    animation: hp-ad-spin 0.9s linear infinite;
+}
+.hp-ad-notice[data-kind='countdown'] circle:last-child {
+    stroke-dashoffset: 0;
+    animation: hp-ad-drain var(--hp-ad-countdown, 3s) linear forwards;
+}
+.hp-ad-notice[data-kind='countdown'] b {
+    animation: hp-ad-pop 1s ease-out infinite;
+}
+.hp-ad-notice[data-kind='empty'] svg {
+    display: none;
+}
+.hp-ad-notice[data-kind='empty'] .hp-ad-notice-mark::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.7);
+}
+.hp-ad-notice[data-kind='empty'] {
+    padding-left: 4px;
+}
+@keyframes hp-ad-spin {
+    to {
+        transform: rotate(270deg);
+    }
+}
+@keyframes hp-ad-drain {
+    to {
+        stroke-dashoffset: 100;
+    }
+}
+@keyframes hp-ad-pop {
+    0% {
+        transform: scale(1.35);
+    }
+    30%,
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Reklama geçiş perdesi (media-layer içinde, reklam katmanının üstünde): kapanır → reklam başlar → açılır. */
+.hp-ad-curtain {
+    position: absolute;
+    inset: 0;
+    z-index: 11;
+    pointer-events: none;
+    transition:
+        opacity 0.42s ease,
+        clip-path 0.42s cubic-bezier(0.6, 0, 0.3, 1),
+        backdrop-filter 0.42s ease;
+}
+.hp-ad-curtain[data-kind='fade'] {
+    background: #000;
+    opacity: 0;
+}
+.hp-ad-curtain[data-kind='fade'][data-closed] {
+    opacity: 1;
+}
+.hp-ad-curtain[data-kind='blur'] {
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(0);
+    opacity: 0;
+}
+.hp-ad-curtain[data-kind='blur'][data-closed] {
+    backdrop-filter: blur(18px);
+    opacity: 1;
+}
+.hp-ad-curtain[data-kind='wipe'] {
+    background: #000;
+    clip-path: inset(0 100% 0 0);
+}
+.hp-ad-curtain[data-kind='wipe'][data-closed] {
+    clip-path: inset(0);
+}
+@media (prefers-reduced-motion: reduce) {
+    .hp-ad-notice,
+    .hp-ad-curtain {
+        transition: none;
+    }
+    .hp-ad-notice svg,
+    .hp-ad-notice b {
+        animation: none !important;
+    }
+}

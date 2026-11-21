@@ -14,6 +14,12 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-11-21
+
+### Added
+
+- **Ad status notices (`ads.notices`, off by default).** While the viewer waits for an ad, a small notice says "Loading ad…"; when no ad comes (empty VAST, error, timeout) it says "No ad, starting the video". When the ad is filled, a ring countdown ("Ad starts in 3") runs before it starts, then the video area closes with a transition (`fade`, `blur`, `wipe` or `none`) and opens as the ad starts. Pausing during the countdown holds the ad. Options: `countdown` (seconds, default 3, `0` = off), `transition`, `position`, `loading`, `empty`. The countdown applies to breaks the player starts; VMAP breaks scheduled by IMA and SCTE-35 breaks do not wait. Texts are in the ads chunk (Turkish / English, overridable via `labels`).
+
 ## [1.10.0] — 2026-11-21
 
 ### Changed

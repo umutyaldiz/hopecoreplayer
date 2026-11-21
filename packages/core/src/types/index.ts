@@ -35,6 +35,20 @@ export interface HopeSubtitleOption {
 /** [upTo, delayMs] ya da { upTo, delay }. */
 export type RetryDelayEntry = [number, number] | { upTo: number; delay: number };
 
+/** ads.notices ayrıntıları. */
+export interface AdNoticesOptions {
+    /** Reklam beklenirken "Reklam yükleniyor…". Varsayılan true. */
+    loading?: boolean;
+    /** Reklam gelmedi / hata: "Reklam yok" (yalnızca kullanıcı beklediyse). Varsayılan true. */
+    empty?: boolean;
+    /** Reklam dolu geldiğinde, başlamadan önceki geri sayım (sn); 0 kapatır. Varsayılan 3. VMAP'in kendi zamanladığı aralarda yoktur. */
+    countdown?: number;
+    /** Geri sayım bitince reklama geçiş animasyonu. Varsayılan 'fade'. */
+    transition?: 'fade' | 'blur' | 'wipe' | 'none';
+    /** Bildirimin yeri. Varsayılan 'bottom-right'. */
+    position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+}
+
 export interface AdsRetryOptions {
     enabled?: boolean;
     maxRetry?: number;
@@ -127,6 +141,8 @@ export interface AdsOptions {
      * gelmedi / hata) oynamaz; bu süre dolarsa reklamsız başlar ve geç gelen preroll gösterilmez. Varsayılan 8000.
      */
     prerollTimeoutMs?: number;
+    /** Reklam durum bildirimleri — varsayılan kapalı. true: "Reklam yükleniyor…", "Reklam yok", 3 sn geri sayım + geçiş. */
+    notices?: boolean | AdNoticesOptions;
     retry?: AdsRetryOptions;
     /**
      * Opt-in — varsayılan kapalı. true olduğunda sayfadaki CMP (varsa)

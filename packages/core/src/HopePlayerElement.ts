@@ -2798,6 +2798,7 @@ export class HopePlayerElement extends HTMLElement {
                             return a.adPoster ? new URL(a.adPoster, document.baseURI).href : undefined;
                         })(),
                         transformTag: (url, type) => this.adTagTransform(url, type),
+                        labels: () => this.i18n,
                         surface: {
                             videoEl: this.videoEl,
                             containerEl: this.videoArea,
