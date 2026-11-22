@@ -1143,6 +1143,27 @@ export interface PrivacyOptions extends PrivacyConsent {
     waitMs?: number;
 }
 
+export interface StableVolumeOptions {
+    /** İzleyici seçmemişse açık başlasın. Varsayılan false. */
+    default?: boolean;
+}
+
+export interface SnapshotOptions {
+    /** İndirmeden önce dosya adı sorulsun. Varsayılan true. */
+    askName?: boolean;
+    /** Dosya biçimi. 'png' kayıpsız (varsayılan), 'jpeg' daha küçük. */
+    format?: 'png' | 'jpeg';
+    /** JPEG kalitesi (0–1). Varsayılan 0.95. */
+    quality?: number;
+    /** Önerilen dosya adı; verilmezse video adı + zaman (ör. `fragman-01m42s`). */
+    fileName?: string;
+}
+
+export interface TouchLockOptions {
+    /** Kilidi açmak için basılı tutma süresi (ms). Varsayılan 800. */
+    holdMs?: number;
+}
+
 export interface AmbientOptions {
     /** Işığın yoğunluğu (0–1). Varsayılan 0.7. */
     opacity?: number;
@@ -1705,6 +1726,15 @@ export interface HopePlayerOptions {
      * Yalnızca oynarken, sekme ve player görünürken, tam ekran dışında güncellenir; düşük pilde durur. DRM'li videoda çalışmaz.
      */
     ambient?: boolean | AmbientOptions;
+    /**
+     * Sabit ses: yüksek ve alçak sesleri dengeler (Web Audio kompresör); ayarlar menüsünde aç-kapa, seçim hatırlanır.
+     * Başka alan adından CORS izni olmadan gelen kaynakta kullanılamaz.
+     */
+    stableVolume?: boolean | StableVolumeOptions;
+    /** Anlık görüntü: o anki kareyi videonun kendi çözünürlüğünde indirir (kontrol çubuğunda buton). DRM'li videoda çalışmaz. */
+    snapshot?: boolean | SnapshotOptions;
+    /** Dokunma kilidi: ayarlar menüsünden ekran kilitlenir, dokunuşlar yok sayılır; basılı tutunca açılır. Varsayılan kapalı. */
+    touchLock?: boolean | TouchLockOptions;
     /**
      * Gizlilik onayı (KVKK / GDPR): reklam kişiselleştirme, analitik ve cihazda saklama onaya göre açılıp kapanır.
      * OneTrust / Cookiebot / TCF bağlayıcıları ya da kendi sisteminiz (`getConsent`, `player.setPrivacy()`). Sayfa

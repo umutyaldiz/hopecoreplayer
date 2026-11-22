@@ -10,6 +10,9 @@ import type { Course } from '../course';
 import type { Podcast } from '../podcast';
 import type { SignLanguage } from '../sign-language';
 import type { Ambient } from '../ambient';
+import type { StableVolume } from '../stable-volume';
+import type { Snapshot } from '../snapshot';
+import type { TouchLock } from '../touch-lock';
 
 export interface EngagementHost {
     hostEl: HTMLElement;
@@ -44,6 +47,9 @@ export class EngagementController {
     podcast: Podcast | null = null;
     signLanguage: SignLanguage | null = null;
     ambient: Ambient | null = null;
+    stableVolume: StableVolume | null = null;
+    snapshot: Snapshot | null = null;
+    touchLock: TouchLock | null = null;
     private keys: Record<string, string> = {};
 
     constructor(private readonly h: EngagementHost) {}
@@ -195,6 +201,42 @@ export class EngagementController {
             const { installAmbient } = await import('../ambient');
             if (this.keys.ambient === 'on' && !this.ambient) this.ambient = installAmbient({ hostEl: h.hostEl, videoEl: h.videoEl, videoArea: h.videoArea, i18n: h.i18n, isAdActive, registerToggle, unregisterToggle }, am);
         }
+
+        // Sabit ses, anlık görüntü, dokunma kilidi — açılınca bir kez kurulur, ayarlar yerinde güncellenir.
+        const opt = <T extends object>(v: boolean | T | undefined): T | null => (v ? (v === true ? ({} as T) : v) : null);
+        const sv = opt(options.stableVolume);
+        if (!sv) {
+            this.stableVolume?.destroy();
+            this.stableVolume = null;
+            delete this.keys.stableVolume;
+        } else if (!this.stableVolume && this.changed('stableVolume', 'on')) {
+            const { installStableVolume } = await import('../stable-volume');
+            if (this.keys.stableVolume === 'on' && !this.stableVolume) this.stableVolume = installStableVolume({ videoEl: h.videoEl, i18n: h.i18n, registerToggle, unregisterToggle }, sv);
+        }
+        const sn = opt(options.snapshot);
+        if (!sn) {
+            this.snapshot?.destroy();
+            this.snapshot = null;
+            delete this.keys.snapshot;
+        } else if (this.snapshot) this.snapshot.setOptions(sn);
+        else if (this.changed('snapshot', 'on')) {
+            const { installSnapshot } = await import('../snapshot');
+            if (this.keys.snapshot === 'on' && !this.snapshot) this.snapshot = installSnapshot({ ...base, addButton }, sn);
+        }
+        const tl = opt(options.touchLock);
+        if (!tl) {
+            this.touchLock?.destroy();
+            this.touchLock = null;
+            delete this.keys.touchLock;
+        } else if (this.touchLock) this.touchLock.setOptions(tl);
+        else if (this.changed('touchLock', 'on')) {
+            const { installTouchLock } = await import('../touch-lock');
+            if (this.keys.touchLock === 'on' && !this.touchLock)
+                this.touchLock = installTouchLock(
+                    { ...base, registerToggle, unregisterToggle, closeMenu: () => menu.closeMenu(), blockChrome: () => h.blockChrome('touch-lock'), unblockChrome: () => h.unblockChrome('touch-lock') },
+                    tl
+                );
+        }
     }
 
     /** Reklam başladı / bitti: filigran gizlenir / döner, bekleyen "birlikte izle" durumu uygulanır. */
@@ -210,11 +252,15 @@ export class EngagementController {
         this.course?.refreshLabels();
         this.podcast?.refreshLabels();
         this.signLanguage?.refreshLabels();
+        this.stableVolume?.refreshLabels();
+        this.snapshot?.refreshLabels();
+        this.touchLock?.refreshLabels();
     }
 
     destroy(): void {
-        for (const p of [this.paywall, this.watermark, this.clips, this.watchParty, this.reactions, this.course, this.podcast, this.signLanguage, this.ambient]) p?.destroy();
+        for (const p of [this.paywall, this.watermark, this.clips, this.watchParty, this.reactions, this.course, this.podcast, this.signLanguage, this.ambient, this.stableVolume, this.snapshot, this.touchLock]) p?.destroy();
         this.paywall = this.watermark = this.clips = this.watchParty = this.reactions = this.course = this.podcast = this.signLanguage = this.ambient = null;
+        this.stableVolume = this.snapshot = this.touchLock = null;
         this.keys = {};
     }
 }

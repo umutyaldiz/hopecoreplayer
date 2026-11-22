@@ -198,6 +198,21 @@ export interface HopeLocaleStrings {
     signLanguageOff: string;
     /** Ortam ışığı (ayarlar menüsü). */
     ambient: string;
+    /** Hız paneli −/+ butonları. */
+    speedDown: string;
+    speedUp: string;
+    /** Sabit ses (ayarlar menüsü). */
+    stableVolume: string;
+    /** Anlık görüntü. */
+    snapshot: string;
+    snapshotName: string;
+    snapshotSave: string;
+    snapshotCancel: string;
+    snapshotFailed: string;
+    /** Dokunma kilidi. */
+    touchLock: string;
+    touchLocked: string;
+    touchUnlock: string;
     /** Sesli betimleme (ayarlar menüsü). */
     audioDescription: string;
     audioDescriptionOn: string;
@@ -350,7 +365,18 @@ export type PluginStringKey =
     | CourseStringKey
     | PodcastStringKey
     | SignLanguageStringKey
-    | 'ambient';
+    | 'ambient'
+    | 'speedDown'
+    | 'speedUp'
+    | 'stableVolume'
+    | 'snapshot'
+    | 'snapshotName'
+    | 'snapshotSave'
+    | 'snapshotCancel'
+    | 'snapshotFailed'
+    | 'touchLock'
+    | 'touchLocked'
+    | 'touchUnlock';
 
 export type AgeGateStringKey =
     | 'ageGateTitle'

@@ -23,6 +23,30 @@ export function canTapAudio(el: HTMLMediaElement): boolean {
     return el.crossOrigin !== null;
 }
 
+const stable = new WeakMap<MediaAudioGraph, AudioNode>();
+
+/**
+ * Sabit ses: `out` → kompresör → telafi kazancı → hoparlör. Kapalıyken `out` doğrudan hoparlöre gider.
+ * Yüksek sahneler bastırılır, kısık konuşmalar telafi kazancıyla öne çıkar.
+ */
+export function setStableVolume(g: MediaAudioGraph, on: boolean): void {
+    let input = stable.get(g);
+    if (!input && on) {
+        const comp = g.ctx.createDynamicsCompressor();
+        comp.threshold.value = -30;
+        comp.knee.value = 24;
+        comp.ratio.value = 6;
+        comp.attack.value = 0.005;
+        comp.release.value = 0.3;
+        const makeup = g.ctx.createGain();
+        makeup.gain.value = 1.6;
+        comp.connect(makeup).connect(g.ctx.destination);
+        stable.set(g, (input = comp));
+    }
+    g.out.disconnect();
+    g.out.connect(on && input ? input : g.ctx.destination);
+}
+
 /** Grafiği döndürür (yoksa kurar); kurulamıyorsa null. */
 export function mediaAudio(el: HTMLMediaElement): MediaAudioGraph | null {
     const existing = graphs.get(el);

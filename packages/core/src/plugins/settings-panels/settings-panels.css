@@ -1,0 +1,103 @@
+/* Ayarlar → Çalma hızı: değer, −/+ ve kaydırıcı, hazır hızlar. */
+.hp-speed {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 10px 10px;
+    box-sizing: border-box;
+    width: 100%;
+    color: var(--hp-color-on-surface);
+}
+.hp-speed-value {
+    text-align: center;
+    font-size: 1.25em;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.hp-speed-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.hp-speed-step {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 0;
+    background: color-mix(in srgb, currentColor 14%, transparent);
+    color: inherit;
+    font: inherit;
+    font-size: 1.1em;
+    line-height: 1;
+    cursor: pointer;
+}
+.hp-speed-step:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+.hp-speed-range {
+    --hp-speed-fill: 0%;
+    flex: 1;
+    min-width: 0;
+    height: 20px;
+    margin: 0;
+    background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+.hp-speed-range::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(to right, currentColor var(--hp-speed-fill), color-mix(in srgb, currentColor 25%, transparent) var(--hp-speed-fill));
+}
+.hp-speed-range::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(to right, currentColor var(--hp-speed-fill), color-mix(in srgb, currentColor 25%, transparent) var(--hp-speed-fill));
+}
+.hp-speed-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border-radius: 50%;
+    border: 0;
+    background: currentColor;
+}
+.hp-speed-range::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 0;
+    background: currentColor;
+}
+.hp-speed-chips {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+.hp-speed-chip {
+    min-width: 0;
+    padding: 6px 4px;
+    border-radius: 999px;
+    border: 0;
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    color: inherit;
+    font: inherit;
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+}
+.hp-speed-chip:hover {
+    background: color-mix(in srgb, currentColor 18%, transparent);
+}
+.hp-speed-chip[data-active] {
+    background: color-mix(in srgb, currentColor 28%, transparent);
+    font-weight: 600;
+}
+.hp-speed :focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}

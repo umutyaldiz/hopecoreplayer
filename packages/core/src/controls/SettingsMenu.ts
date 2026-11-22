@@ -125,22 +125,28 @@ export class SettingsMenu {
     private quickOwner: HTMLButtonElement | null = null;
     private readonly quickObserver: MutationObserver;
     private badgeEnabled = true;
-    private readonly panel: HTMLDivElement;
-    private readonly video: HTMLVideoElement;
-    private playbackRates: number[];
-    private readonly labels: HopeLocaleStrings;
+    /** @internal settings-panels */
+    readonly panel: HTMLDivElement;
+    /** @internal */
+    readonly video: HTMLVideoElement;
+    /** @internal */
+    playbackRates: number[];
+    /** @internal */
+    readonly labels: HopeLocaleStrings;
 
     private qualities: SettingsQualityOption[] = [];
     private activeQualityLabel: string;
     private captions: SettingsCaptionOption[] = [];
     private activeCaptionLabel: string;
-    private captionAppearance: SettingsCaptionAppearance | null = null;
+    /** @internal */
+    captionAppearance: SettingsCaptionAppearance | null = null;
     private qrResumeToggle: SettingsToggleRow | null = null;
     private open = false;
     /** Menü açılıp kapanınca — HopePlayerElement açıkken kontrolleri otomatik gizlemez. */
     onOpenChange: ((open: boolean) => void) | null = null;
     private readonly panelObserver: MutationObserver;
-    private currentPanel: PanelId = 'main';
+    /** @internal */
+    currentPanel: PanelId = 'main';
     private submenus: SettingsSubmenuDef[] = [];
     /** Eklenti aç / kapa satırları. */
     private readonly toggles = new Map<string, SettingsToggleRow>();
@@ -401,7 +407,8 @@ export class SettingsMenu {
         if (this.open) this.close();
     }
 
-    private close(): void {
+    /** @internal */
+    close(): void {
         this.open = false;
         this.quickOwner = null;
         this.panel.classList.add('hp:hidden');
@@ -415,7 +422,8 @@ export class SettingsMenu {
     };
 
     /** Metinler textContent ile yazılır (manifest / eklenti etiketleri HTML olarak çalışmasın); ikonlar düğüm olarak gelir. */
-    private row(label: string, value: string | Node | Array<string | Node>, onClick: () => void): HTMLButtonElement {
+    /** @internal */
+    row(label: string, value: string | Node | Array<string | Node>, onClick: () => void): HTMLButtonElement {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className =
@@ -430,7 +438,8 @@ export class SettingsMenu {
         return btn;
     }
 
-    private backRow(title: string, onBack: () => void): HTMLButtonElement {
+    /** @internal */
+    backRow(title: string, onBack: () => void): HTMLButtonElement {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className =
@@ -444,32 +453,25 @@ export class SettingsMenu {
     }
 
     private render(): void {
-        if (this.currentPanel === 'main') this.renderMain();
-        else if (this.currentPanel === 'speed') this.renderSpeed();
-        else if (this.currentPanel === 'quality') this.renderQuality();
-        else if (this.currentPanel === 'captions') this.renderCaptions();
-        else if (this.currentPanel === 'captions-settings') this.renderCaptionSettings();
-        else if (this.currentPanel === 'captions-size') this.renderCaptionsSize();
-        else if (this.currentPanel === 'captions-bg') this.renderCaptionColorPanel('bg');
-        else if (this.currentPanel === 'captions-text') this.renderCaptionColorPanel('text');
-        else {
-            const key = this.currentPanel.slice('custom:'.length);
-            const def = this.submenus.find((s) => s.key === key);
+        const p = this.currentPanel;
+        if (p === 'main') this.renderMain();
+        else if (p === 'quality') this.renderQuality();
+        else if (p === 'captions') this.renderCaptions();
+        else if (p.startsWith('custom:')) {
+            const def = this.submenus.find((s) => s.key === p.slice(7));
             if (def) this.renderSubmenu(def);
             else this.renderMain();
-        }
+        } else this.panels(p);
     }
 
-    private renderMain(): void {
+    /** @internal */
+    renderMain(): void {
         this.currentPanel = 'main';
         this.panel.innerHTML = '';
         // `playbackRates: []` → hız satırı yok.
         if (this.playbackRates.length) {
             this.panel.appendChild(
-                this.row(this.labels.playbackSpeed, this.video.playbackRate === 1 ? this.labels.normal : `${this.video.playbackRate}x`, () => {
-                    this.currentPanel = 'speed';
-                    this.renderSpeed();
-                })
+                this.row(this.labels.playbackSpeed, this.video.playbackRate === 1 ? this.labels.normal : `${this.video.playbackRate}x`, () => this.panels('speed'))
             );
         }
         if (this.qualities.length > 0) {
@@ -544,17 +546,10 @@ export class SettingsMenu {
         }
     }
 
-    private renderSpeed(): void {
-        this.panel.innerHTML = '';
-        this.panel.appendChild(this.backRow(this.labels.playbackSpeed, () => this.renderMain()));
-        for (const rate of this.playbackRates) {
-            const active = this.video.playbackRate === rate;
-            const btn = this.row(rate === 1 ? this.labels.normal : `${rate}x`, active ? checkIcon() : '', () => {
-                this.video.playbackRate = rate;
-                this.close();
-            });
-            this.panel.appendChild(btn);
-        }
+    /** Hız ve altyazı görünüm panelleri ayrı parçada (plugins/settings-panels). */
+    private panels(id: PanelId): void {
+        this.currentPanel = id;
+        void import('../plugins/settings-panels').then((m) => this.currentPanel === id && m.renderPanel(this, id));
     }
 
     private renderQuality(): void {
@@ -571,7 +566,8 @@ export class SettingsMenu {
         }
     }
 
-    private renderCaptions(): void {
+    /** @internal */
+    renderCaptions(): void {
         this.panel.innerHTML = '';
         this.panel.appendChild(this.backRow(this.labels.captions, () => this.renderMain()));
         for (const c of this.captions) {
@@ -590,104 +586,9 @@ export class SettingsMenu {
             divider.setAttribute('role', 'separator');
             this.panel.appendChild(divider);
             this.panel.appendChild(
-                this.row(this.labels.captionSettings, '', () => {
-                    this.currentPanel = 'captions-settings';
-                    this.renderCaptionSettings();
-                })
+                this.row(this.labels.captionSettings, '', () => this.panels('captions-settings'))
             );
         }
-    }
-
-    /** Altyazı → Altyazı ayarları: boyut, arka plan / yazı rengi, konumu sıfırla — her satırda o anki değer. */
-    private renderCaptionSettings(): void {
-        this.panel.innerHTML = '';
-        this.panel.appendChild(
-            this.backRow(this.labels.captionSettings, () => {
-                this.currentPanel = 'captions';
-                this.renderCaptions();
-            })
-        );
-        const appearance = this.captionAppearance;
-        if (!appearance) return;
-        const dot = (color: string | undefined): string | Node => {
-            if (!color) return '';
-            const el = document.createElement('span');
-            el.className = 'hp:inline-block hp:w-3 hp:h-3 hp:rounded-full hp:border hp:border-on-surface/30';
-            el.style.background = color;
-            return el;
-        };
-        this.panel.appendChild(
-            this.row(appearance.sizeLabel, appearance.getSizeOptions().find((o) => o.active)?.label ?? '', () => {
-                this.currentPanel = 'captions-size';
-                this.renderCaptionsSize();
-            })
-        );
-        this.panel.appendChild(
-            this.row(appearance.bgColorLabel, dot(appearance.getBgColorOptions().find((o) => o.active)?.value), () => {
-                this.currentPanel = 'captions-bg';
-                this.renderCaptionColorPanel('bg');
-            })
-        );
-        this.panel.appendChild(
-            this.row(appearance.textColorLabel, dot(appearance.getTextColorOptions().find((o) => o.active)?.value), () => {
-                this.currentPanel = 'captions-text';
-                this.renderCaptionColorPanel('text');
-            })
-        );
-        this.panel.appendChild(
-            this.row(appearance.resetPositionLabel, '', () => {
-                appearance.onResetPosition();
-                this.close();
-            })
-        );
-    }
-
-    private backToCaptionSettings = (): void => {
-        this.currentPanel = 'captions-settings';
-        this.renderCaptionSettings();
-    };
-
-    private renderCaptionsSize(): void {
-        this.panel.innerHTML = '';
-        const appearance = this.captionAppearance;
-        this.panel.appendChild(this.backRow(appearance?.sizeLabel ?? this.labels.captionSize, this.backToCaptionSettings));
-        if (!appearance) return;
-        for (const item of appearance.getSizeOptions()) {
-            this.panel.appendChild(
-                this.row(item.label, item.active ? checkIcon() : '', () => {
-                    item.onSelect();
-                    this.close();
-                })
-            );
-        }
-    }
-
-    /** "Arka Plan Rengi" / "Yazı Rengi" — düz metin satırları yerine renkli swatch grid'i (YouTube'un kendi altyazı renk seçici deseni). */
-    private renderCaptionColorPanel(kind: 'bg' | 'text'): void {
-        this.panel.innerHTML = '';
-        const appearance = this.captionAppearance;
-        const title = kind === 'bg' ? (appearance?.bgColorLabel ?? this.labels.captionBgColor) : (appearance?.textColorLabel ?? this.labels.captionTextColor);
-        this.panel.appendChild(this.backRow(title, this.backToCaptionSettings));
-        if (!appearance) return;
-
-        const grid = document.createElement('div');
-        grid.className = 'hp:flex hp:flex-wrap hp:gap-2 hp:px-3 hp:py-2';
-        const options = kind === 'bg' ? appearance.getBgColorOptions() : appearance.getTextColorOptions();
-        for (const opt of options) {
-            const swatch = document.createElement('button');
-            swatch.type = 'button';
-            swatch.setAttribute('aria-label', opt.ariaLabel);
-            swatch.className = 'hp:w-7 hp:h-7 hp:rounded-full hp:cursor-pointer hp:flex-shrink-0 hp:border hp:border-on-surface/20';
-            swatch.style.background = opt.value;
-            swatch.style.outline = opt.active ? '2px solid currentColor' : '2px solid transparent';
-            swatch.style.outlineOffset = '2px';
-            swatch.addEventListener('click', () => {
-                opt.onSelect();
-                this.render();
-            });
-            grid.appendChild(swatch);
-        }
-        this.panel.appendChild(grid);
     }
 
     /** Dil sonradan değişince statik buton etiketini tazeler + mevcut panel zaten güncel `this.labels`'ı okuyarak yeniden render edilir. */

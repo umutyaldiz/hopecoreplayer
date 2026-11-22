@@ -1,0 +1,71 @@
+/* Dokunma kilidi: tüm alanı kaplayan görünmez katman; dokununca kilit rozeti belirir. */
+.hp-touch-lock {
+    position: absolute;
+    inset: 0;
+    z-index: 70;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+.hp-touch-lock-badge {
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: calc(100% - 24px);
+    padding: 8px 14px 8px 10px;
+    border-radius: 999px;
+    border: 0;
+    background: rgba(0, 0, 0, 0.62);
+    color: #fff;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+}
+.hp-touch-lock-badge > * {
+    position: relative;
+}
+.hp-touch-lock-badge svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+}
+.hp-touch-lock-badge span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.hp-touch-lock[data-hint] .hp-touch-lock-badge,
+.hp-touch-lock-badge:focus-visible {
+    opacity: 1;
+}
+/* Basılı tutarken soldan dolan ilerleme. */
+.hp-touch-lock-badge::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.22);
+    transform: scaleX(0);
+    transform-origin: left;
+}
+.hp-touch-lock-badge[data-holding]::before {
+    transform: scaleX(1);
+    transition: transform var(--hp-hold, 800ms) linear;
+}
+.hp-touch-lock-badge:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .hp-touch-lock-badge {
+        transition: none;
+    }
+}

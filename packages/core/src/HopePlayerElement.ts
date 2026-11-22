@@ -1551,7 +1551,7 @@ export class HopePlayerElement extends HTMLElement {
     /** 1.8 eklentileri: ödeme duvarı, filigran, klip, birlikte izle, tepkiler, eğitim modu, podcast, işaret dili. */
     private async applyEngagementPlugins(options: HopePlayerOptions): Promise<void> {
         const o = options;
-        if (!(o.paywall || o.watermark || o.clips || o.watchParty || o.reactions || o.course || o.podcast || o.signLanguage || o.ambient) && !this.engagement) return;
+        if (!(o.paywall || o.watermark || o.clips || o.watchParty || o.reactions || o.course || o.podcast || o.signLanguage || o.ambient || o.stableVolume || o.snapshot || o.touchLock) && !this.engagement) return;
         if (!this.engagement) {
             const { EngagementController } = await import('./plugins/engagement');
             this.engagement ??= new EngagementController({

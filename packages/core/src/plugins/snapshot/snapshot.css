@@ -1,0 +1,88 @@
+/* Anlık görüntü: dosya adı penceresi. */
+.hp-snapshot {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 60;
+    transform: translate(-50%, -50%);
+    width: min(340px, calc(100% - 24px));
+    max-height: calc(100% - 24px);
+    overflow: auto;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 12px;
+    background: var(--hp-panel-bg, rgba(10, 10, 14, 0.85));
+    border: 1px solid var(--hp-panel-border, rgba(255, 255, 255, 0.1));
+    backdrop-filter: blur(var(--hp-panel-blur, 20px));
+    -webkit-backdrop-filter: blur(var(--hp-panel-blur, 20px));
+    color: var(--hp-panel-text, #fff);
+    font-size: 13px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+}
+.hp-snapshot-preview {
+    width: 100%;
+    border-radius: 8px;
+    display: block;
+}
+.hp-snapshot-label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-weight: 500;
+}
+.hp-snapshot-field {
+    display: flex;
+    align-items: center;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+    background: color-mix(in srgb, currentColor 6%, transparent);
+    padding: 0 10px;
+}
+.hp-snapshot-field:focus-within {
+    border-color: currentColor;
+}
+.hp-snapshot-field input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+}
+.hp-snapshot-field span,
+.hp-snapshot-size {
+    color: var(--hp-panel-text-muted, #a3a3a3);
+    font-variant-numeric: tabular-nums;
+}
+.hp-snapshot-size {
+    font-size: 12px;
+}
+.hp-snapshot-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+.hp-snapshot-actions button {
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 0;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+/* Marka rengi: --hp-color-accent / --hp-color-on-accent. */
+.hp-snapshot-actions .hp-snapshot-save {
+    background: var(--hp-color-accent, #fff);
+    color: var(--hp-color-on-accent, #111);
+    font-weight: 600;
+}
+.hp-snapshot button:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}

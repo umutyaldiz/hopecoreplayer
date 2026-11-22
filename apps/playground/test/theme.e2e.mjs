@@ -732,15 +732,17 @@ async function testPlaybackRates(browser) {
                 if (speedRow) {
                     speedRow.click();
                     await wait();
-                    speeds = rows().slice(1);
+                    // Hız paneli: hazır hız butonları (ayrı parçadan yüklenir).
+                    for (let i = 0; i < 20 && !root.querySelector('.hp-speed-chip'); i++) await wait();
+                    speeds = Array.from(root.querySelectorAll('.hp-speed-chip')).map((b) => b.textContent.trim());
                 }
                 root.querySelector('[aria-label="Ayarlar"]').click();
                 return { main, speeds };
             }, options);
         let r = await menu({});
-        ok(JSON.stringify(r.speeds) === JSON.stringify(['0.5x', '0.75x', 'Normal', '1.25x', '1.5x', '2x']), `varsayılan hızlar ${JSON.stringify(r.speeds)}`);
+        ok(JSON.stringify(r.speeds) === JSON.stringify(['0.5', '0.75', 'Normal', '1.25', '1.5', '2']), `varsayılan hızlar ${JSON.stringify(r.speeds)}`);
         r = await menu({ playbackRates: [2, 1, 1.5, 1] });
-        ok(JSON.stringify(r.speeds) === JSON.stringify(['Normal', '1.5x', '2x']), `özel liste sıralandı, tekrar atıldı ${JSON.stringify(r.speeds)}`);
+        ok(JSON.stringify(r.speeds) === JSON.stringify(['Normal', '1.5', '2']), `özel liste sıralandı, tekrar atıldı ${JSON.stringify(r.speeds)}`);
         r = await menu({ playbackRates: [] });
         ok(r.speeds === null && !r.main.some((x) => x.startsWith('Oynatma Hızı')), `[] → hız satırı yok ${JSON.stringify(r.main)}`);
     } finally {
