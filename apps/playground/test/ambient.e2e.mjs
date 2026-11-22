@@ -20,7 +20,10 @@ async function open(browser, options, { battery } = {}) {
         window.__chunks = [];
         const orig = CanvasRenderingContext2D.prototype.drawImage;
         CanvasRenderingContext2D.prototype.drawImage = function (src, ...rest) {
-            if (src instanceof HTMLVideoElement) window.__draws++;
+            if (src instanceof HTMLVideoElement) {
+                window.__draws++;
+                window.__last = { w: rest[2], filter: this.filter };
+            }
             return orig.call(this, src, ...rest);
         };
         if (battery) {
@@ -49,9 +52,9 @@ const state = (page) =>
         return {
             layer: !!layer,
             shown: !!layer && getComputedStyle(layer).display !== 'none',
-            on: r.querySelectorAll('.hp-ambient canvas[data-on]').length,
+            on: layer?.hasAttribute('data-on') ? 1 : 0,
             draws: window.__draws,
-            fade: layer ? getComputedStyle(layer.querySelector('canvas')).transitionDuration : null,
+            fade: layer?.querySelector('canvas:last-child').getAnimations()[0]?.effect.getTiming().duration ?? null,
         };
     });
 const play = (page) => page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').play());
@@ -77,11 +80,12 @@ async function testPlayingOnly(browser) {
     console.log('\n[2] Açık: duraklatılmışken bir kare, oynarken seyrek güncelleme, duraklatınca durur');
     const { context, page } = await open(browser, { ambient: { updateMs: 500 } });
     const s0 = await state(page);
-    ok(s0.fade === '0.3s', `geçiş süresi aralığa uydu (500 ms → ${s0.fade})`);
     ok(s0.layer && s0.shown && s0.on === 1, `katman kuruldu, ilk kare çizildi ${JSON.stringify(s0)}`);
     ok((await drawsDuring(page, 1200)) === 0, 'duraklatılmışken kare alınmıyor');
     await play(page);
     const playing = await drawsDuring(page, 2000);
+    const fade = (await state(page)).fade;
+    ok(fade === 450, `geçiş bir sonraki kareye kadar sürüyor (500 ms → ${fade} ms)`);
     ok(playing >= 3 && playing <= 6, `oynarken 500 ms'de bir (2 sn'de ${playing} kare)`);
     await pause(page);
     await page.waitForTimeout(100);
@@ -95,9 +99,9 @@ async function testPlayingOnly(browser) {
 async function testDefaultInterval(browser) {
     console.log('\n[3] Varsayılan aralık 2 sn');
     const { context, page } = await open(browser, { ambient: true });
-    ok((await state(page)).fade === '1.2s', 'varsayılan geçiş 1.2 sn');
     await play(page);
     await page.waitForTimeout(200);
+    ok((await state(page)).fade === 1800, 'varsayılan geçiş 1.8 sn');
     const n = await drawsDuring(page, 4100);
     ok(n >= 1 && n <= 3, `4 sn'de ${n} kare`);
     await context.close();
@@ -176,6 +180,69 @@ async function testToggleOff(browser) {
     await context.close();
 }
 
+async function testLookOptions(browser) {
+    console.log('\n[8] blur / saturation / brightness kareye uygulanır; duraklatılmışken değişince hemen yansır');
+    const { context, page } = await open(browser, { ambient: { blur: 20, saturation: 2, brightness: 1.3 } });
+    const a = await page.evaluate(() => window.__last);
+    ok(a?.w === 4, `blur 20 → 4 px kare (${a?.w})`);
+    ok(a?.filter === 'saturate(2) brightness(1.3)', `filtre uygulandı (${a?.filter})`);
+    const before = (await state(page)).draws;
+    await page.evaluate(() => {
+        const el = document.getElementById('player');
+        el.options = { ...el.options, ambient: { blur: 1 } };
+    });
+    await page.waitForTimeout(300);
+    const b = await page.evaluate(() => window.__last);
+    ok((await state(page)).draws === before + 1 && b?.w === 64, `değişince bir kez yeniden çizildi (blur 1 → ${b?.w} px)`);
+    ok(b?.filter === 'saturate(1.4) brightness(1)', `varsayılanlara döndü (${b?.filter})`);
+    await context.close();
+}
+
+/** Ayarlar menüsündeki "Ortam ışığı" satırı: { found, value } ve istenirse tıklar. */
+const menuRow = (page, click = false) =>
+    page.evaluate(async (click) => {
+        const r = document.getElementById('player').shadowRoot;
+        r.querySelector('[aria-label="Ayarlar"]').click();
+        await new Promise((x) => setTimeout(x, 100));
+        const row = [...r.querySelectorAll('button, [role="menuitem"], [role="menuitemcheckbox"]')].find((b) => b.textContent.includes('Ortam ışığı'));
+        const value = row?.textContent.replace('Ortam ışığı', '').trim() ?? null;
+        if (row && click) row.click();
+        r.querySelector('[aria-label="Ayarlar"]').click();
+        return { found: !!row, value };
+    }, click);
+
+async function testMenuToggle(browser) {
+    console.log('\n[9] Ayarlar menüsünden aç-kapa; tercih hatırlanır; menu: false satırı gizler');
+    const { context, page } = await open(browser, { ambient: { updateMs: 500 } });
+    const a = await menuRow(page);
+    ok(a.found && a.value === 'Açık', `menüde satır var (${JSON.stringify(a)})`);
+    await play(page);
+    await menuRow(page, true);
+    await page.waitForTimeout(200);
+    const s = await state(page);
+    const stored = await page.evaluate(() => localStorage.getItem('hp-ambient'));
+    ok(s.on === 0 && stored === '0', `kapatıldı, ışık gizli, tercih saklandı (${stored})`);
+    ok((await drawsDuring(page, 1500)) === 0, 'kapalıyken oynarken kare alınmıyor');
+    ok((await menuRow(page)).value === 'Kapalı', 'menü "Kapalı" gösteriyor');
+    await page.reload();
+    await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+    await page.evaluate(() => { document.getElementById('player').options = { src: '/sample-30s.mp4', muted: true, ambient: { updateMs: 500 } }; });
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 2);
+    await page.waitForTimeout(400);
+    await play(page);
+    ok((await drawsDuring(page, 1200)) === 0 && (await menuRow(page)).value === 'Kapalı', 'yeniden yüklenince kapalı kaldı');
+    await menuRow(page, true);
+    await page.waitForTimeout(200);
+    ok((await state(page)).on === 1 && (await drawsDuring(page, 1200)) >= 2, 'menüden yeniden açıldı, güncelleniyor');
+    await page.evaluate(() => {
+        const el = document.getElementById('player');
+        el.options = { ...el.options, ambient: { menu: false } };
+    });
+    await page.waitForTimeout(200);
+    ok(!(await menuRow(page)).found, 'menu: false → satır yok');
+    await context.close();
+}
+
 (async () => {
     const browser = await launchBrowser();
     try {
@@ -186,6 +253,8 @@ async function testToggleOff(browser) {
         await testFullscreen(browser);
         await testLowBattery(browser);
         await testToggleOff(browser);
+        await testLookOptions(browser);
+        await testMenuToggle(browser);
     } finally {
         await browser.close();
     }

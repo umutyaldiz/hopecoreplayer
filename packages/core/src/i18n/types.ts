@@ -196,6 +196,8 @@ export interface HopeLocaleStrings {
     signLanguage: string;
     signLanguageOn: string;
     signLanguageOff: string;
+    /** Ortam ışığı (ayarlar menüsü). */
+    ambient: string;
     /** Sesli betimleme (ayarlar menüsü). */
     audioDescription: string;
     audioDescriptionOn: string;
@@ -347,7 +349,8 @@ export type PluginStringKey =
     | ReactionsStringKey
     | CourseStringKey
     | PodcastStringKey
-    | SignLanguageStringKey;
+    | SignLanguageStringKey
+    | 'ambient';
 
 export type AgeGateStringKey =
     | 'ageGateTitle'

@@ -193,7 +193,7 @@ export class EngagementController {
         } else if (this.ambient) this.ambient.setOptions(am);
         else if (this.changed('ambient', 'on')) {
             const { installAmbient } = await import('../ambient');
-            if (this.keys.ambient === 'on' && !this.ambient) this.ambient = installAmbient({ hostEl: h.hostEl, videoEl: h.videoEl, videoArea: h.videoArea, isAdActive }, am);
+            if (this.keys.ambient === 'on' && !this.ambient) this.ambient = installAmbient({ hostEl: h.hostEl, videoEl: h.videoEl, videoArea: h.videoArea, i18n: h.i18n, isAdActive, registerToggle, unregisterToggle }, am);
         }
     }
 

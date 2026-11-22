@@ -1136,8 +1136,16 @@ export interface AmbientOptions {
     opacity?: number;
     /** Işığın player dışına taşması (genişliğe oran, 0–0.5; her yönde aynı piksel). Varsayılan 0.12. */
     spread?: number;
-    /** Renklerin güncellenme aralığı (ms, en az 500). Varsayılan 2000. */
+    /** Renklerin güncellenme aralığı (ms, en az 100). Varsayılan 2000. */
     updateMs?: number;
+    /** Bulanıklık düzeyi (1–20; büyüdükçe daha yumuşak, daha az ayrıntı). Varsayılan 5. */
+    blur?: number;
+    /** Renk doygunluğu (0–3; 1 = videodaki gibi). Varsayılan 1.4. */
+    saturation?: number;
+    /** Parlaklık (0–2; 1 = videodaki gibi). Varsayılan 1. */
+    brightness?: number;
+    /** Ayarlar menüsünde izleyicinin aç-kapa satırı (tercih hatırlanır). Varsayılan true. */
+    menu?: boolean;
 }
 
 export interface SignLanguageOptions {
