@@ -38,7 +38,8 @@ async function testTracking(browser) {
     const page = await open(browser, { id, milestones: [5, 10] });
     try {
         await video(page, () => document.getElementById('player').shadowRoot.querySelector('video').play());
-        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').currentTime >= 3.4, null, { timeout: 8000 });
+        // Kayıt timeupdate ile videonun gerisinden gelir — videonun konumunu değil kaydın kendisini bekle (yavaş CI).
+        await page.waitForFunction(() => document.getElementById('player').getCourseProgress().watched > 3.2, null, { timeout: 10000 });
         let p = await progress(page);
         ok(p.ranges.length === 1 && p.ranges[0][0] < 0.5 && p.ranges[0][1] > 3, `izlenen aralık ${JSON.stringify(p.ranges.map((r) => r.map((x) => +x.toFixed(1))))}`);
         ok(p.percent > 10 && p.watched > 3, `oran %${p.percent}, ${p.watched} sn`);
@@ -49,6 +50,7 @@ async function testTracking(browser) {
         await page.waitForTimeout(400);
         const t = await video(page, () => document.getElementById('player').shadowRoot.querySelector('video').currentTime);
         ev = await page.evaluate(() => window.__ev);
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('.hp-plugin-toast[data-visible]'), null, { timeout: 3000 }).catch(() => {});
         const toast = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-plugin-toast[data-visible]')?.textContent);
         ok(t < 5, `20 sn'ye sarma engellendi (t=${t.toFixed(2)})`);
         ok(ev.some((e) => e.state === 'blocked' && e.time >= 19.9), `blocked olayı (hedef ${ev.find((e) => e.state === 'blocked')?.time})`);

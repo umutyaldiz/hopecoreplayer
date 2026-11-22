@@ -64,7 +64,10 @@ async function drag(page, toX, toY) {
     await page.mouse.move(x + (toX - x) / 2, y + (toY - y) / 2, { steps: 5 });
     await page.mouse.move(toX, toY, { steps: 5 });
     await page.mouse.up();
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(100);
+    // Köşeye kayma animasyonu yavaş makinede uzar — bitmesini bekle.
+    await page.waitForFunction(() => !document.getElementById('player').getAnimations().length, null, { timeout: 3000 }).catch(() => {});
+    await page.waitForTimeout(50);
 }
 
 /** Köşe tutamacını (dx, dy) kadar çeker. */

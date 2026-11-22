@@ -176,7 +176,8 @@ async function testSnapshot(browser) {
     const [dl] = await Promise.all([page.waitForEvent('download'), page.keyboard.press('Enter')]);
     const file = await dl.path();
     const size = pngSize(readFileSync(file));
-    ok(dl.suggestedFilename() === 'kare 1.png', `Enter ile indi: ${dl.suggestedFilename()}`);
+    // Linux'ta tarayıcı indirirken boşluğu alt çizgiye çevirebilir.
+    ok(/^kare[ _]1\.png$/.test(dl.suggestedFilename()), `Enter ile indi: ${dl.suggestedFilename()}`);
     ok(size.w === d.vw && size.h === d.vh, `PNG videonun kendi çözünürlüğünde (${size.w}×${size.h})`);
     ok(!(await page.evaluate(() => !!document.getElementById('player').shadowRoot.querySelector('[part="snapshot-dialog"]'))), 'pencere kapandı');
     const ev = await page.evaluate(() => window.__ev.find((e) => e.t === 'hp:snapshot')?.d);
