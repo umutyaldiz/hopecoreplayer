@@ -14,6 +14,8 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.12.0] — 2026-11-22
+
 ### Added
 
 - **`fullscreenMode: 'browser'` — fullscreen inside the browser on iPhone.** iPhone Safari has no Fullscreen API, so the fullscreen button opened iOS's built-in video player: our controls, caption style and plugins disappeared, and a linear ad had to exit fullscreen to be visible. With `'browser'` the player fills the browser window instead (safe-area aware, page scroll locked, Escape or the button exits), so controls, plugins and ads stay in the player and an ad no longer exits fullscreen. Default `'auto'` keeps the current behavior; no effect where the Fullscreen API exists (desktop, Android, iPad, Mac). The code loads as a separate chunk only when used.
