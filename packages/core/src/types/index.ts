@@ -538,8 +538,10 @@ export type StickyCorner = 'br' | 'bl' | 'tr' | 'tl';
 export interface StickyOptions {
     enabled?: boolean;
     corner?: StickyCorner;
-    /** Yalnızca oynatma aktifken (içerik ya da reklam) sticky'ye izin ver. */
+    /** Yalnızca oynatma aktifken (içerik ya da reklam) sticky'ye izin ver. false: hiç başlatılmamış ya da duraklatılmış player da köşeye yapışır. Varsayılan true. */
     requirePlaying?: boolean;
+    /** Video bitince sticky kapanıp player yerine döner. false: bitince köşede kalır. Varsayılan true. */
+    closeOnEnd?: boolean;
     /** Sticky'ye geçmeden önce viewport'ta en az bu kadar ms oynatılmış olmalı. */
     minPlayMs?: number;
     /** Sayfada aynı anda yalnızca bir sticky player. */
@@ -553,6 +555,16 @@ export interface StickyOptions {
     cooldownMinutes?: number;
     storage?: 'local' | 'session' | 'memory';
     closeButton?: boolean;
+    /** Mini player tutup sürüklenir, bırakınca en yakın köşeye oturur. Varsayılan true. */
+    draggable?: boolean;
+    /** Ekrana yapışık olmayan köşelerden çekerek boyutlandırma (oran korunur). Varsayılan true. */
+    resizable?: boolean;
+    /** Boyutlandırmada en küçük genişlik (px). Varsayılan 200. */
+    minWidth?: number;
+    /** Boyutlandırmada en büyük genişlik (px; ekranı aşmaz). Varsayılan 640. */
+    maxWidth?: number;
+    /** İzleyicinin seçtiği köşe ve boyut tarayıcıda hatırlanır (gizlilik onayına uyar). Varsayılan true. */
+    rememberPosition?: boolean;
     /** Sticky dock'un yerleştirileceği üst kapsayıcı — verilmezse player'ın parentElement'i kullanılır. */
     wrapperSelector?: string;
 }

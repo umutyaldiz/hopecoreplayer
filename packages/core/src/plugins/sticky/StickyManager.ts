@@ -1,6 +1,7 @@
 import type { StickyCorner, StickyOptions } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { storageGet, storageSet } from '../../utils/storage';
+import { enableDock, savedDock } from './dock';
 
 export interface StickyPlayerContext {
     key: string;
@@ -39,6 +40,8 @@ interface StickyItemState {
     programmaticPauseUntil: number;
     placeholderEl: HTMLElement | null;
     closeBtnEl: HTMLElement | null;
+    /** Sürükleme / boyutlandırmayı kaldırır. */
+    dockOff: (() => void) | null;
 }
 
 interface StickyItem {
@@ -69,6 +72,10 @@ class StickyManagerImpl {
     private dismissedUntil = 0;
     private dismissedForever = false;
     private dismissLoaded = false;
+    /** İzleyicinin sürükleyip seçtiği köşe ve boyut (sayfa boyunca; rememberPosition ile kalıcı). */
+    private dockCorner: StickyCorner | null = null;
+    private dockWidth: number | undefined;
+    private dockLoaded = false;
 
     register(ctx: StickyPlayerContext, options: StickyOptions): StickyUnregister {
         this.ensureGestureListeners();
@@ -78,6 +85,7 @@ class StickyManagerImpl {
             enabled: options.enabled ?? true,
             corner: options.corner ?? 'br',
             requirePlaying: options.requirePlaying ?? true,
+            closeOnEnd: options.closeOnEnd ?? true,
             minPlayMs: options.minPlayMs ?? 800,
             onlyOneSticky: options.onlyOneSticky ?? true,
             closeActiveStickyOnAnotherPlay: options.closeActiveStickyOnAnotherPlay ?? true,
@@ -87,9 +95,20 @@ class StickyManagerImpl {
             cooldownMinutes: options.cooldownMinutes ?? 5,
             storage: options.storage ?? 'local',
             closeButton: options.closeButton ?? true,
+            draggable: options.draggable ?? true,
+            resizable: options.resizable ?? true,
+            minWidth: options.minWidth ?? 200,
+            maxWidth: options.maxWidth ?? 640,
+            rememberPosition: options.rememberPosition ?? true,
         };
 
         if (!resolved.enabled) return () => {};
+        if (resolved.rememberPosition && !this.dockLoaded) {
+            this.dockLoaded = true;
+            const d = savedDock();
+            this.dockCorner = d.corner ?? null;
+            this.dockWidth = d.width;
+        }
 
         const sentinel = document.createElement('div');
         sentinel.setAttribute('aria-hidden', 'true');
@@ -117,6 +136,7 @@ class StickyManagerImpl {
                 programmaticPauseUntil: 0,
                 placeholderEl: null,
                 closeBtnEl: null,
+                dockOff: null,
             },
         };
         this.items.set(ctx.key, item);
@@ -279,7 +299,7 @@ class StickyManagerImpl {
                 item.state.userPausedAt = now;
                 this.lastGestureType = 'pause';
             }
-        } else if (item.state.sticky) {
+        } else if (item.state.sticky && item.options.closeOnEnd) {
             this.unstick(item.ctx.key, 'ended');
         }
     }
@@ -352,8 +372,10 @@ class StickyManagerImpl {
         }
 
         if (!item.state.hasEverBeenInView) return;
-        if (!item.state.hasEverBeenInViewWhilePlaying) return;
-        if (item.state.userPaused) return;
+        // requirePlaying: false → oynamamış / duraklatılmış player da yapışır; oynatmaya bağlı koşullar atlanır.
+        const needPlay = item.options.requirePlaying;
+        if (needPlay && !item.state.hasEverBeenInViewWhilePlaying) return;
+        if (needPlay && item.state.userPaused) return;
 
         const now = Date.now();
         if (item.options.dismissMode === 'never' && this.dismissedForever) return;
@@ -361,7 +383,7 @@ class StickyManagerImpl {
 
         if (item.options.requirePlaying && !item.state.playing) return;
         if (item.state.sticky) return;
-        if (item.options.minPlayMs > 0 && !item.state.minPlaySatisfied) return;
+        if (needPlay && item.options.minPlayMs > 0 && !item.state.minPlaySatisfied) return;
 
         if (item.options.onlyOneSticky && this.activeKey && this.activeKey !== item.ctx.key) {
             this.pauseAndUnstick(this.activeKey, 'replaced');
@@ -372,7 +394,7 @@ class StickyManagerImpl {
 
     private stick(item: StickyItem): void {
         const wrapper = item.ctx.wrapperEl;
-        const corner = item.options.corner;
+        const corner = this.dockCorner ?? item.options.corner;
 
         if (!item.state.placeholderEl) {
             const ph = document.createElement('div');
@@ -403,6 +425,26 @@ class StickyManagerImpl {
             item.state.closeBtnEl = btn;
         }
 
+        // Konum yalnızca player'ın kendisi dock olunca bizde; wrapperSelector ile sayfanındır.
+        const o = item.options;
+        if ((o.draggable || o.resizable) && wrapper === item.ctx.hostEl && !item.state.dockOff) {
+            item.state.dockOff = enableDock(
+                wrapper,
+                item.ctx.closeButtonMountEl,
+                {
+                    corner: () => (wrapper.getAttribute('data-sticky-corner') as StickyCorner) || corner,
+                    setCorner: (c) => {
+                        this.dockCorner = c;
+                        wrapper.setAttribute('data-sticky-corner', c);
+                        item.ctx.hostEl.dispatchEvent(new CustomEvent('hp:sticky', { detail: { sticky: true, corner: c } }));
+                    },
+                    width: this.dockWidth,
+                    setWidth: (w) => (this.dockWidth = w),
+                },
+                { draggable: o.draggable, resizable: o.resizable, minWidth: o.minWidth, maxWidth: Math.max(o.minWidth, o.maxWidth), remember: o.rememberPosition && o.storage !== 'memory' }
+            );
+        }
+
         item.state.sticky = true;
         this.activeKey = item.ctx.key;
         item.ctx.hostEl.dispatchEvent(new CustomEvent('hp:sticky', { detail: { sticky: true, corner } }));
@@ -418,6 +460,8 @@ class StickyManagerImpl {
 
         item.state.closeBtnEl?.remove();
         item.state.closeBtnEl = null;
+        item.state.dockOff?.();
+        item.state.dockOff = null;
         item.state.placeholderEl?.remove();
         item.state.placeholderEl = null;
 
