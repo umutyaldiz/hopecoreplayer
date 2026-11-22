@@ -72,6 +72,8 @@ export class Ambient {
         const num = (x: unknown, d: number, min: number, max: number): number =>
             typeof x === 'number' && Number.isFinite(x) ? Math.min(max, Math.max(min, x)) : d;
         this.updateMs = num(o.updateMs, 2000, 500, 60000);
+        // Geçiş aralığın %60'ı (en fazla 1.2 sn), kısa aralıkta da kare bitmeden tamamlanır.
+        this.layer.style.setProperty('--hp-ambient-fade', `${Math.min(1200, this.updateMs * 0.6)}ms`);
         this.layer.style.setProperty('--hp-ambient-opacity', String(num(o.opacity, 0.7, 0, 1)));
         this.spread = num(o.spread, 0.12, 0, 0.5);
         this.fit();

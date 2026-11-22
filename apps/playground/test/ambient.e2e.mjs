@@ -51,6 +51,7 @@ const state = (page) =>
             shown: !!layer && getComputedStyle(layer).display !== 'none',
             on: r.querySelectorAll('.hp-ambient canvas[data-on]').length,
             draws: window.__draws,
+            fade: layer ? getComputedStyle(layer.querySelector('canvas')).transitionDuration : null,
         };
     });
 const play = (page) => page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').play());
@@ -76,6 +77,7 @@ async function testPlayingOnly(browser) {
     console.log('\n[2] Açık: duraklatılmışken bir kare, oynarken seyrek güncelleme, duraklatınca durur');
     const { context, page } = await open(browser, { ambient: { updateMs: 500 } });
     const s0 = await state(page);
+    ok(s0.fade === '0.3s', `geçiş süresi aralığa uydu (500 ms → ${s0.fade})`);
     ok(s0.layer && s0.shown && s0.on === 1, `katman kuruldu, ilk kare çizildi ${JSON.stringify(s0)}`);
     ok((await drawsDuring(page, 1200)) === 0, 'duraklatılmışken kare alınmıyor');
     await play(page);
@@ -93,6 +95,7 @@ async function testPlayingOnly(browser) {
 async function testDefaultInterval(browser) {
     console.log('\n[3] Varsayılan aralık 2 sn');
     const { context, page } = await open(browser, { ambient: true });
+    ok((await state(page)).fade === '1.2s', 'varsayılan geçiş 1.2 sn');
     await play(page);
     await page.waitForTimeout(200);
     const n = await drawsDuring(page, 4100);
