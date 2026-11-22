@@ -14,6 +14,15 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+### Added
+
+- **`fullscreenMode: 'browser'` — fullscreen inside the browser on iPhone.** iPhone Safari has no Fullscreen API, so the fullscreen button opened iOS's built-in video player: our controls, caption style and plugins disappeared, and a linear ad had to exit fullscreen to be visible. With `'browser'` the player fills the browser window instead (safe-area aware, page scroll locked, Escape or the button exits), so controls, plugins and ads stay in the player and an ad no longer exits fullscreen. Default `'auto'` keeps the current behavior; no effect where the Fullscreen API exists (desktop, Android, iPad, Mac). The code loads as a separate chunk only when used.
+- **`ambient` — ambient light (off by default).** The video's colors spill behind the player as a soft light that fades towards the edge and stays behind the page content. Built for minimal battery and CPU cost: a 16px-wide frame every 2 s (≈0.6 ms per update), blur by upscaling instead of a GPU filter, opacity-only fades; updates stop when paused, while the tab is hidden, while the player is off screen, in fullscreen and on low battery (under 20%, not charging), and no frames are taken during ads or from DRM video. Options `opacity`, `spread`, `updateMs`; `::part(ambient)`. Separate chunk.
+
+### Changed
+
+- **Mobile: the seek bar sits at the very bottom, edge to edge.** In the compact layout (player under 480px) the seek bar moved below the buttons; the line touches the bottom edge and its touch area extends upward, so tapping right at the edge seeks. The centered play button keeps clear of the button row.
+
 ## [1.11.1] — 2026-11-22
 
 ### Fixed

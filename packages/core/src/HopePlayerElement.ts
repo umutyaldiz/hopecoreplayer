@@ -197,6 +197,8 @@ export class HopePlayerElement extends HTMLElement {
     private lastHlsActive = -1;
     /** options.audio — kapak + plak sahnesi, kontroller hep görünür, tam ekran yok. */
     private audioMode = false;
+    /** Tarayıcı içi tam ekran açıkken çıkış fonksiyonu (plugins/browser-fullscreen). */
+    private browserFullscreen: (() => void) | null = null;
     private inViewAutoplay: InViewAutoplay | null = null;
     private unregisterSticky: StickyUnregister | null = null;
     private playlistRunner: PlaylistRunner | null = null;
@@ -558,6 +560,7 @@ export class HopePlayerElement extends HTMLElement {
         this.videoEl.removeEventListener('touchstart', this.onVideoPressStart);
         this.videoEl.removeEventListener('touchend', this.onVideoPressEnd);
         this.videoEl.removeEventListener('touchcancel', this.onVideoPressCancel);
+        this.browserFullscreen?.();
         this.controlBar.destroy();
         this.captionRenderer.destroy();
         this.keyboard.destroy();
@@ -1548,7 +1551,7 @@ export class HopePlayerElement extends HTMLElement {
     /** 1.8 eklentileri: ödeme duvarı, filigran, klip, birlikte izle, tepkiler, eğitim modu, podcast, işaret dili. */
     private async applyEngagementPlugins(options: HopePlayerOptions): Promise<void> {
         const o = options;
-        if (!(o.paywall || o.watermark || o.clips || o.watchParty || o.reactions || o.course || o.podcast || o.signLanguage) && !this.engagement) return;
+        if (!(o.paywall || o.watermark || o.clips || o.watchParty || o.reactions || o.course || o.podcast || o.signLanguage || o.ambient) && !this.engagement) return;
         if (!this.engagement) {
             const { EngagementController } = await import('./plugins/engagement');
             this.engagement ??= new EngagementController({
@@ -2384,13 +2387,31 @@ export class HopePlayerElement extends HTMLElement {
             requestFullscreen?: () => Promise<void>;
             webkitRequestFullscreen?: () => void;
         };
-        const videoFallback = (): void => this.iosVideo.webkitEnterFullscreen?.();
+        const videoFallback = (): void =>
+            this.options.fullscreenMode === 'browser' ? this.enterBrowserFullscreen() : this.iosVideo.webkitEnterFullscreen?.();
         if (el.requestFullscreen) el.requestFullscreen().catch(videoFallback);
         else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
         else videoFallback();
     }
 
+    /** Fullscreen API'siz tam ekran: player pencereyi kaplar, kontroller/altyazı/reklam bizde kalır. */
+    private enterBrowserFullscreen(): void {
+        const changed = (): boolean => this.dispatchEvent(new Event('fullscreenchange', { bubbles: true, composed: true }));
+        void import('./plugins/browser-fullscreen').then(({ enterBrowserFullscreen }) => {
+            if (this.browserFullscreen || !this.isConnected) return;
+            this.browserFullscreen = enterBrowserFullscreen(this, this.videoEl, () => {
+                this.browserFullscreen = null;
+                changed();
+            });
+            changed();
+        });
+    }
+
     private exitFullscreenCompat(): void {
+        if (this.browserFullscreen) {
+            this.browserFullscreen();
+            return;
+        }
         if (this.iosVideo.webkitDisplayingFullscreen) {
             this.iosVideo.webkitExitFullscreen?.();
             return;
@@ -2402,7 +2423,12 @@ export class HopePlayerElement extends HTMLElement {
 
     private isFullscreenActive(): boolean {
         const doc = document as unknown as { webkitFullscreenElement?: Element | null };
-        return document.fullscreenElement === this || doc.webkitFullscreenElement === this || !!this.iosVideo.webkitDisplayingFullscreen;
+        return (
+            document.fullscreenElement === this ||
+            doc.webkitFullscreenElement === this ||
+            !!this.iosVideo.webkitDisplayingFullscreen ||
+            !!this.browserFullscreen
+        );
     }
 
     private readonly onFullscreenChange = (e?: Event): void => {
@@ -2534,7 +2560,8 @@ export class HopePlayerElement extends HTMLElement {
         };
         if (!areaRect.height || !seekRect.height || !area.hasAttribute('data-compact')) return reset();
         const fullSize = 64;
-        const freeBottom = seekRect.top - areaRect.top - 8;
+        // Kompaktta seek bar en altta — boş alanın sınırı buton satırı.
+        const freeBottom = this.controlBar.bottomRow.getBoundingClientRect().top - areaRect.top - 8;
         // Ortada zaten sığıyorsa dokunma.
         if (areaRect.height / 2 + fullSize / 2 <= freeBottom) return reset();
         const size = Math.max(40, Math.min(56, freeBottom - 12));

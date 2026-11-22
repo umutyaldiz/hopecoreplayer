@@ -9,6 +9,7 @@ import type { Reactions } from '../reactions';
 import type { Course } from '../course';
 import type { Podcast } from '../podcast';
 import type { SignLanguage } from '../sign-language';
+import type { Ambient } from '../ambient';
 
 export interface EngagementHost {
     hostEl: HTMLElement;
@@ -42,6 +43,7 @@ export class EngagementController {
     course: Course | null = null;
     podcast: Podcast | null = null;
     signLanguage: SignLanguage | null = null;
+    ambient: Ambient | null = null;
     private keys: Record<string, string> = {};
 
     constructor(private readonly h: EngagementHost) {}
@@ -181,6 +183,18 @@ export class EngagementController {
                 if (this.keys.signLanguage === slKey) this.signLanguage = installSignLanguage({ ...base, addButton, registerToggle, unregisterToggle, isAdActive }, sl);
             }
         }
+
+        // Ortam ışığı — yalnızca açılıp kapanınca yeniden kurulur, ayarlar yerinde güncellenir.
+        const am = options.ambient ? (options.ambient === true ? {} : options.ambient) : null;
+        if (!am) {
+            this.ambient?.destroy();
+            this.ambient = null;
+            delete this.keys.ambient;
+        } else if (this.ambient) this.ambient.setOptions(am);
+        else if (this.changed('ambient', 'on')) {
+            const { installAmbient } = await import('../ambient');
+            if (this.keys.ambient === 'on' && !this.ambient) this.ambient = installAmbient({ hostEl: h.hostEl, videoEl: h.videoEl, videoArea: h.videoArea, isAdActive }, am);
+        }
     }
 
     /** Reklam başladı / bitti: filigran gizlenir / döner, bekleyen "birlikte izle" durumu uygulanır. */
@@ -199,8 +213,8 @@ export class EngagementController {
     }
 
     destroy(): void {
-        for (const p of [this.paywall, this.watermark, this.clips, this.watchParty, this.reactions, this.course, this.podcast, this.signLanguage]) p?.destroy();
-        this.paywall = this.watermark = this.clips = this.watchParty = this.reactions = this.course = this.podcast = this.signLanguage = null;
+        for (const p of [this.paywall, this.watermark, this.clips, this.watchParty, this.reactions, this.course, this.podcast, this.signLanguage, this.ambient]) p?.destroy();
+        this.paywall = this.watermark = this.clips = this.watchParty = this.reactions = this.course = this.podcast = this.signLanguage = this.ambient = null;
         this.keys = {};
     }
 }

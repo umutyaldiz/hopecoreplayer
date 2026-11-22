@@ -149,6 +149,108 @@ async function testIphoneFullscreenFallback(browser) {
     await context.close();
 }
 
+async function testBrowserFullscreen(browser) {
+    console.log("\n[1e] fullscreenMode: 'browser' — iPhone'da native oynatıcı yerine player pencereyi kaplıyor, Escape / buton çıkarıyor");
+    const { context, page } = await openPlayer(browser, { width: 390, touch: true });
+    await page.evaluate(() => {
+        const host = document.getElementById('player');
+        const v = host.shadowRoot.querySelector('video');
+        Object.defineProperty(host, 'requestFullscreen', { value: undefined, configurable: true });
+        Object.defineProperty(host, 'webkitRequestFullscreen', { value: undefined, configurable: true });
+        v.webkitEnterFullscreen = () => (window.__iosFs = true);
+        document.body.style.overflow = 'auto';
+        window.__fsEvents = 0;
+        document.addEventListener('fullscreenchange', () => window.__fsEvents++);
+        host.options = { ...host.options, fullscreenMode: 'browser' };
+    });
+    await page.waitForTimeout(150);
+    const btn = async (label) =>
+        page.evaluate((label) => {
+            const r = document.getElementById('player').shadowRoot.querySelector(`[aria-label="${label}"]`).getBoundingClientRect();
+            return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        }, label);
+    let pos = await btn('Tam ekran');
+    await page.touchscreen.tap(pos.x, pos.y);
+    await page.waitForTimeout(250);
+    const on = await page.evaluate(() => {
+        const host = document.getElementById('player');
+        const r = host.getBoundingClientRect();
+        const area = host.shadowRoot.querySelector('.video-area').getBoundingClientRect();
+        return {
+            native: !!window.__iosFs,
+            attr: host.hasAttribute('data-hp-fullscreen'),
+            cover: Math.round(r.left) === 0 && Math.round(r.top) === 0 && Math.round(r.width) === innerWidth && Math.round(r.height) === innerHeight,
+            areaH: Math.round(area.height),
+            exitLabel: !!host.shadowRoot.querySelector('[aria-label="Tam ekrandan çık"]'),
+            scrollLocked: getComputedStyle(document.documentElement).overflow === 'hidden',
+            events: window.__fsEvents,
+        };
+    });
+    ok(!on.native && on.attr, `native tam ekran açılmadı, tarayıcı içi tam ekran açıldı ${JSON.stringify(on)}`);
+    ok(on.cover && on.areaH >= 700, 'player pencerenin tamamını kaplıyor (video alanı da)');
+    ok(on.exitLabel && on.events === 1, 'buton "Tam ekrandan çık" oldu, fullscreenchange yayınlandı');
+    ok(on.scrollLocked, 'sayfa kaydırması kilitlendi');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+    const off = await page.evaluate(() => {
+        const host = document.getElementById('player');
+        return {
+            attr: host.hasAttribute('data-hp-fullscreen'),
+            enterLabel: !!host.shadowRoot.querySelector('[aria-label="Tam ekran"]'),
+            html: document.documentElement.style.overflow,
+            body: document.body.style.overflow,
+        };
+    });
+    ok(!off.attr && off.enterLabel, `Escape tam ekrandan çıkardı ${JSON.stringify(off)}`);
+    ok(off.html === '' && off.body === 'auto', 'sayfanın overflow değerleri geri yüklendi');
+    pos = await btn('Tam ekran');
+    await page.touchscreen.tap(pos.x, pos.y);
+    await page.waitForTimeout(250);
+    pos = await btn('Tam ekrandan çık');
+    await page.touchscreen.tap(pos.x, pos.y);
+    await page.waitForTimeout(250);
+    ok(await page.evaluate(() => !document.getElementById('player').hasAttribute('data-hp-fullscreen')), 'butonla girip butonla çıkıldı');
+    await context.close();
+}
+
+async function testSeekBarAtBottom(browser) {
+    console.log('\n[1f] Mobil: seek bar en altta kenardan kenara, dokunma alanı korunuyor, butonlarla çakışmıyor');
+    for (const width of [320, 390]) {
+        const { context, page } = await openPlayer(browser, { width, touch: true });
+        try {
+            const r = await page.evaluate(() => {
+                const root = document.getElementById('player').shadowRoot;
+                const area = root.querySelector('.video-area').getBoundingClientRect();
+                const seek = root.querySelector('[part="seek-bar"]').getBoundingClientRect();
+                const track = root.querySelector('[part="seek-bar"] > :first-child').getBoundingClientRect();
+                const groups = Array.from(root.querySelectorAll('[part="control-bar"] .hp-group')).filter((g) => g.getBoundingClientRect().width > 0);
+                return {
+                    trackGap: Math.round(area.bottom - track.bottom),
+                    edges: Math.round(track.left - area.left) === 0 && Math.round(area.right - track.right) === 0,
+                    hitH: Math.round(seek.height),
+                    clear: groups.every((g) => g.getBoundingClientRect().bottom <= seek.top + 0.5),
+                };
+            });
+            ok(r.trackGap === 0 && r.edges, `${width}px: çizgi alt kenara yapışık, kenardan kenara ${JSON.stringify(r)}`);
+            ok(r.hitH >= 22 && r.clear, `${width}px: dokunma alanı ${r.hitH}px, buton grupları seek bar'ın üstünde`);
+            // Alt kenarın 2px üstüne ve dokunma alanının üst kısmına dokunuş sarıyor.
+            for (const [frac, dy] of [[0.75, 2], [0.25, 18]]) {
+                const t = await page.evaluate(([frac, dy]) => {
+                    const root = document.getElementById('player').shadowRoot;
+                    const area = root.querySelector('.video-area').getBoundingClientRect();
+                    return { x: area.left + area.width * frac, y: area.bottom - dy };
+                }, [frac, dy]);
+                await page.touchscreen.tap(t.x, t.y);
+                await page.waitForTimeout(250);
+                const ct = await page.evaluate(() => { const v = document.getElementById('player').shadowRoot.querySelector('video'); return v.currentTime / v.duration; });
+                ok(Math.abs(ct - frac) < 0.06, `${width}px: alttan ${dy}px'e dokunuş %${Math.round(frac * 100)}'e sardı (%${Math.round(ct * 100)})`);
+            }
+        } finally {
+            await context.close();
+        }
+    }
+}
+
 async function testIosNativeFullscreenCaptions(browser) {
     console.log('\n[5] iPhone native tam ekran: altyazı iOS\'a devrediliyor, dönüşte seçim bize aktarılıyor ve çift altyazı olmuyor');
     const { context, page } = await openPlayer(browser, { width: 390, touch: true });
@@ -388,10 +490,11 @@ async function testCenterPlayClearOfSeekBar(browser) {
                 const seek = root.querySelector('[part="seek-bar"]').getBoundingClientRect();
                 const top = root.querySelector('.hp-top-bar').getBoundingClientRect();
                 const overlap = (a, b) => b.width > 0 && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+                const groups = Array.from(root.querySelectorAll('[part="control-bar"] .hp-group'));
                 const hit = root.elementFromPoint(chip.left + chip.width / 2, chip.top + chip.height / 2);
-                return { seek: overlap(chip, seek), topBar: overlap(chip, top), hit: !!hit?.closest('.hp-center-play'), size: Math.round(chip.width) };
+                return { seek: overlap(chip, seek), topBar: overlap(chip, top), row: groups.some((g) => overlap(chip, g.getBoundingClientRect())), hit: !!hit?.closest('.hp-center-play'), size: Math.round(chip.width) };
             });
-            ok(!r.seek && !r.topBar && r.hit && r.size >= 40, `${width}px: çakışma yok, dokunuş butona gidiyor (${r.size}px) ${JSON.stringify(r)}`);
+            ok(!r.seek && !r.topBar && !r.row && r.hit && r.size >= 40, `${width}px: çakışma yok, dokunuş butona gidiyor (${r.size}px) ${JSON.stringify(r)}`);
         } finally {
             await context.close();
         }
@@ -541,6 +644,8 @@ async function testCaptionsDropToBottom(browser) {
         await testSettingsMenuStaysInside(browser);
         await testChromeStaysWhileMenuOpen(browser);
         await testIphoneFullscreenFallback(browser);
+        await testBrowserFullscreen(browser);
+        await testSeekBarAtBottom(browser);
         await testUnmuteBadge(browser);
         await testDesktopLayoutAndResize(browser);
         await testCaptionsDropToBottom(browser);

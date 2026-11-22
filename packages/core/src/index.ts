@@ -92,6 +92,7 @@ export type {
     CourseNote,
     PodcastOptions,
     SignLanguageOptions,
+    AmbientOptions,
     PrivacyOptions,
     PrivacyConsent,
     PrivacyGroupMap,

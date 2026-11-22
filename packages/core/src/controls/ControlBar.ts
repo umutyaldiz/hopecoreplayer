@@ -104,7 +104,7 @@ export class ControlBar {
     private showRemaining = false;
     /** Kompakt düzende (player < 480px) sağ grubun taşındığı üst bar; tam ekran altta kalır. */
     readonly topEl: HTMLDivElement;
-    private readonly bottomRow: HTMLDivElement;
+    readonly bottomRow: HTMLDivElement;
     private readonly rightGroup: HTMLDivElement;
     private readonly fullscreenSlot: HTMLDivElement;
     private compact = false;

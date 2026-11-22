@@ -1131,6 +1131,15 @@ export interface PrivacyOptions extends PrivacyConsent {
     waitMs?: number;
 }
 
+export interface AmbientOptions {
+    /** Işığın yoğunluğu (0–1). Varsayılan 0.7. */
+    opacity?: number;
+    /** Işığın player dışına taşması (genişliğe oran, 0–0.5; her yönde aynı piksel). Varsayılan 0.12. */
+    spread?: number;
+    /** Renklerin güncellenme aralığı (ms, en az 500). Varsayılan 2000. */
+    updateMs?: number;
+}
+
 export interface SignLanguageOptions {
     /** İşaret dili videosu (MP4 / WebM; Safari'de HLS de). Ana videoyla eş zamanlı, sessiz oynar. */
     src: string;
@@ -1672,6 +1681,11 @@ export interface HopePlayerOptions {
     /** İşaret dili videosu: köşede, ana videoyla eş zamanlı oynar. */
     signLanguage?: SignLanguageOptions;
     /**
+     * Ortam ışığı: videonun renkleri player'ın arkasına yumuşak ışık olarak yansır. Varsayılan kapalı.
+     * Yalnızca oynarken, sekme ve player görünürken, tam ekran dışında güncellenir; düşük pilde durur. DRM'li videoda çalışmaz.
+     */
+    ambient?: boolean | AmbientOptions;
+    /**
      * Gizlilik onayı (KVKK / GDPR): reklam kişiselleştirme, analitik ve cihazda saklama onaya göre açılıp kapanır.
      * OneTrust / Cookiebot / TCF bağlayıcıları ya da kendi sisteminiz (`getConsent`, `player.setPrivacy()`). Sayfa
      * genelidir — tüm player'lar aynı onayı kullanır.
@@ -1682,6 +1696,13 @@ export interface HopePlayerOptions {
      * `tapGestures`'taki `toggleFullscreen` çalışmaya devam eder.
      */
     fullscreenButton?: boolean;
+    /**
+     * Fullscreen API'si olmayan tarayıcılarda (iPhone Safari) tam ekran. `'auto'` (varsayılan): iOS'un yerleşik
+     * video oynatıcısına geçer — bizim kontroller, altyazı stili ve eklentiler görünmez; lineer reklamda tam ekrandan çıkılır.
+     * `'browser'`: player tarayıcı penceresini kaplar (CSS) — kontroller, eklentiler ve reklam player içinde kalır,
+     * reklam gelince tam ekrandan çıkılmaz. API'si olan tarayıcılarda (masaüstü, Android, iPad) etkisi yok.
+     */
+    fullscreenMode?: 'auto' | 'browser';
     /** Fare video üzerinden ayrılınca kontrol çubuğunun/merkez play butonunun kaybolmadan önce beklediği süre (ms). Varsayılan 1200. */
     autoHideDelayMs?: number;
     /** Video oynarken fare bu süre (ms) kıpırdamazsa imleç gizlenir; `false` = hiç gizleme. Varsayılan 5000. */

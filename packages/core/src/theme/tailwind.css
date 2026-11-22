@@ -373,6 +373,24 @@ button.hp-chip:active {
     padding: 28px 20px 18px;
 }
 
+/* Kompakt (mobil): seek bar en altta kenardan kenara; çizgi alt kenarda, dokunma alanı yukarı uzanır. */
+[part='control-bar'][data-compact] {
+    padding-inline: 0;
+    padding-bottom: 0;
+}
+[part='control-bar'][data-compact] > :not(.hp-seekbar) {
+    padding-inline: 12px;
+}
+[part='control-bar'][data-compact] > .hp-seekbar {
+    order: 2;
+}
+[part='control-bar'][data-compact] :is(.hp-seekbar, .hp-chapters) {
+    align-items: flex-end;
+}
+[part='control-bar'][data-compact] .hp-seek-marker {
+    top: calc(100% - var(--hp-seek-track-h) / 2);
+}
+
 /* Video alanı: 16:9; panelli plugin'ler (playlist/story) bunun altına eklenir. */
 .video-area {
     position: relative;

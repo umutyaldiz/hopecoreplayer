@@ -785,7 +785,7 @@ export class AdsController {
     private viewMode(): string {
         const doc = document as Document & { webkitFullscreenElement?: Element | null };
         const host = this.ctx.hostEl;
-        const full = document.fullscreenElement === host || doc.webkitFullscreenElement === host;
+        const full = document.fullscreenElement === host || doc.webkitFullscreenElement === host || host.hasAttribute('data-hp-fullscreen');
         return full ? this.ima!.ViewMode.FULLSCREEN : this.ima!.ViewMode.NORMAL;
     }
 
