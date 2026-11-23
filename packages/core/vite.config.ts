@@ -31,26 +31,24 @@ function chunkName(name: string, facade: string | null): string {
 }
 
 /**
- * hls.js / dash.js parçalarını küçült: Vite kütüphane modunda (es) boşlukları küçültmüyor, hls.js parçası boşluklarıyla çıkıyordu
- * (~229 KB gzip). Yalnızca bu üçüncü taraf parçalar — kendi kodumuz okunur kalır (kaynak haritası zaten var).
+ * Tüm parçaları küçült: Vite kütüphane modunda (es) boşlukları küçültmüyor. Kendi kodumuz da küçültülür (ilk yükleme
+ * ~81 → ~63 KB gzip, PageSpeed "Minify JavaScript"); hata ayıklama için kaynak haritaları üretilir.
  */
-const minifyHls = (): Plugin => ({
-    name: 'hope:minify-hls',
+const minifyChunks = (): Plugin => ({
+    name: 'hope:minify',
     // order 'post': Vite'in kendi renderChunk'ı (es kütüphanede boşlukları koruyarak) kodu yeniden biçimlendiriyor —
     // ondan sonra küçültmek gerek. renderChunk'ta olduğu için dosya adındaki hash küçültülmüş içerikten hesaplanır.
     renderChunk: {
         order: 'post',
         async handler(code, chunk) {
-            if (!HLS_CHUNKS.has(chunk.name)) return null;
             const out = await transformWithEsbuild(code, chunk.fileName, { minify: true, sourcemap: true, target: 'esnext', legalComments: 'none' });
             return { code: out.code, map: out.map };
         },
     },
 });
-const HLS_CHUNKS = new Set(['hls', 'hls.light', 'dashEngine']);
 
 export default defineConfig({
-    plugins: [tailwindcss(), minifyHls()],
+    plugins: [tailwindcss(), minifyChunks()],
     // Sağ tık menüsü / istatistik paneli sürümü — package.json'dan, elle güncellenmez.
     define: { __HOPE_VERSION__: JSON.stringify(pkg.version) },
     build: {

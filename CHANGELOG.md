@@ -28,7 +28,7 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 ### Changed
 
 - **Speed panel.** Settings → Playback speed shows the value in large type, −/+ buttons and a slider in 0.05 steps between the lowest and highest rate, and the listed rates as presets; the menu stays open and changes apply at once.
-- **Smaller initial load.** The speed and caption-appearance panels of the settings menu moved into a chunk loaded the first time one opens (initial load 80.0 → 79.3 KB gzip).
+- **Smaller initial load: 80.0 → 61.3 KB gzip.** All published code is now minified (previously only the hls.js / dash.js chunks were; source maps are still shipped), and the speed and caption-appearance panels of the settings menu moved into a chunk loaded the first time one opens. PageSpeed's "Minify JavaScript" warning is gone.
 - **Mobile: the seek bar sits at the very bottom, edge to edge.** In the compact layout (player under 480px) the seek bar moved below the buttons; the line touches the bottom edge and its touch area extends upward, so tapping right at the edge seeks. The centered play button keeps clear of the button row.
 
 ## [1.11.1] — 2026-11-22
