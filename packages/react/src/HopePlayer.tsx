@@ -29,7 +29,20 @@ export interface HopePlayerProps extends HopePlayerOptions {
     onSourceFallback?: (detail: HopePlayerEventMap['hp:sourcefallback']['detail']) => void;
     /** `options.analytics` açıkken her izlenme olayı. */
     onAnalytics?: (detail: HopePlayerEventMap['hp:analytics']['detail']) => void;
+    /** Oynarken en sık 250 ms'de bir: konum, süre, buffer. */
+    onTimeUpdate?: (detail: HopePlayerEventMap['hp:timeupdate']['detail']) => void;
+    onVolumeChange?: (detail: HopePlayerEventMap['hp:volumechange']['detail']) => void;
+    onSeeked?: (detail: HopePlayerEventMap['hp:seeked']['detail']) => void;
+    onBuffering?: (buffering: boolean) => void;
+    onFullscreen?: (detail: HopePlayerEventMap['hp:fullscreen']['detail']) => void;
+    onSubtitleChange?: (detail: HopePlayerEventMap['hp:subtitlechange']['detail']) => void;
+    onDubbing?: (detail: HopePlayerEventMap['hp:dubbing']['detail']) => void;
+    /** Diğer tüm `hp:*` olayları: `{ 'hp:share': (e) => … }`. */
+    events?: HopePlayerEventHandlers;
 }
+
+/** Olay adı → dinleyici (`events` prop'u). */
+export type HopePlayerEventHandlers = { [K in keyof HopePlayerEventMap]?: (event: HopePlayerEventMap[K]) => void };
 
 export interface HopePlayerHandle {
     play(): Promise<void>;
@@ -60,11 +73,23 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
         onSticky,
         onSourceFallback,
         onAnalytics,
+        onTimeUpdate,
+        onVolumeChange,
+        onSeeked,
+        onBuffering,
+        onFullscreen,
+        onSubtitleChange,
+        onDubbing,
+        events,
         ...options
     },
     ref
 ) {
     const elRef = useRef<HopePlayerEl | null>(null);
+    // `events` her render'da yeni nesne olabilir: dinleyiciler en güncel işleyiciyi ref'ten okur.
+    const eventsRef = useRef(events);
+    eventsRef.current = events;
+    const eventNames = Object.keys(events ?? {}).sort().join(',');
 
     useEffect(() => {
         let cancelled = false;
@@ -139,6 +164,19 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
             listeners.push(['hp:sourcefallback', (e) => onSourceFallback((e as HopePlayerEventMap['hp:sourcefallback']).detail)]);
         }
         if (onAnalytics) listeners.push(['hp:analytics', (e) => onAnalytics((e as HopePlayerEventMap['hp:analytics']).detail)]);
+        const detail = <K extends keyof HopePlayerEventMap>(fn: ((d: HopePlayerEventMap[K]['detail']) => void) | undefined, name: K): void => {
+            if (fn) listeners.push([name, (e) => fn((e as HopePlayerEventMap[K]).detail)]);
+        };
+        detail(onTimeUpdate, 'hp:timeupdate');
+        detail(onVolumeChange, 'hp:volumechange');
+        detail(onSeeked, 'hp:seeked');
+        if (onBuffering) listeners.push(['hp:buffering', (e) => onBuffering((e as HopePlayerEventMap['hp:buffering']).detail.buffering)]);
+        detail(onFullscreen, 'hp:fullscreen');
+        detail(onSubtitleChange, 'hp:subtitlechange');
+        detail(onDubbing, 'hp:dubbing');
+        for (const name of eventNames ? (eventNames.split(',') as Array<keyof HopePlayerEventMap>) : []) {
+            listeners.push([name, (e) => (eventsRef.current?.[name] as ((ev: Event) => void) | undefined)?.(e)]);
+        }
 
         for (const [name, handler] of listeners) el.addEventListener(name, handler);
         return () => {
@@ -159,6 +197,14 @@ export const HopePlayer = forwardRef<HopePlayerHandle, HopePlayerProps>(function
         onSticky,
         onSourceFallback,
         onAnalytics,
+        onTimeUpdate,
+        onVolumeChange,
+        onSeeked,
+        onBuffering,
+        onFullscreen,
+        onSubtitleChange,
+        onDubbing,
+        eventNames,
     ]);
 
     useImperativeHandle(

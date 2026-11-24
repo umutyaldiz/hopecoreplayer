@@ -53,7 +53,8 @@ export class Dubbing {
         this.ctx.unregisterSubmenu(SUBMENU_KEY);
     }
 
-    private select(index: number): void {
+    /** Menüden ya da player API'sinden (`setDubbing`) dil seçimi. */
+    select(index: number): void {
         if (index === this.activeIndex || !this.options.tracks[index]) return;
         this.activeIndex = index;
         void this.ctx.selectTrack(index);

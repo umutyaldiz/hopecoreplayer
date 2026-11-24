@@ -69,6 +69,23 @@ const FORWARDED_EVENTS = [
     'hp:podcast',
     'hp:signlanguage',
     'hp:privacy',
+    // 1.13: zamanı köprünün kendi `timeupdate`'i taşır; hp:timeupdate aktarılmaz.
+    'hp:volumechange',
+    'hp:seeking',
+    'hp:seeked',
+    'hp:buffering',
+    'hp:loadedmetadata',
+    'hp:sourcechange',
+    'hp:sourcefallback',
+    'hp:subtitlechange',
+    'hp:dubbing',
+    'hp:fullscreen',
+    'hp:controls',
+    'hp:chapterchange',
+    'hp:live',
+    'hp:adclick',
+    'hp:adskip',
+    'hp:adprogress',
 ];
 
 /** React Native'den `call` komutuyla çağrılabilen player yöntemleri. */
@@ -85,6 +102,10 @@ export const NATIVE_METHODS = [
     'setPrivacy',
     'openShare',
     'togglePip',
+    'setQuality',
+    'setSubtitle',
+    'setDubbing',
+    'toggleFullscreen',
 ] as const;
 export type HopeNativeMethod = (typeof NATIVE_METHODS)[number];
 

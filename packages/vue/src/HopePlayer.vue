@@ -22,7 +22,23 @@ const emit = defineEmits<{
     sticky: [sticky: boolean, corner: StickyCorner | undefined];
     sourcefallback: [detail: HopePlayerEventMap['hp:sourcefallback']['detail']];
     analytics: [detail: HopePlayerEventMap['hp:analytics']['detail']];
+    timeupdate: [detail: HopePlayerEventMap['hp:timeupdate']['detail']];
+    volumechange: [detail: HopePlayerEventMap['hp:volumechange']['detail']];
+    seeking: [detail: HopePlayerEventMap['hp:seeking']['detail']];
+    seeked: [detail: HopePlayerEventMap['hp:seeked']['detail']];
+    buffering: [buffering: boolean];
+    loadedmetadata: [detail: HopePlayerEventMap['hp:loadedmetadata']['detail']];
+    sourcechange: [detail: HopePlayerEventMap['hp:sourcechange']['detail']];
+    subtitlechange: [detail: HopePlayerEventMap['hp:subtitlechange']['detail']];
+    dubbing: [detail: HopePlayerEventMap['hp:dubbing']['detail']];
+    fullscreen: [detail: HopePlayerEventMap['hp:fullscreen']['detail']];
+    controls: [visible: boolean];
+    chapterchange: [detail: HopePlayerEventMap['hp:chapterchange']['detail']];
+    live: [detail: HopePlayerEventMap['hp:live']['detail']];
 }>();
+
+/** Ayrıntısıyla aynen iletilen olaylar (`hp:` öneki atılır). */
+const DETAIL_EVENTS = ['timeupdate', 'volumechange', 'seeking', 'seeked', 'loadedmetadata', 'sourcechange', 'subtitlechange', 'dubbing', 'fullscreen', 'chapterchange', 'live'] as const;
 
 const instance = getCurrentInstance();
 
@@ -75,6 +91,12 @@ onMounted(() => {
         ],
         ['hp:sourcefallback', (e) => emit('sourcefallback', (e as HopePlayerEventMap['hp:sourcefallback']).detail)],
         ['hp:analytics', (e) => emit('analytics', (e as HopePlayerEventMap['hp:analytics']).detail)],
+        ['hp:buffering', (e) => emit('buffering', (e as HopePlayerEventMap['hp:buffering']).detail.buffering)],
+        ['hp:controls', (e) => emit('controls', (e as HopePlayerEventMap['hp:controls']).detail.visible)],
+        ...DETAIL_EVENTS.map((name): [keyof HopePlayerEventMap, EventListener] => [
+            `hp:${name}`,
+            (e) => (emit as (n: string, d: unknown) => void)(name, (e as CustomEvent).detail),
+        ]),
     ];
     for (const [name, handler] of listeners) el.addEventListener(name, handler);
 

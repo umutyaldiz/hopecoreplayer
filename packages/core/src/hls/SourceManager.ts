@@ -118,6 +118,10 @@ export interface StreamAudioTrack {
 
 export interface SourceManagerCallbacks {
     onLevelsChanged(levels: HlsQualityLevel[], activeIndex: number): void;
+    /** Ekrana gelen kalite değişti (HLS / DASH; `auto`: ABR seçti). */
+    onRendition?(level: { height: number; bitrate: number | null }, auto: boolean): void;
+    /** Yeni bir kaynak yüklenmeye başladı. */
+    onSourceLoad?(src: string, format: 'hls' | 'dash' | 'native'): void;
     /** Boş liste = kaynak değişti, önceki izler kalmasın. */
     onAudioTracksChanged(tracks: StreamAudioTrack[], activeIndex: number): void;
     /** hls.js yayın altyazıları — boş liste = sıfırla. Liste büyüyebilir (CEA-608 izleri oynarken bulunur). */
@@ -200,6 +204,9 @@ export class SourceManager {
         // algoritmasını zaten baştan başlatıyor (önceki kaynak iptal edilir).
 
         const sourceType = detectSourceType(src, type);
+        this.callbacks.onSourceLoad?.(src, sourceType === 'hls' || sourceType === 'dash' ? sourceType : 'native');
+        // Yeni kaynak hızı defaultPlaybackRate'e sıfırlar: kalite / dublaj değişince hız korunsun.
+        if (this.video.defaultPlaybackRate !== this.video.playbackRate) this.video.defaultPlaybackRate = this.video.playbackRate;
         // Önceki kaynağın kalite / ses / altyazı listeleri kalmasın.
         this.callbacks.onLevelsChanged([], -1);
         this.callbacks.onAudioTracksChanged([], -1);
@@ -291,6 +298,7 @@ export class SourceManager {
             onDrm: (keySystem) => {
                 this.engineInfo = { ...this.engineInfo, drm: keySystem };
             },
+            onRendition: (level, auto) => this.callbacks.onRendition?.(level, auto),
         });
     }
 
@@ -432,6 +440,8 @@ export class SourceManager {
         hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
             // Otomatik (ABR) modda menü "Otomatik"i seçili göstersin, o anki seviyeyi değil.
             this.callbacks.onLevelsChanged(levels(), hls.autoLevelEnabled ? -1 : data.level);
+            const l = hls.levels[data.level];
+            if (l) this.callbacks.onRendition?.({ height: l.height, bitrate: l.bitrate ?? null }, hls.autoLevelEnabled);
         });
 
         const audio = (): StreamAudioTrack[] =>

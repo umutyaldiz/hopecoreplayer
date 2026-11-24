@@ -33,6 +33,8 @@ export interface DashCallbacks {
     onError(info: { code: number; message: string; fatal: boolean }): void;
     /** Şifreli içerikte seçilen anahtar sistemi. */
     onDrm?(keySystem: string): void;
+    /** Ekrana gelen video kalitesi değişti (`auto`: ABR seçti). */
+    onRendition?(level: { height: number; bitrate: number }, auto: boolean): void;
 }
 
 /** DRM hata kodları (dash.js MediaPlayerErrors). */
@@ -95,7 +97,10 @@ export class DashEngine {
             this.reportText();
         });
         player.on(E('QUALITY_CHANGE_RENDERED', 'qualityChangeRendered') as never, ((e: { mediaType: string }) => {
-            if (e.mediaType === 'video') this.reportLevels();
+            if (e.mediaType !== 'video') return;
+            this.reportLevels();
+            const level = this.currentLevel();
+            if (level) cb.onRendition?.(level, this.auto);
         }) as never);
         player.on(E('TRACK_CHANGE_RENDERED', 'trackChangeRendered') as never, ((e: { mediaType: string }) => {
             if (e.mediaType === 'audio') this.reportAudio();

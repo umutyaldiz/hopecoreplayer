@@ -14,6 +14,25 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.13.0] — 2026-11-24
+
+### Added
+
+- **Player API: read and control the player from code.** `player.currentTime` (assigning seeks), `duration`, `paused`, `ended`, `buffered`, `volume`, `muted` and `playbackRate` (the player's own volume slider and speed panel follow), `getQualities()` / `setQuality(label | 'auto')` (MP4 `sources` and HLS / DASH levels), `getSubtitles()` / `setSubtitle(labelOrLang | null)`, `setDubbing(indexOrLang)`, `enterFullscreen()` / `exitFullscreen()` / `toggleFullscreen()` and `isFullscreen` (follows `fullscreenMode` on iPhone, unlike the element's own `requestFullscreen()`). New types `HopeQualityInfo`, `HopeSubtitleInfo`.
+- **New events.** `hp:timeupdate` (`{ currentTime, duration, buffered }`, at most every 250 ms, not during ads), `hp:volumechange`, `hp:seeking` / `hp:seeked` (`{ from, to }`; restoring the position after a quality / language / format change is not counted), `hp:buffering`, `hp:loadedmetadata` (`{ duration, width, height, live }`), `hp:sourcechange`, `hp:subtitlechange`, `hp:fullscreen` (`{ state, mode: 'native' | 'browser' | 'ios' }`), `hp:controls` (control bar shown / hidden), `hp:chapterchange` (`segments`), `hp:live` (`{ atLiveEdge, behind }`), `hp:adclick`, `hp:adskip`, `hp:adprogress` (IMA quartiles 25 / 50 / 75) and `hp:ambient`.
+- **Typed events.** The 11 plugin events that were missing from `HopePlayerEventMap` (`hp:snapshot`, `hp:stablevolume`, `hp:touchlock`, `hp:rewarded*`, `hp:sponsor*`) are now typed; the map covers all 67 events.
+- **React / Vue.** React: `onTimeUpdate`, `onVolumeChange`, `onSeeked`, `onBuffering`, `onFullscreen`, `onSubtitleChange`, `onDubbing` and an `events` prop for any other event (`events={{ 'hp:share': (e) => … }}`, typed; new type `HopePlayerEventHandlers`). Vue: `@timeupdate`, `@volumechange`, `@seeking`, `@seeked`, `@buffering`, `@loadedmetadata`, `@sourcechange`, `@subtitlechange`, `@dubbing`, `@fullscreen`, `@controls`, `@chapterchange`, `@live`. React Native: the new events reach `onEvent` (time keeps coming from `onTimeUpdate`), and `call()` accepts `setQuality`, `setSubtitle`, `setDubbing` and `toggleFullscreen`.
+- **Docs: Events page** with every event on its own card, its `detail` shape, the option that enables it, and a live player whose events light up the cards as they fire; plus a Player API panel that drives the player.
+
+### Changed
+
+- **`hp:qualitychange`** now also fires for HLS / DASH (picking a level from the menu, automatic ABR switches with `auto: true`, and the first level at start). It used to fire only when switching between MP4 `sources`. The detail gains `auto`, `height` and `bitrate`; `label` is unchanged.
+- **`hp:ratechange`** fires only when the rate really changes (no duplicate after a source switch).
+
+### Fixed
+
+- **Playback speed is kept when the quality or dubbing language changes.** Loading the new source used to reset it to 1×.
+
 ## [1.12.1] — 2026-11-24
 
 ### Added

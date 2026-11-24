@@ -57,6 +57,8 @@ export interface ControlBarCallbacks {
     adVolume: VolumePanelAdHooks;
     /** hls.js'in hedef canlı konumu (canlı ucun ~3 segment gerisi) — rozet "geride" kararı ve "canlıya dön" için. */
     liveSyncPosition?(): number | null;
+    /** Canlı yayında canlı uca gelindi / geride kalındı (`behind`: saniye). */
+    onLiveState?(atLiveEdge: boolean, behind: number): void;
     /**
      * Oynat/duraklat butonu ve klavyeden önce sorulur — true dönerse tıklama orada işlenmiştir.
      * Preroll beklenirken basılan "duraklat" beklemeyi iptal eder (video zaten duraklatılmış durumda).
@@ -618,6 +620,7 @@ export class ControlBar {
         this.liveBadge.style.display = !this.adMode && isLive ? '' : 'none';
 
         if (!isLive) {
+            this.lastLiveBehind = null;
             const duration = this.video.duration;
             const current = this.video.currentTime;
             if (this.showRemaining) {
@@ -635,7 +638,12 @@ export class ControlBar {
         const target = this.callbacks.liveSyncPosition?.() ?? this.liveEdge();
         const behind = target !== null && target - this.video.currentTime > LIVE_EDGE_TOLERANCE_SEC;
         this.liveBadge.toggleAttribute('data-behind', behind);
+        if (target !== null && behind !== this.lastLiveBehind) {
+            this.lastLiveBehind = behind;
+            this.callbacks.onLiveState?.(!behind, Math.max(0, Math.round(target - this.video.currentTime)));
+        }
     };
+    private lastLiveBehind: boolean | null = null;
 
     /** Buffer bekleniyor (oynarken takılma ya da buffer'lanmamış bir yere atlama). */
     private readonly onLoadingStart = (e: Event): void => {

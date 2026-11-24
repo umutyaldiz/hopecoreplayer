@@ -41,6 +41,8 @@ export type {
     HopeSourceOption,
     HopeSourceFormat,
     HopePlayerEventMap,
+    HopeQualityInfo,
+    HopeSubtitleInfo,
     AdsOptions,
     AdsRetryOptions,
     AdNoticesOptions,

@@ -274,6 +274,11 @@ export class SettingsMenu {
         this.badge.toggleAttribute('data-low', !!text && /^\d+$/.test(text));
     };
 
+    /** Kalite menüsünün o anki içeriği (player API'si okur). */
+    get qualityState(): { options: readonly SettingsQualityOption[]; active: string } {
+        return { options: this.qualities, active: this.activeQualityLabel };
+    }
+
     setQualities(options: SettingsQualityOption[], activeLabel: string): void {
         this.qualities = options;
         this.activeQualityLabel = activeLabel;

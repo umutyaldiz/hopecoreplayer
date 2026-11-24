@@ -184,7 +184,10 @@ async function testLiveBadge(browser) {
     ok(!vod.badgeVisible && vod.timeVisible, 'normal (VOD) videoda rozet YOK, süre etiketi var');
 
     await page.evaluate(() => {
-        const video = document.getElementById('player').shadowRoot.querySelector('video');
+        const el = document.getElementById('player');
+        window.__live = [];
+        el.addEventListener('hp:live', (e) => window.__live.push(e.detail));
+        const video = el.shadowRoot.querySelector('video');
         Object.defineProperty(video, 'duration', { value: Infinity, configurable: true });
         Object.defineProperty(video, 'seekable', { value: { length: 0, start: () => 0, end: () => 0 }, configurable: true });
         Object.defineProperty(video, 'buffered', { value: { length: 1, start: () => 0, end: () => 120 }, configurable: true });
@@ -217,6 +220,11 @@ async function testLiveBadge(browser) {
     await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="live-badge"]').click());
     const back = await read();
     ok(Math.abs(back.t - 119) < 0.01 && !back.behind, `rozete tıklayınca canlı uca döndü (currentTime=${back.t})`);
+    const live = await page.evaluate(() => window.__live);
+    ok(
+        live.length === 3 && live[0].atLiveEdge && !live[1].atLiveEdge && live[1].behind === 60 && live[2].atLiveEdge,
+        `hp:live uç → geride (60 sn) → uç (${JSON.stringify(live)})`
+    );
 
     await page.evaluate(() => document.getElementById('player').setAttribute('locale', 'en'));
     await page.waitForTimeout(100);

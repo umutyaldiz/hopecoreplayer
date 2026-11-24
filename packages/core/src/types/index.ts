@@ -1911,7 +1911,11 @@ export type HopePlayerEventMap = {
     /** Hata ekranı açıldı (oynatılamayan kaynak, kopan yayın…). `code`: MediaError kodu (2 ağ, 3 çözümleme, 4 desteklenmiyor). */
     'hp:error': CustomEvent<{ message: string; code?: number }>;
     'hp:analytics': CustomEvent<{ event: HopeAnalyticsEvent; metrics: HopeQoeMetrics }>;
-    'hp:qualitychange': CustomEvent<{ label: string }>;
+    /**
+     * Kalite değişti: menüden seçildi (MP4 `sources`, HLS / DASH seviyesi) ya da ABR geçti (`auto: true`).
+     * HLS / DASH'te ilk seviye de bildirilir. `label`: menüdeki etiket ya da "720p".
+     */
+    'hp:qualitychange': CustomEvent<{ label: string; auto: boolean; height: number | null; bitrate: number | null }>;
     /**
      * Kaynak grubu değişti: `from` grubu ölümcül hata verdi (ya da tarayıcı oynatamıyor) ve `to` grubuna geçildi.
      * `code`: MediaError kodu (2 ağ, 3 çözümleme, 4 desteklenmiyor); `skipped`: denenmeden atlandı (desteklenmiyor).
@@ -2026,4 +2030,74 @@ export type HopePlayerEventMap = {
     'hp:privacy': CustomEvent<{ consent: Required<PrivacyConsent>; source: string }>;
     /** İşaret dili videosu açıldı / kapandı ya da başka köşeye taşındı. */
     'hp:signlanguage': CustomEvent<{ state: 'on' | 'off' | 'move'; position?: SignLanguageOptions['position'] }>;
+    /** Oynarken en sık 250 ms'de bir (reklamda gelmez). `buffered`: konumu kapsayan buffer'ın sonu (sn). */
+    'hp:timeupdate': CustomEvent<{ currentTime: number; duration: number; buffered: number }>;
+    /** Ses ya da sessiz durumu değişti (izleyici, klavye ya da API). */
+    'hp:volumechange': CustomEvent<{ volume: number; muted: boolean }>;
+    /** Sarma başladı (`from` → `to`); kaynak / kalite değişiminde konumun geri yüklenmesi sayılmaz. */
+    'hp:seeking': CustomEvent<{ from: number; to: number }>;
+    /** Sarma bitti, yeni konumda oynatmaya hazır. */
+    'hp:seeked': CustomEvent<{ from: number; to: number }>;
+    /** Takılma: veri bekleniyor (`true`) ya da oynatma sürdü (`false`). */
+    'hp:buffering': CustomEvent<{ buffering: boolean }>;
+    /** Kaynağın süresi ve çözünürlüğü belli oldu (her kaynak yüklemesinde). `live`: canlı yayın. */
+    'hp:loadedmetadata': CustomEvent<{ duration: number; width: number; height: number; live: boolean }>;
+    /** Yeni bir içerik kaynağı yüklenmeye başladı (ilk yükleme, kalite, yedek biçim, dublaj, playlist…). */
+    'hp:sourcechange': CustomEvent<{ src: string; format: 'hls' | 'dash' | 'native' }>;
+    /** Altyazı açıldı / kapandı ya da dili değişti (`label: null` = kapalı). */
+    'hp:subtitlechange': CustomEvent<{ label: string | null; srclang?: string }>;
+    /** Tam ekrana girildi / çıkıldı. `mode`: native (Fullscreen API), browser (`fullscreenMode: 'browser'`), ios (iPhone video tam ekranı). */
+    'hp:fullscreen': CustomEvent<{ state: 'enter' | 'exit'; mode: 'native' | 'browser' | 'ios' }>;
+    /** Kontrol çubuğu göründü / gizlendi. */
+    'hp:controls': CustomEvent<{ visible: boolean }>;
+    /** O anki bölüm (`segments`) değişti; `index: -1` = bölüm dışı. */
+    'hp:chapterchange': CustomEvent<{ index: number; title?: string; start?: number; end?: number }>;
+    /** Canlı yayında canlı uca gelindi ya da geride kalındı (`behind`: saniye). */
+    'hp:live': CustomEvent<{ atLiveEdge: boolean; behind: number }>;
+    /** IMA reklamına tıklandı. */
+    'hp:adclick': CustomEvent<{ type: 'preroll' | 'midroll' | 'postroll' }>;
+    /** IMA reklamı atlandı. */
+    'hp:adskip': CustomEvent<{ type: 'preroll' | 'midroll' | 'postroll' }>;
+    /** IMA reklamının çeyreği geçildi (25 / 50 / 75). */
+    'hp:adprogress': CustomEvent<{ type: 'preroll' | 'midroll' | 'postroll'; quartile: 25 | 50 | 75 }>;
+    /** İzleyici ortam ışığını menüden açtı / kapattı. */
+    'hp:ambient': CustomEvent<{ on: boolean }>;
+    /** Sabit ses açıldı / kapandı. */
+    'hp:stablevolume': CustomEvent<{ on: boolean }>;
+    /** Anlık kare indirildi. */
+    'hp:snapshot': CustomEvent<{ name: string; width: number; height: number; time: number }>;
+    /** Dokunma kilidi açıldı / kapandı. */
+    'hp:touchlock': CustomEvent<{ locked: boolean }>;
+    /** Kilitli kalite seçildi, "reklam izleyerek aç" penceresi açıldı. */
+    'hp:rewardedprompt': CustomEvent<{ quality: string }>;
+    /** Ödül verildi, kalite açıldı (`noAd`: reklam gelmedi, reklamsız açıldı). */
+    'hp:rewardedgranted': CustomEvent<{ quality: string; noAd: boolean }>;
+    /** Ödüllü reklam doldurulamadı (`granted`: yine de açıldı mı). */
+    'hp:rewardednofill': CustomEvent<{ granted: boolean }>;
+    /** Ödül alınmadan kapandı: vazgeçildi (`declined`) ya da reklam yarıda bırakıldı (`cancelled`). */
+    'hp:rewardedclosed': CustomEvent<{ granted: false; cancelled?: boolean; declined?: boolean }>;
+    /** Sponsor kampanyası yüklendi / yenilendi (`null`: yok). */
+    'hp:sponsorship': CustomEvent<{ config: SponsorshipConfig | null }>;
+    /** Sponsor logosu görüntülendi. */
+    'hp:sponsorimpression': CustomEvent<{ id: string; sponsor: string }>;
+    /** Sponsor logosuna tıklandı. */
+    'hp:sponsorclick': CustomEvent<{ id: string; sponsor: string }>;
+    /** "Bu yayın … sunar" girişi gösterildi (`count`: kaçıncı kez). */
+    'hp:sponsorintro': CustomEvent<{ id: string; sponsor: string; count: number }>;
 };
+
+/** `getQualities()` satırı. */
+export interface HopeQualityInfo {
+    label: string;
+    active: boolean;
+    locked: boolean;
+    /** "Otomatik" (ABR) satırı. */
+    auto: boolean;
+}
+
+/** `getSubtitles()` satırı. */
+export interface HopeSubtitleInfo {
+    label: string;
+    srclang?: string;
+    active: boolean;
+}

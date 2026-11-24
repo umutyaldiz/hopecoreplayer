@@ -121,6 +121,7 @@ export class Ambient {
         if (on === this.enabled) return;
         this.enabled = on;
         storageSet(STORE, on ? '1' : '0');
+        this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:ambient', { detail: { on } }));
         if (!on) return this.clear();
         this.onPlay();
         if (!this.timer) this.drawQuick();

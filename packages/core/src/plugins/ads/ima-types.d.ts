@@ -86,6 +86,9 @@ declare namespace google.ima {
             USER_CLOSE?: string;
             SKIPPED: string;
             CLICK: string;
+            FIRST_QUARTILE?: string;
+            MIDPOINT?: string;
+            THIRD_QUARTILE?: string;
             /** Toolbar'daki oynat/duraklat butonuyla (adsManager.pause()/resume()) tetiklenir; ayrıca IMA'nın KENDİ reklam UI'ı (ör. reklam video'suna tıklama) üzerinden de gelebilir — ikisini senkron tutmak için dinleniyor. */
             PAUSED: string;
             RESUMED: string;

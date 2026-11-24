@@ -543,6 +543,17 @@ export class AdsController {
         this.adsManager.addEventListener(AdEvent.Type.STARTED, this.onAdStarted);
         this.adsManager.addEventListener(AdEvent.Type.COMPLETE, this.stopAdProgress);
         this.adsManager.addEventListener(AdEvent.Type.SKIPPED, this.stopAdProgress);
+        // Sayfaya bildirilen reklam olayları: tıklama, atlama, çeyrekler.
+        const emit = (name: string, extra?: object) => () =>
+            this.ctx.hostEl.dispatchEvent(new CustomEvent(name, { detail: { type: this.activeBreak, ...extra } }));
+        this.adsManager.addEventListener(AdEvent.Type.CLICK, emit('hp:adclick'));
+        this.adsManager.addEventListener(AdEvent.Type.SKIPPED, emit('hp:adskip'));
+        const quartiles: Array<[string | undefined, number]> = [
+            [AdEvent.Type.FIRST_QUARTILE, 25],
+            [AdEvent.Type.MIDPOINT, 50],
+            [AdEvent.Type.THIRD_QUARTILE, 75],
+        ];
+        for (const [type, quartile] of quartiles) if (type) this.adsManager.addEventListener(type, emit('hp:adprogress', { quartile }));
         if (AdEvent.Type.USER_CLOSE) this.adsManager.addEventListener(AdEvent.Type.USER_CLOSE, this.endNonLinear);
         this.adsManager.addEventListener(this.ima.AdErrorEvent.Type.AD_ERROR, this.onAdsManagerError);
         // IMA'nın KENDİ reklam UI'ı üzerinden (ör. reklam video'suna tıklama)

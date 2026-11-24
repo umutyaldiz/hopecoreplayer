@@ -1,5 +1,5 @@
 import tailwindCss from './theme/tailwind.css?inline';
-import type { HopeSourceOption, AdsOptions, HopePlayerOptions, HopeQoeMetrics, WatchPartyMessage, CourseProgress, PrivacyConsent } from './types';
+import type { HopeSourceOption, AdsOptions, HopePlayerOptions, HopeQoeMetrics, WatchPartyMessage, CourseProgress, PrivacyConsent, HopeQualityInfo, HopeSubtitleInfo } from './types';
 import type Hls from 'hls.js';
 import { SourceManager, type HlsQualityLevel, type PlaybackEngineInfo, type StreamAudioTrack, type StreamTextTrack } from './hls/SourceManager';
 import { cannotPlay, groupSources, sourceFormat, type SourceGroup } from './hls/sourceGroups';
@@ -38,6 +38,7 @@ import type { InViewAutoplay } from './plugins/in-view-autoplay';
 import type { StickyUnregister } from './plugins/sticky';
 import type { PlaylistRunner } from './plugins/playlist';
 import type { HopeStory } from './plugins/story';
+import { MediaEvents } from './events/MediaEvents';
 import type { MarkProgress } from './plugins/markers';
 import type { Segments } from './plugins/segments';
 import type { SpriteThumbnails } from './plugins/sprite-thumbnails';
@@ -130,6 +131,10 @@ export class HopePlayerElement extends HTMLElement {
     private readonly root: ShadowRoot;
     private readonly videoArea: HTMLDivElement;
     private readonly videoEl: HTMLVideoElement;
+    private readonly mediaEvents: MediaEvents;
+    /** Son bildirilen durumlar — olay yalnızca değişince gelir. */
+    private lastFullscreen = false;
+    private lastSubtitle: string | null = null;
     private readonly adLayerEl: HTMLDivElement;
     private readonly chromeEl: HTMLDivElement;
     private readonly centerPlayButton: HTMLButtonElement;
@@ -337,6 +342,10 @@ export class HopePlayerElement extends HTMLElement {
         this.videoEl = this.root.querySelector('video')!;
         this.adLayerEl = this.root.querySelector('[part="ad-layer"]')!;
         this.instanceKey = `hp-${Math.random().toString(36).slice(2, 10)}`;
+        this.mediaEvents = new MediaEvents(this, this.videoEl, {
+            isAdActive: () => this.isAdPlaying(),
+            segments: () => this._options.segments,
+        });
 
         this.prerollGate = new PrerollGate(this.videoEl);
         this.prerollGate.onWaitChange = (waiting) => this.onPrerollWaitChange(waiting);
@@ -396,6 +405,9 @@ export class HopePlayerElement extends HTMLElement {
 
         this.sourceManager = new SourceManager(this.videoEl, {
             onLevelsChanged: this.onHlsLevelsChanged,
+            onRendition: ({ height, bitrate }, auto) =>
+                this.dispatchEvent(new CustomEvent('hp:qualitychange', { detail: { label: `${height}p`, auto, height, bitrate } })),
+            onSourceLoad: (src, format) => this.dispatchEvent(new CustomEvent('hp:sourcechange', { detail: { src, format } })),
             onAudioTracksChanged: this.onStreamAudioTracks,
             onTextTracksFound: this.onStreamTextTracks,
             onCues: this.onStreamCues,
@@ -421,6 +433,7 @@ export class HopePlayerElement extends HTMLElement {
             {
                 onRequestFullscreen: () => this.requestFullscreenCompat(),
                 liveSyncPosition: () => this.sourceManager.hlsInstance?.liveSyncPosition ?? null,
+                onLiveState: (atLiveEdge, behind) => this.dispatchEvent(new CustomEvent('hp:live', { detail: { atLiveEdge, behind } })),
                 onExitFullscreen: () => this.exitFullscreenCompat(),
                 isFullscreen: () => this.isFullscreenActive(),
                 // adsController sonradan kurulur — closure'lar her çağrıda güncel this.adsController'ı okur.
@@ -498,6 +511,7 @@ export class HopePlayerElement extends HTMLElement {
         this.videoEl.addEventListener('pause', this.onPause);
         this.videoEl.addEventListener('ended', this.onEnded);
         this.videoEl.addEventListener('ratechange', this.onRateChange);
+        this.mediaEvents.attach();
         this.addEventListener('pointermove', this.onPointerMove);
         this.addEventListener('pointerleave', this.onPointerLeave);
         this.addEventListener('pointerdown', this.onPointerDownFocus);
@@ -548,6 +562,7 @@ export class HopePlayerElement extends HTMLElement {
         this.videoEl.removeEventListener('pause', this.onPause);
         this.videoEl.removeEventListener('ended', this.onEnded);
         this.videoEl.removeEventListener('ratechange', this.onRateChange);
+        this.mediaEvents.detach();
         this.removeEventListener('pointermove', this.onPointerMove);
         this.removeEventListener('pointerleave', this.onPointerLeave);
         this.removeEventListener('pointerdown', this.onPointerDownFocus);
@@ -683,6 +698,106 @@ export class HopePlayerElement extends HTMLElement {
 
     pause(): void {
         this.videoEl.pause();
+    }
+
+    // ── Okuma / kontrol API'si (içerik videosu) ──
+
+    /** Oynatma konumu (sn); atanırsa o saniyeye sarar. */
+    get currentTime(): number {
+        return this.videoEl.currentTime;
+    }
+    set currentTime(value: number) {
+        if (Number.isFinite(value)) this.videoEl.currentTime = Math.max(0, value);
+    }
+    /** Süre (sn); canlıda Infinity, yüklenmeden NaN. */
+    get duration(): number {
+        return this.videoEl.duration;
+    }
+    get paused(): boolean {
+        return this.videoEl.paused;
+    }
+    get ended(): boolean {
+        return this.videoEl.ended;
+    }
+    get buffered(): TimeRanges {
+        return this.videoEl.buffered;
+    }
+    /** Ses 0–1; kendi ses çubuğu da güncellenir. */
+    get volume(): number {
+        return this.videoEl.volume;
+    }
+    set volume(value: number) {
+        if (Number.isFinite(value)) this.videoEl.volume = Math.min(1, Math.max(0, value));
+    }
+    get muted(): boolean {
+        return this.videoEl.muted;
+    }
+    set muted(value: boolean) {
+        this.videoEl.muted = !!value;
+    }
+    get playbackRate(): number {
+        return this.videoEl.playbackRate;
+    }
+    set playbackRate(value: number) {
+        if (Number.isFinite(value) && value > 0) this.videoEl.playbackRate = value;
+    }
+
+    /** Kalite menüsündeki seçenekler (`auto`: "Otomatik" satırı). */
+    getQualities(): HopeQualityInfo[] {
+        const { options, active } = this.controlBar.settingsMenu.qualityState;
+        return options.map((q) => ({ label: q.label, active: q.label === active, locked: !!q.locked, auto: q.label === this.i18n.autoQuality }));
+    }
+
+    /** Kaliteyi seç: menüdeki etiket ("720p") ya da 'auto'. Bulunamaz ya da kilitliyse false. */
+    setQuality(label: string): boolean {
+        const { options } = this.controlBar.settingsMenu.qualityState;
+        const q = options.find((o) => (label === 'auto' ? o.label === this.i18n.autoQuality : o.label === label));
+        if (!q || q.locked) return false;
+        q.onSelect();
+        return true;
+    }
+
+    /** Altyazı izleri (`options.subtitles` + yayın izleri). */
+    getSubtitles(): HopeSubtitleInfo[] {
+        return this.subtitleTracks.map(({ label, track }) => ({ label, srclang: track.language || undefined, active: label === this.activeCaptionLabel }));
+    }
+
+    /** Altyazıyı seç: etiket ya da dil kodu; null kapatır. Bulunamazsa false. */
+    setSubtitle(labelOrLang: string | null): boolean {
+        if (!this.selectCaption) return labelOrLang === null;
+        if (labelOrLang === null) {
+            this.selectCaption(null);
+            return true;
+        }
+        const t = this.subtitleTracks.find((x) => x.label === labelOrLang) ?? this.subtitleTracks.find((x) => x.track.language === labelOrLang);
+        if (!t) return false;
+        this.selectCaption(t.label);
+        return true;
+    }
+
+    /** Dublaj dilini seç: sıra numarası ya da `srclang`. Bulunamazsa false. */
+    setDubbing(indexOrLang: number | string): boolean {
+        const tracks = this.playOptions.dubbing?.tracks;
+        if (!tracks?.length) return false;
+        const index = typeof indexOrLang === 'number' ? indexOrLang : tracks.findIndex((t) => t.srclang === indexOrLang);
+        if (!tracks[index] || !this.dubbing) return false;
+        this.dubbing.select(index);
+        return true;
+    }
+
+    /** Tam ekran (iPhone'da `fullscreenMode`'a göre). Not: öğenin kendi requestFullscreen()'i değil. */
+    enterFullscreen(): void {
+        if (!this.isFullscreenActive()) this.requestFullscreenCompat();
+    }
+    exitFullscreen(): void {
+        if (this.isFullscreenActive()) this.exitFullscreenCompat();
+    }
+    toggleFullscreen(): void {
+        if (this.isFullscreenActive()) this.exitFullscreenCompat();
+        else this.requestFullscreenCompat();
+    }
+    get isFullscreen(): boolean {
+        return this.isFullscreenActive();
     }
 
     /** Kaynak yüklenmeden önce kurulur — ilk oynatma ölçülsün. */
@@ -1793,6 +1908,7 @@ export class HopePlayerElement extends HTMLElement {
     private rebuildCaptions(activeLabel: string | null): void {
         this.subtitleTracks = [...this.optionTracks, ...this.streamTracks];
         if (!this.subtitleTracks.length) {
+            this.emitSubtitle(null);
             this.selectCaption = null;
             this.activeCaptionLabel = null;
             this.controlBar.setCaptions([], this.i18n.captionsOff);
@@ -1813,6 +1929,7 @@ export class HopePlayerElement extends HTMLElement {
             this.controlBar.settingsMenu.setActiveCaption(track ? label! : this.i18n.captionsOff);
             this.controlBar.settingsMenu.setCaptionAppearance(track !== null ? this.buildCaptionAppearance() : null);
             this.transcript?.onTracksChanged();
+            this.emitSubtitle(track ? label : null, track?.language);
         };
         this.selectCaption = selectCaption;
         const active = activeLabel && this.subtitleTracks.some((t) => t.label === activeLabel) ? activeLabel : null;
@@ -2253,7 +2370,14 @@ export class HopePlayerElement extends HTMLElement {
         await this.sourceManager.load(source.src, source.type);
         this.videoEl.currentTime = resumeTime;
         if (wasPlaying) this.videoEl.play().catch(() => {});
-        this.dispatchEvent(new CustomEvent('hp:qualitychange', { detail: { label: source.label } }));
+        this.dispatchEvent(new CustomEvent('hp:qualitychange', { detail: { label: source.label, auto: false, height: this.sourceHeight(source) ?? null, bitrate: null } }));
+    }
+
+    /** Altyazı seçimi değişince hp:subtitlechange (aynı seçim tekrar gelirse olay yok). */
+    private emitSubtitle(label: string | null, srclang?: string): void {
+        if (label === this.lastSubtitle) return;
+        this.lastSubtitle = label;
+        this.dispatchEvent(new CustomEvent('hp:subtitlechange', { detail: { label, srclang: label ? srclang || undefined : undefined } }));
     }
 
     /** `from`'dan itibaren tarayıcının oynatabileceği ilk grup (oynatamadıkları atlanır); hiçbiri yoksa -1 (from 0'sa 0 — yine de dene). */
@@ -2482,7 +2606,13 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     private readonly onFullscreenChange = (e?: Event): void => {
-        this.controlBar.setFullscreenState(this.isFullscreenActive());
+        const active = this.isFullscreenActive();
+        this.controlBar.setFullscreenState(active);
+        if (active !== this.lastFullscreen) {
+            this.lastFullscreen = active;
+            const mode = this.browserFullscreen ? 'browser' : this.iosVideo.webkitDisplayingFullscreen || e?.type === 'webkitendfullscreen' ? 'ios' : 'native';
+            this.dispatchEvent(new CustomEvent('hp:fullscreen', { detail: { state: active ? 'enter' : 'exit', mode } }));
+        }
         if (e?.type === 'webkitbeginfullscreen') this.showCaptionsNatively();
         else if (e?.type === 'webkitendfullscreen') this.syncCaptionsFromNative();
     };
@@ -2543,8 +2673,12 @@ export class HopePlayerElement extends HTMLElement {
         this.dispatchEvent(new CustomEvent('hp:ended'));
     };
 
+    private lastRate = 1;
     private readonly onRateChange = (): void => {
-        this.dispatchEvent(new CustomEvent('hp:ratechange', { detail: { rate: this.videoEl.playbackRate } }));
+        const v = this.videoEl;
+        if (v.playbackRate === this.lastRate) return;
+        this.lastRate = v.playbackRate;
+        this.dispatchEvent(new CustomEvent('hp:ratechange', { detail: { rate: v.playbackRate } }));
     };
 
     private readonly onPointerDownFocus = (): void => {
@@ -2677,7 +2811,9 @@ export class HopePlayerElement extends HTMLElement {
     /** Chrome görünürlüğünün tek giriş noktası — altyazı da haberdar olur (kontroller gizlenince en alta iner). */
     private setChromeOpacity(value: '0' | '1'): void {
         this.chromeEl.style.opacity = value;
+        const changed = this.chromeVisible !== (value === '1');
         this.chromeVisible = value === '1';
+        if (changed) this.dispatchEvent(new CustomEvent('hp:controls', { detail: { visible: this.chromeVisible } }));
         // Kontrollerin üstüne binmemek için yer değiştiren katmanlar (ör. sponsor logosu) kontroller gizliyken köşeye döner.
         // Host'a değil video alanına: constructor'da da çağrılıyor ve createElement ile oluşturulan custom element
         // constructor'da kendine attribute ekleyemez (NotSupportedError).
