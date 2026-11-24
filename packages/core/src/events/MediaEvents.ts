@@ -26,8 +26,8 @@ export class MediaEvents {
         private readonly deps: MediaEventsDeps
     ) {}
 
-    private emit(name: string, detail: unknown): void {
-        this.host.dispatchEvent(new CustomEvent(name, { detail }));
+    private emit(event: CustomEvent): void {
+        this.host.dispatchEvent(event);
     }
 
     /** Oynatma konumunu kapsayan buffer aralığının sonu. */
@@ -48,11 +48,11 @@ export class MediaEvents {
         const now = performance.now();
         if (now - this.lastTimeAt < TIME_INTERVAL_MS) return;
         this.lastTimeAt = now;
-        this.emit('hp:timeupdate', { currentTime: v.currentTime, duration: v.duration, buffered: this.bufferedEnd() });
+        this.emit(new CustomEvent('hp:timeupdate', { detail: { currentTime: v.currentTime, duration: v.duration, buffered: this.bufferedEnd() } }));
     };
 
     private readonly onVolume = (): void => {
-        this.emit('hp:volumechange', { volume: this.video.volume, muted: this.video.muted });
+        this.emit(new CustomEvent('hp:volumechange', { detail: { volume: this.video.volume, muted: this.video.muted } }));
     };
 
     private readonly onSeeking = (): void => {
@@ -60,7 +60,7 @@ export class MediaEvents {
         // Kaynak değişiminde konumun geri yüklenmesi (aynı yere) sarma sayılmaz.
         if (Math.abs(to - this.lastTime) < SEEK_MIN_SEC) return;
         this.seekFrom ??= this.lastTime;
-        this.emit('hp:seeking', { from: this.seekFrom, to });
+        this.emit(new CustomEvent('hp:seeking', { detail: { from: this.seekFrom, to } }));
     };
 
     private readonly onSeeked = (): void => {
@@ -68,14 +68,14 @@ export class MediaEvents {
         const from = this.seekFrom;
         this.seekFrom = null;
         this.lastTime = this.video.currentTime;
-        this.emit('hp:seeked', { from, to: this.video.currentTime });
+        this.emit(new CustomEvent('hp:seeked', { detail: { from, to: this.video.currentTime } }));
         this.updateChapter();
     };
 
     private setBuffering(on: boolean): void {
         if (on === this.buffering) return;
         this.buffering = on;
-        this.emit('hp:buffering', { buffering: on });
+        this.emit(new CustomEvent('hp:buffering', { detail: { buffering: on } }));
     }
 
     private readonly onWaiting = (): void => {
@@ -89,7 +89,7 @@ export class MediaEvents {
         this.lastTime = v.currentTime;
         this.seekFrom = null;
         this.chapter = -1;
-        this.emit('hp:loadedmetadata', { duration: v.duration, width: v.videoWidth, height: v.videoHeight, live: v.duration === Infinity });
+        this.emit(new CustomEvent('hp:loadedmetadata', { detail: { duration: v.duration, width: v.videoWidth, height: v.videoHeight, live: v.duration === Infinity } }));
         this.updateChapter();
     };
 
@@ -106,7 +106,7 @@ export class MediaEvents {
         if (index === this.chapter) return;
         this.chapter = index;
         const s = list[index];
-        this.emit('hp:chapterchange', s ? { index, title: s.text, start: s.start, end: s.end } : { index: -1 });
+        this.emit(new CustomEvent('hp:chapterchange', { detail: s ? { index, title: s.text, start: s.start, end: s.end } : { index: -1 } }));
     }
 
     attach(): void {
