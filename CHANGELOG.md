@@ -14,6 +14,15 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+### Added
+
+- **Dubbing: sources per language.** A dubbing track can take its own `sources` list (for example an HLS plus 1080p / 720p / 360p MP4s) instead of a single `src`. Everything `sources` / `sourcePriority` does now works per language: the quality menu shows that language's qualities, and if its HLS fails playback falls back to that language's MP4 from the same second. Switching language keeps the position, play state, format (a language that fell back to MP4 continues on MP4) and the quality label when it exists. With this layout `src` / `sources` are not needed on the player; the default language's list plays at start. The `src` layout keeps working. New `hp:dubbing` event.
+
+### Fixed
+
+- **Dubbing:** the chosen language is kept when options are applied again (e.g. a React re-render) instead of jumping back to the default; changing `dubbing` (another film) rebuilds the "Audio / Language" menu and returns to the default language — the menu used to keep the first film's languages.
+- **Source switching on WebKit (GStreamer):** switching language or falling back to another format while paused no longer restarts from 0 — the early seek that WebKit resets is retried.
+
 ## [1.12.0] — 2026-11-22
 
 ### Added

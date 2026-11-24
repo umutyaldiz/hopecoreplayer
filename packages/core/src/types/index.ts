@@ -1626,8 +1626,14 @@ export interface QrResumeOptions {
 }
 
 export interface DubbingTrack {
-    src: string;
+    /** Tek kaynak. Varsayılan dilde verilmezse player'ın `src` / `sources`'ı kullanılır. */
+    src?: string;
     type?: string;
+    /**
+     * Bu dilin kaynakları — `sources` ile aynı biçimde: HLS + MP4 kaliteleri gibi biçim grupları, kalite menüsü ve
+     * `sourcePriority`'ye göre yedeğe düşme bu dil için de çalışır. Verilirse `src` kullanılmaz.
+     */
+    sources?: HopeSourceOption[];
     label: string;
     srclang?: string;
     default?: boolean;
@@ -1911,6 +1917,8 @@ export type HopePlayerEventMap = {
      * `code`: MediaError kodu (2 ağ, 3 çözümleme, 4 desteklenmiyor); `skipped`: denenmeden atlandı (desteklenmiyor).
      */
     'hp:sourcefallback': CustomEvent<{ from: HopeSourceFormat; to: HopeSourceFormat; code?: number; skipped?: boolean }>;
+    /** Dublaj dili değişti (`options.dubbing`). */
+    'hp:dubbing': CustomEvent<{ index: number; label?: string; srclang?: string }>;
     'hp:ratechange': CustomEvent<{ rate: number }>;
     /** `linear: false` → overlay (non-linear) reklam: içerik durmaz, reklam içeriğin üstünde gösterilir. */
     'hp:adstart': CustomEvent<{ type: 'preroll' | 'midroll' | 'postroll'; linear?: boolean; /** Eklenti reklamıysa eklenti adı. */ plugin?: string }>;

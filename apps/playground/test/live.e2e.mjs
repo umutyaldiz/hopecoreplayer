@@ -392,7 +392,8 @@ async function testHlsLightBuild(browser) {
     const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
     const chunks = [];
     page.on('request', (r) => {
-        const m = /\/chunks\/(hls(?:Light)?)-[\w-]+\.js$/.exec(r.url());
+        // Vite dev sunucusu değişen dosyaya ?t=… ekleyebilir.
+        const m = /\/chunks\/(hls(?:Light)?)-[\w-]+\.js(?:\?.*)?$/.exec(r.url());
         if (m) chunks.push(m[1]);
     });
     await page.route('https://hls-av.example.test/**', (route) => {

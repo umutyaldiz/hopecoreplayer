@@ -254,6 +254,12 @@ export class HopePlayerElement extends HTMLElement {
     /** İçerik Chromecast'te oynuyor (player kumanda) — yerel reklam / otomatik oynatma devre dışı. */
     private casting = false;
     private dubbing: Dubbing | null = null;
+    /** Kurulu dublaj menüsünün seçenekleri (değişince yeniden kurulur). */
+    private dubbingKey = '';
+    /** Seçili dublaj dili (null = varsayılan); seçenekler yeniden uygulansa da korunur. */
+    private dubbingIndex: number | null = null;
+    /** Son uygulanan seçenekler — dublaj geçişi kaynak listesini buradan kurar. */
+    private playOptions: HopePlayerOptions = {};
     private liveWallClock: LiveWallClock | null = null;
     private daiController: DaiController | null = null;
     private readonly instanceKey: string;
@@ -632,6 +638,8 @@ export class HopePlayerElement extends HTMLElement {
         this.pauseAd?.destroy();
         this.pauseAd = null;
         this.dubbing?.destroy();
+        this.dubbing = null;
+        this.dubbingKey = '';
         this.liveWallClock?.destroy();
         this.daiController?.destroy();
         this.prerollGate.release(false);
@@ -1136,16 +1144,11 @@ export class HopePlayerElement extends HTMLElement {
         this.errorScreen.dismiss();
         await this.applyRewardedUnlock(options);
 
-        // Çoklu kamerada src verilmezse başlangıç kamerası oynar.
-        const mv = options.multiview?.sources?.length ? (options.multiview.sources.find((c) => c.id === options.multiview!.start) ?? options.multiview.sources[0]!) : null;
-        const all: HopeSourceOption[] = options.sources?.length
-            ? options.sources
-            : options.src
-              ? [{ src: options.src, label: this.i18n.autoQuality }]
-              : mv
-                ? [{ src: mv.src, type: mv.type, label: this.i18n.autoQuality }]
-                : [];
-        this.sourceGroups = groupSources(all, options.sourcePriority);
+        // Dublaj seçenekleri değişti (başka film): varsayılan dile dön.
+        const dubKey = options.dubbing ? JSON.stringify(options.dubbing) : '';
+        if (dubKey !== this.dubbingKey) this.dubbingIndex = null;
+        this.playOptions = options;
+        this.sourceGroups = groupSources(this.playbackSources(options), options.sourcePriority);
         // O an yüklü kaynak listede varsa (ve kilitli değilse) korunur: seçenekler yeniden uygulanınca (ör. React prop)
         // kullanıcının seçtiği kalite `selected` olana geri dönmesin — yedek gruba düşülmüşse o grupta kalınır.
         const isLive = (s: HopeSourceOption): boolean => this.sourceManager.isLoaded(s.src, s.type) && !this.isSourceLocked(s);
@@ -1434,18 +1437,23 @@ export class HopePlayerElement extends HTMLElement {
             );
         }
 
-        if (options.dubbing && !this.dubbing) {
-            const { installDubbing } = await import('./plugins/dubbing');
-            this.dubbing = installDubbing(
-                {
-                    videoEl: this.videoEl,
-                    loadSource: (src, type) => this.sourceManager.load(src, type),
-                    registerSubmenu: (def) => this.controlBar.settingsMenu.registerSubmenu(def),
-                    unregisterSubmenu: (key) => this.controlBar.settingsMenu.unregisterSubmenu(key),
-                    i18n: this.i18n,
-                },
-                options.dubbing
-            );
+        if (dubKey !== this.dubbingKey) {
+            this.dubbingKey = dubKey;
+            this.dubbing?.destroy();
+            this.dubbing = null;
+            if (options.dubbing?.tracks?.length) {
+                const { installDubbing } = await import('./plugins/dubbing');
+                if (this.dubbingKey === dubKey)
+                    this.dubbing = installDubbing(
+                        {
+                            selectTrack: (index) => this.selectDubbing(index),
+                            registerSubmenu: (def) => this.controlBar.settingsMenu.registerSubmenu(def),
+                            unregisterSubmenu: (key) => this.controlBar.settingsMenu.unregisterSubmenu(key),
+                            i18n: this.i18n,
+                        },
+                        options.dubbing
+                    );
+            }
         }
 
         if (options.liveWallClock && !this.liveWallClock) {
@@ -2292,18 +2300,27 @@ export class HopePlayerElement extends HTMLElement {
         return true;
     }
 
-    private async activateSourceGroup(index: number, resumeTime: number, play: boolean): Promise<void> {
+    /** `preferLabel`: varsa aynı kalite etiketiyle başlar (dublaj geçişinde seçili kalite korunur). */
+    private async activateSourceGroup(index: number, resumeTime: number, play: boolean, preferLabel?: string): Promise<void> {
         const group = this.sourceGroups[index];
         if (!group) return;
         this.activeGroup = index;
         this.currentSources = this.limitSources(group.sources);
-        const initial = this.pickInitialSource(this.currentSources)!;
+        const initial = this.currentSources.find((s) => s.label === preferLabel && !this.isSourceLocked(s)) ?? this.pickInitialSource(this.currentSources)!;
         this.errorScreen.dismiss();
         this.controlBar.setQualities([], '');
         this.hlsQualitiesShown = false;
         this.activeSourceLabel = initial.label;
         if (resumeTime > 0) {
-            this.videoEl.addEventListener('loadedmetadata', () => (this.videoEl.currentTime = resumeTime), { once: true });
+            const v = this.videoEl;
+            v.addEventListener('loadedmetadata', () => (v.currentTime = resumeTime), { once: true });
+            // WebKit (GStreamer) duraklatılmış yeni kaynakta erken sarmayı başa döndürüyor — bir iki kez yeniden dene.
+            let tries = 0;
+            const keep = (): void => {
+                if (resumeTime > 0.5 && v.currentTime < 0.5 && tries++ < 2) v.currentTime = resumeTime;
+                else v.removeEventListener('seeked', keep);
+            };
+            v.addEventListener('seeked', keep);
         }
         try {
             await this.sourceManager.load(initial.src, initial.type);
@@ -2313,6 +2330,39 @@ export class HopePlayerElement extends HTMLElement {
         this.renderSourceQualities();
         this.rewardedUnlock?.onQualitiesChanged();
         if (play) this.videoEl.play().catch(() => {});
+    }
+
+    /**
+     * Çalınacak kaynak listesi: seçili dublaj dilinin `sources` / `src`'si; dil kendi kaynağını vermiyorsa (eski kullanımda
+     * varsayılan dil) `sources` / `src`; o da yoksa çoklu kameranın başlangıç kamerası.
+     */
+    private playbackSources(o: HopePlayerOptions): HopeSourceOption[] {
+        const auto = this.i18n.autoQuality;
+        const mv = o.multiview?.sources?.length ? (o.multiview.sources.find((c) => c.id === o.multiview!.start) ?? o.multiview.sources[0]!) : null;
+        const own: HopeSourceOption[] = o.sources?.length ? o.sources : o.src ? [{ src: o.src, label: auto }] : mv ? [{ src: mv.src, type: mv.type, label: auto }] : [];
+        const tracks = o.dubbing?.tracks;
+        if (!tracks?.length) return own;
+        const def = Math.max(0, tracks.findIndex((t) => t.default));
+        const index = this.dubbingIndex ?? def;
+        const t = tracks[index];
+        if (t?.sources?.length) return t.sources;
+        if (!t?.src || (index === def && own.length)) return own;
+        return [{ src: t.src, type: t.type, label: auto }];
+    }
+
+    /** Dublaj dili seçildi: o dilin kaynakları yüklenir; konum, oynatma, biçim (MP4'e düşüldüyse MP4) ve kalite korunur. */
+    private async selectDubbing(index: number): Promise<void> {
+        this.dubbingIndex = index;
+        const format = this.sourceGroups[this.activeGroup]?.format;
+        const label = this.activeSourceLabel;
+        const resume = Number.isFinite(this.videoEl.duration) ? this.videoEl.currentTime : 0;
+        const play = !this.videoEl.paused;
+        this.sourceGroups = groupSources(this.playbackSources(this.playOptions), this.playOptions.sourcePriority);
+        const same = this.sourceGroups.findIndex((g) => g.format === format && !cannotPlay(g, this.videoEl));
+        this.fallbackPending = true;
+        await this.activateSourceGroup(same >= 0 ? same : this.firstPlayableGroup(), resume, play, label);
+        const t = this.playOptions.dubbing?.tracks[index];
+        this.dispatchEvent(new CustomEvent('hp:dubbing', { detail: { index, label: t?.label, srclang: t?.srclang } }));
     }
 
     /** Hata ekranındaki "Tekrar dene": birden fazla grup varsa en öncelikli gruptan baştan başla. */

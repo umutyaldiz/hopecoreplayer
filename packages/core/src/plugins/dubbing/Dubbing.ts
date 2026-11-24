@@ -3,8 +3,8 @@ import type { DubbingOptions, DubbingTrack } from '../../types';
 import type { HopeLocaleStrings } from '../../i18n/types';
 
 export interface DubbingPlayerContext {
-    videoEl: HTMLVideoElement;
-    loadSource(src: string, type?: string): Promise<void>;
+    /** Dili değiştir: player o dilin kaynaklarını (biçim grupları, kaliteler, yedekler) konumu koruyarak yükler. */
+    selectTrack(index: number): Promise<void>;
     registerSubmenu(def: SettingsSubmenuDef): void;
     unregisterSubmenu(key: string): void;
     i18n: HopeLocaleStrings;
@@ -54,17 +54,8 @@ export class Dubbing {
     }
 
     private select(index: number): void {
-        if (index === this.activeIndex) return;
-        const track = this.options.tracks[index];
-        if (!track) return;
-
-        const resumeTime = this.ctx.videoEl.currentTime;
-        const wasPlaying = !this.ctx.videoEl.paused;
+        if (index === this.activeIndex || !this.options.tracks[index]) return;
         this.activeIndex = index;
-
-        void this.ctx.loadSource(track.src, track.type).then(() => {
-            this.ctx.videoEl.currentTime = resumeTime;
-            if (wasPlaying) void this.ctx.videoEl.play().catch(() => {});
-        });
+        void this.ctx.selectTrack(index);
     }
 }
