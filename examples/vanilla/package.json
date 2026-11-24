@@ -1,7 +1,7 @@
 {
   "name": "hopeplayer-vanilla-example",
   "private": true,
-  "version": "1.12.0",
+  "version": "1.12.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@hopeplayer/core": "^1.12.0"
+    "@hopeplayer/core": "^1.12.1"
   },
   "devDependencies": {
     "vite": "^6.0.0"
