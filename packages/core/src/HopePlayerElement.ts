@@ -459,6 +459,8 @@ export class HopePlayerElement extends HTMLElement {
             this.i18n
         );
         this.chromeEl.appendChild(this.controlBar.el);
+        // İlerleme çubuğu sürüklenirken `data-scrubbing`: eklentiler bu sıradaki duraklatmayı yok sayar.
+        this.controlBar.seekBar.onScrubChange = (on) => this.toggleAttribute('data-scrubbing', on);
         // Kompakt (küçük player) düzende sağ grubun taşındığı üst bar — chrome'la birlikte otomatik gizlenir.
         this.chromeEl.appendChild(this.controlBar.topEl);
         // "Sesi aç" rozeti chrome'un DIŞINDA: kontroller gizlense de sessiz videoda görünür kalmalı.
@@ -2706,6 +2708,8 @@ export class HopePlayerElement extends HTMLElement {
     }
 
     private readonly onPlay = (): void => {
+        // Sürükleme bitince kaldığı yerden devam: izleyicinin oynatması değil (hp:play yok).
+        if (this.hasAttribute('data-scrubbing')) return;
         // Oynat'a tıklayıp fareyi kıpırdatmayan kullanıcı için de imleç sayacı başlasın.
         if (this.matches(':hover')) this.scheduleCursorHide();
         if (!this.isChromeBlocked) {
@@ -2717,6 +2721,8 @@ export class HopePlayerElement extends HTMLElement {
     };
 
     private readonly onPause = (): void => {
+        // İlerleme çubuğu sürüklenirken video durur: izleyicinin duraklatması değil (hp:pause, büyük oynat butonu yok).
+        if (this.hasAttribute('data-scrubbing')) return;
         // Oynarken kurulan gizleme zamanlayıcısını iptal et — yoksa duraklatınca kontroller birazdan kayboluyordu.
         if (this.hideTimer) clearTimeout(this.hideTimer);
         this.showCursor();

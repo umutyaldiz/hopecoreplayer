@@ -1,4 +1,5 @@
 import type { PauseAdOptions } from '../../types';
+import { isScrubbing } from '../../utils/scrub';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { loadGpt, type GoogleTag, type GptSlot, type GptSlotRenderEndedEvent } from './loadGpt';
 
@@ -127,6 +128,8 @@ export class PauseAd {
     // ── olaylar ──
 
     private readonly onPause = (): void => {
+        // İlerleme çubuğu sürüklenirken durma izleyicinin duraklatması değil.
+        if (isScrubbing(this.ctx.videoEl)) return;
         if (this.delayTimer) clearTimeout(this.delayTimer);
         this.delayTimer = setTimeout(() => void this.request(), this.options.delayMs ?? 300);
     };

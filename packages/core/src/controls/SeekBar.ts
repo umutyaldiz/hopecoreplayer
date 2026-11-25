@@ -113,6 +113,7 @@ export class SeekBar {
         video.addEventListener('play', this.startLoop);
         video.addEventListener('pause', this.stopLoop);
         video.addEventListener('ended', this.stopLoop);
+        video.addEventListener('seeked', this.onSeeked);
         // rAF döngüsü yalnızca OYNARKEN çalışır — duraklıyken/scrub ederken
         // (ör. seek sonrası henüz play tetiklenmeden) konum hâlâ güncel
         // kalsın diye timeupdate/progress/loadedmetadata da dinleniyor.
@@ -311,13 +312,41 @@ export class SeekBar {
         }
     }
 
+    /** Sürüklerken thumb'ın gösterdiği konum (video sarmayı henüz bitirmemiş olabilir); null = videonun konumu. */
+    private scrubTime: number | null = null;
+    /** Sarma sürerken gelen son hedef — o sarma bitince uygulanır. */
+    private pendingSeek: number | null = null;
+    private readonly onSeeked = (): void => {
+        if (this.pendingSeek === null) return;
+        const t = this.pendingSeek;
+        this.pendingSeek = null;
+        this.video.currentTime = t;
+    };
+
+    /** Sürüklerken video durur (parmak beklerken ilerlemesin); bırakınca oynuyorduysa devam eder. */
+    private resumeAfterScrub = false;
+
+    /** Sürükleme sürüyor mu — bu sıradaki duraklatma izleyicinin duraklatması sayılmaz (olay / ikon değişmez). */
+    get scrubbing(): boolean {
+        return this.dragging || this.resuming;
+    }
+    /** Bırakıldı, oynatma yeniden başlıyor — `play` olayı gelene kadar (o da sürüklemenin parçası). */
+    private resuming = false;
+
     private readonly onPointerDown = (e: PointerEvent): void => {
+        if (this.dragging) return;
         this.dragging = true;
         this.hoverDotEl.removeAttribute('data-visible');
         this.el.setPointerCapture(e.pointerId);
+        this.resumeAfterScrub = !this.video.paused;
+        // İşaret duraklatmadan önce: pause olayını dinleyenler bunun sürükleme olduğunu bilsin.
+        this.notifyScrub();
+        if (this.resumeAfterScrub) this.video.pause();
         this.seekToRatio(this.ratioFromEvent(e));
         this.el.addEventListener('pointermove', this.onPointerMove);
         this.el.addEventListener('pointerup', this.onPointerUp);
+        this.el.addEventListener('pointercancel', this.onPointerUp);
+        this.el.addEventListener('lostpointercapture', this.onPointerUp);
     };
 
     private readonly onPointerMove = (e: PointerEvent): void => {
@@ -325,12 +354,42 @@ export class SeekBar {
         this.seekToRatio(this.ratioFromEvent(e));
     };
 
+    /** Bırakma, iptal (ör. iOS sistem hareketi) ya da yakalamanın kaybı — sürükleme biter, oynatma sürer. */
     private readonly onPointerUp = (e: PointerEvent): void => {
-        this.dragging = false;
-        this.el.releasePointerCapture(e.pointerId);
+        if (!this.dragging) return;
         this.el.removeEventListener('pointermove', this.onPointerMove);
         this.el.removeEventListener('pointerup', this.onPointerUp);
+        this.el.removeEventListener('pointercancel', this.onPointerUp);
+        this.el.removeEventListener('lostpointercapture', this.onPointerUp);
+        if (this.el.hasPointerCapture(e.pointerId)) this.el.releasePointerCapture(e.pointerId);
+        const resume = this.resumeAfterScrub;
+        this.resumeAfterScrub = false;
+        this.dragging = false;
+        if (this.pendingSeek !== null && !this.video.seeking) this.onSeeked();
+        this.scrubTime = null;
+        if (!resume) return this.notifyScrub();
+        // play olayı ayrı bir görevde gelir: o ana kadar "sürükleme sürüyor" sayılır (hp:play gönderilmez).
+        this.resuming = true;
+        const done = (): void => {
+            this.video.removeEventListener('play', done);
+            if (!this.resuming) return;
+            this.resuming = false;
+            this.notifyScrub();
+        };
+        this.video.addEventListener('play', done);
+        void this.video.play().catch(done);
+        setTimeout(done, 1000);
     };
+
+    /** Sürükleme başladı / bitti (player `data-scrubbing` işaretini buna göre koyar). */
+    onScrubChange: ((scrubbing: boolean) => void) | null = null;
+    private lastScrub = false;
+    private notifyScrub(): void {
+        const now = this.scrubbing;
+        if (now === this.lastScrub) return;
+        this.lastScrub = now;
+        this.onScrubChange?.(now);
+    }
 
     /** Odaktayken ←/→ sarma süresi (sn) — player'ın klavye kısayoluyla aynı (options.keyboardSeekStep). */
     keyboardStep = 5;
@@ -357,7 +416,12 @@ export class SeekBar {
         if (!tl) return;
         const time = tl.start + ratio * (tl.end - tl.start);
         // Canlıda tam uca değil biraz gerisine — en son segmentin sonuna seek edince oynatma takılabiliyor.
-        this.video.currentTime = tl.live ? Math.min(time, tl.end - LIVE_EDGE_SAFETY_SEC) : vodSeekTarget(this.video, time);
+        const target = tl.live ? Math.min(time, tl.end - LIVE_EDGE_SAFETY_SEC) : vodSeekTarget(this.video, time);
+        // Sürüklerken önceki sarma bitmeden yenisi gelirse bekletilir, bitince en sonuncusu uygulanır (WebKit ara
+        // sarmaları yutuyordu; mobilde de her harekette çözme yapmaz). Thumb beklemeden parmağı izler.
+        this.scrubTime = this.dragging ? target : null;
+        if (this.dragging && this.video.seeking) this.pendingSeek = target;
+        else this.video.currentTime = target;
         // video'nun kendi 'timeupdate'i asenkron/gecikmeli olabilir —
         // sürüklerken parmak/imleçle thumb arasında gecikme hissi
         // bırakmamak için konumu HEMEN, burada çiziyoruz.
@@ -398,7 +462,8 @@ export class SeekBar {
         const toRatio = (t: number): number => Math.min(1, Math.max(0, (t - tl.start) / span));
 
         // Canlıda, canlı konumdayken thumb sağ uçta — rozet "canlı" derken seek bar "geride" göstermesin.
-        const playedRatio = tl.live && this.atLiveEdge(tl) ? 1 : toRatio(this.video.currentTime);
+        const shown = this.scrubTime ?? this.video.currentTime;
+        const playedRatio = tl.live && this.atLiveEdge(tl) && this.scrubTime === null ? 1 : toRatio(shown);
         // `translate` (transform DEĞİL): CSS'teki `scale` transform'u da ölçekleyip konumu kaydırırdı.
         this.thumbEl.style.translate = `calc(${this.xAtRatio(playedRatio)}px - 50%) 0`;
 
@@ -486,6 +551,7 @@ export class SeekBar {
         this.video.removeEventListener('play', this.startLoop);
         this.video.removeEventListener('pause', this.stopLoop);
         this.video.removeEventListener('ended', this.stopLoop);
+        this.video.removeEventListener('seeked', this.onSeeked);
         this.video.removeEventListener('timeupdate', this.render);
         this.video.removeEventListener('progress', this.render);
         this.video.removeEventListener('loadedmetadata', this.render);

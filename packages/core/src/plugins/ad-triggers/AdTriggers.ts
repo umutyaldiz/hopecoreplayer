@@ -1,4 +1,5 @@
 import type { AdTrigger, AdTriggerLayout, AdTriggerRule, AdTriggersConfig, AdTriggersOptions } from '../../types';
+import { isScrubbing } from '../../utils/scrub';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { firePixels as fire } from '../shared/trackingPixel';
 import { safeUrl } from '../../utils/safe-url';
@@ -321,6 +322,8 @@ export class AdTriggers {
 
     private readonly onPause = (): void => {
         const v = this.ctx.videoEl;
+        // İlerleme çubuğu sürüklenirken durma izleyicinin duraklatması değil.
+        if (isScrubbing(v)) return;
         if (this.selfPause) {
             this.selfPause = false;
             return;

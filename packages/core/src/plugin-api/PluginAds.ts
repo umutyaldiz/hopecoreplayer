@@ -1,5 +1,6 @@
 // Eklenti reklam API'si: reklam arası, preroll kapısı, midroll noktaları, duraklatma / bitiş kancaları, tag dönüşümü.
 import type { PluginAdBreak, PluginAdBreakOptions, PluginAdBreakType, PluginCleanup } from './types';
+import { isScrubbing } from '../utils/scrub';
 
 export interface PluginAdsContext {
     element: HTMLElement;
@@ -193,6 +194,7 @@ export class PluginAds {
 
     private readonly onPlay = (): void => {
         const v = this.ctx.video;
+        if (isScrubbing(v)) return;
         // Reklam arasında / preroll beklenirken içerik oynamaz.
         if (this.active || this.gateRunning) {
             v.pause();
@@ -249,6 +251,8 @@ export class PluginAds {
 
     private readonly onPause = (): void => {
         const v = this.ctx.video;
+        // İlerleme çubuğu sürüklenirken durma izleyicinin duraklatması değil.
+        if (isScrubbing(v)) return;
         if (!this.pauses.length || v.ended || v.seeking || this.active || this.gateRunning || this.ctx.isAdPlaying()) return;
         this.clearPause();
         const delay = Math.min(...this.pauses.map((p) => p.delayMs));

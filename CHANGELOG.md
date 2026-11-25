@@ -14,6 +14,10 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+### Fixed
+
+- **Seek bar scrubbing** — dragging the progress bar while playing no longer lets the video keep running (iOS Safari / Chrome, Android, desktop). Playback pauses for the drag and resumes on release; no `hp:pause` / `hp:play` is emitted for it and plugins (pause ad, ad triggers, QR resume, sticky, QoE, watch party, plugin ads) ignore it. `pointercancel` / lost pointer capture now end the drag, and intermediate seeks are coalesced so WebKit lands on the release position.
+
 ## [1.14.0] — 2026-11-25
 
 ### Added

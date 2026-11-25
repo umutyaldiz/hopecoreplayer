@@ -99,8 +99,8 @@ async function testTimeVolumeSeek(browser) {
     await page.waitForTimeout(200);
     ok((await el(page, (p) => p.playbackRate)) === 1.5 && (await events(page, 'hp:ratechange')).at(-1)?.rate === 1.5, 'playbackRate yazılır, hp:ratechange');
 
-    // Kalite değişiminde konumun geri yüklenmesi sarma sayılmaz.
-    ok((await el(page, (p) => Number.isFinite(p.duration) && p.buffered.length >= 1 && p.ended === false)) === true, 'duration / buffered / ended okunur');
+    const props = await el(page, (p) => ({ duration: p.duration, buffered: p.buffered instanceof TimeRanges, ended: p.ended, t: p.currentTime }));
+    ok(Number.isFinite(props.duration) && props.buffered && props.ended === false, `duration / buffered / ended okunur (${JSON.stringify(props)})`);
     ok(page.__errors.length === 0, `sayfa hatası yok (${page.__errors.join(' | ')})`);
     await context.close();
 }
@@ -258,9 +258,68 @@ async function testAdEvents(browser) {
     await context.close();
 }
 
+async function testScrub(browser) {
+    console.log('\n[7] İlerleme çubuğunu sürüklerken video durur, bırakınca devam eder (hp:pause / hp:play yok)');
+    const { context, page } = await open(browser, { src: '/sample-30s.mp4' });
+    await page.evaluate(() => {
+        const el = document.getElementById('player');
+        for (const t of ['hp:play', 'hp:pause']) el.addEventListener(t, (e) => window.__ev.push({ t, d: e.detail }));
+    });
+    await el(page, (p) => p.play());
+    await page.waitForTimeout(800);
+    await clear(page);
+    const bar = await page.evaluate(() => {
+        const r = document.getElementById('player').shadowRoot.querySelector('[part="seek-bar"]').getBoundingClientRect();
+        return { x: r.left, y: r.top + r.height / 2, w: r.width };
+    });
+    await page.mouse.move(bar.x + bar.w * 0.3, bar.y);
+    await page.mouse.down();
+    await page.mouse.move(bar.x + bar.w * 0.5, bar.y, { steps: 5 });
+    await page.waitForTimeout(300);
+    const held = await el(page, (p) => ({ t: p.currentTime, paused: p.paused, flag: p.hasAttribute('data-scrubbing') }));
+    await page.waitForTimeout(1200);
+    const later = await el(page, (p) => p.currentTime);
+    ok(held.paused && held.flag && Math.abs(later - held.t) < 0.05, `basılı tutarken video durdu, konum sabit (${held.t.toFixed(2)} → ${later.toFixed(2)})`);
+    ok(Math.abs(held.t - 15) < 1.5, `sürüklenen yere sarıldı (${held.t.toFixed(2)} sn)`);
+    await page.mouse.up();
+    await page.waitForTimeout(800);
+    const after = await el(page, (p) => ({ t: p.currentTime, paused: p.paused, flag: p.hasAttribute('data-scrubbing') }));
+    ok(!after.paused && after.t > held.t + 0.3 && !after.flag, `bırakınca kaldığı yerden devam etti (${after.t.toFixed(2)} sn)`);
+    const pp = (await page.evaluate(() => window.__ev.filter((e) => e.t === 'hp:play' || e.t === 'hp:pause').map((e) => e.t)));
+    ok(pp.length === 0, `sürükleme izleyicinin duraklat / oynatı sayılmadı (${pp.join(',') || 'olay yok'})`);
+    const icon = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="play-pause-button"]').getAttribute('aria-label'));
+    ok(/Duraklat|Pause/.test(icon ?? ''), `oynat / duraklat butonu oynuyor durumunda (${icon})`);
+
+    // İptal edilen dokunuş (iOS sistem hareketi): sürükleme takılı kalmaz.
+    await page.mouse.move(bar.x + bar.w * 0.6, bar.y);
+    await page.mouse.down();
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+        const s = document.getElementById('player').shadowRoot.querySelector('[part="seek-bar"]');
+        s.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 1, bubbles: true }));
+    });
+    await page.waitForTimeout(600);
+    const cancel = await el(page, (p) => ({ paused: p.paused, flag: p.hasAttribute('data-scrubbing') }));
+    ok(!cancel.paused && !cancel.flag, `pointercancel: sürükleme bitti, oynatma sürdü (${JSON.stringify(cancel)})`);
+    await page.mouse.up();
+
+    // Duraklatılmışken sürükleme: bırakınca kendiliğinden oynamaz.
+    await el(page, (p) => p.pause());
+    await page.waitForTimeout(200);
+    await page.mouse.move(bar.x + bar.w * 0.2, bar.y);
+    await page.mouse.down();
+    await page.mouse.move(bar.x + bar.w * 0.4, bar.y, { steps: 3 });
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+    ok((await el(page, (p) => p.paused)) === true, 'duraklatılmışken sürüklenince duraklatılmış kaldı');
+    ok(page.__errors.length === 0, `sayfa hatası yok (${page.__errors.join(' | ')})`);
+    await context.close();
+}
+
 (async () => {
     const browser = await launchBrowser();
     try {
+        await testScrub(browser);
         await testTimeVolumeSeek(browser);
         await testQualitySubtitlesDubbing(browser);
         if (only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok')) await testHlsQuality(browser);

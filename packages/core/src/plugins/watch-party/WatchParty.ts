@@ -1,4 +1,5 @@
 import type { WatchPartyMessage, WatchPartyOptions } from '../../types';
+import { isScrubbing } from '../../utils/scrub';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { formatTime } from '../../utils/format-time';
 import { showToast } from '../shared/toast';
@@ -103,9 +104,12 @@ export class WatchParty {
     }
 
     private readonly onPlay = (): void => {
+        // Sürükleme: yalnızca sonuçtaki sarma (seek) gönderilir, duraklat / oynat değil.
+        if (isScrubbing(this.ctx.videoEl)) return;
         if (!this.echo('play')) this.send('play');
     };
     private readonly onPause = (): void => {
+        if (isScrubbing(this.ctx.videoEl)) return;
         // Video sonu da 'pause' verir — onu da bildir, herkes dursun.
         if (!this.echo('pause')) this.send('pause');
     };

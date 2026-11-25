@@ -690,7 +690,7 @@ export class ControlBar {
     }
 
     private readonly renderPlayState = (): void => {
-        const paused = this.callbacks.isAdActive() ? this.callbacks.adIsPaused() : this.video.paused && !this.pendingPlay;
+        const paused = this.callbacks.isAdActive() ? this.callbacks.adIsPaused() : this.video.paused && !this.pendingPlay && !this.seekBar.scrubbing;
         setIconName(this.playIcon, paused ? 'play' : 'pause');
         setButtonLabel(this.playButton, paused ? this.labels.play : this.labels.pause);
         this.barMetaEl?.toggleAttribute('data-playing', !paused && !this.callbacks.isAdActive());

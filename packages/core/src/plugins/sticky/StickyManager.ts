@@ -1,4 +1,5 @@
 import type { StickyCorner, StickyOptions } from '../../types';
+import { isScrubbing } from '../../utils/scrub';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { storageGet, storageSet } from '../../utils/storage';
 import { enableDock, savedDock } from './dock';
@@ -144,7 +145,10 @@ class StickyManagerImpl {
         this.ensureObserver().observe(sentinel);
 
         const onPlay = () => this.handlePlay(item);
-        const onPause = () => this.handlePauseOrEnded(item, 'pause');
+        // Sürükleme sırasındaki durma köşeden ayırmasın.
+        const onPause = () => {
+            if (!isScrubbing(ctx.videoEl)) this.handlePauseOrEnded(item, 'pause');
+        };
         const onEnded = () => this.handlePauseOrEnded(item, 'ended');
         const onAdStart = () => this.handleAdStart(item);
         const onAdEnd = () => this.handleAdEnd(item);

@@ -1,4 +1,5 @@
 import type { QrResumeOptions } from '../../types';
+import { isScrubbing } from '../../utils/scrub';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import { buildQrSvg } from './qrSvg';
 import { seekWhenReady } from '../shared/seekWhenReady';
@@ -123,6 +124,8 @@ export class QrResume {
     };
 
     private readonly onPause = (): void => {
+        // İlerleme çubuğu sürüklenirken durma izleyicinin duraklatması değil.
+        if (isScrubbing(this.ctx.videoEl)) return;
         if (this.isDismissedForever()) return;
         const { currentTime, duration } = this.ctx.videoEl;
         const minElapsed = this.options.minElapsed ?? 60;

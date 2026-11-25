@@ -1,5 +1,6 @@
 // İzleyici deneyimi (QoE) ölçümleri ve izlenme olayları: hp:analytics, onEvent, GA4, toplu gönderim.
 import type { HopeAnalyticsEvent, HopeAnalyticsEventType, HopeAnalyticsOptions, HopeAnalyticsPayload, HopeQoeMetrics } from '../../types';
+import { isScrubbing } from '../../utils/scrub';
 import { getPrivacy } from '../../utils/privacy';
 
 export interface AnalyticsPlayerContext {
@@ -149,7 +150,7 @@ export class QoeTracker {
     };
 
     private readonly onPlay = (): void => {
-        if (this.ctx.isAdActive()) return;
+        if (this.ctx.isAdActive() || isScrubbing(this.ctx.videoEl)) return;
         if (!this.started) {
             this.playIntentAt ??= performance.now();
             return;
@@ -168,6 +169,8 @@ export class QoeTracker {
     };
 
     private readonly onPause = (): void => {
+        // İlerleme çubuğu sürüklenirken durma izleyicinin duraklatması değil.
+        if (isScrubbing(this.ctx.videoEl)) return;
         this.endStall();
         const v = this.ctx.videoEl;
         if (!this.started || v.ended || this.ctx.isAdActive()) return;
