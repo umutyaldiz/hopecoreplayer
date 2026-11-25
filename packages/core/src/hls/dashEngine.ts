@@ -60,11 +60,20 @@ export class DashEngine {
     private cueTimer: ReturnType<typeof setInterval> | null = null;
     private copied = -1;
     private readonly video: HTMLVideoElement;
+    private scte35Cleanup: (() => void) | null = null;
 
     constructor(
         video: HTMLVideoElement,
         src: string,
-        options: { dash?: HopeDashOptions; drm?: HopeDrmOptions; autoplay: boolean; fitPlayer?: boolean; cmcd?: { sessionId: string; contentId?: string; mode?: 'query' | 'header' } | null },
+        options: {
+            dash?: HopeDashOptions;
+            drm?: HopeDrmOptions;
+            autoplay: boolean;
+            fitPlayer?: boolean;
+            cmcd?: { sessionId: string; contentId?: string; mode?: 'query' | 'header' } | null;
+            /** SCTE-35 şemalarına abone olur (initialize'dan önce); temizleyiciyi döndürür. */
+            scte35?: ((player: MediaPlayerClass) => () => void) | null;
+        },
         private readonly cb: DashCallbacks
     ) {
         const player = MediaPlayer().create();
@@ -117,6 +126,7 @@ export class DashEngine {
             cb.onFatal(isDrmCode(code) ? 'drm' : NETWORK_CODES.has(code) ? 'network' : UNSUPPORTED_CODES.has(code) ? 'unsupported' : 'media');
         }) as never);
 
+        this.scte35Cleanup = options.scte35?.(player) ?? null;
         player.initialize(video, src, options.autoplay);
     }
 
@@ -254,7 +264,13 @@ export class DashEngine {
         }
     }
 
+    /** dash.js MediaPlayer (DAI gibi eklentiler olaylarına abone olur). */
+    get mediaPlayer(): MediaPlayerClass {
+        return this.player;
+    }
+
     destroy(): void {
+        this.scte35Cleanup?.();
         this.video.removeEventListener('timeupdate', this.syncCues);
         this.resize?.disconnect();
         if (this.cueTimer) clearInterval(this.cueTimer);

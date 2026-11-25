@@ -10,6 +10,7 @@ function newId(): string {
     }
 }
 import type { DashEngine } from './dashEngine';
+import type { Scte35Sink } from '../scte35';
 import type { NativeEme } from '../drm/NativeEme';
 import { hasFatalMediaError } from '../utils/media-error';
 import { getPrivacy } from '../utils/privacy';
@@ -163,6 +164,9 @@ export class SourceManager {
     private cmcd: (HopeCmcdOptions & { contentId?: string }) | null = null;
     /** Her `load()`'da yenilenir. */
     private sid = newId();
+    /** SCTE-35 sinyal alıcısı (`options.scte35`); null = kapalı. */
+    private scte35: Scte35Sink | null = null;
+    private scte35Cleanup: (() => void) | null = null;
 
     constructor(
         video: HTMLVideoElement,
@@ -181,6 +185,11 @@ export class SourceManager {
         this.qualityLimit = media?.qualityLimit;
         this.dashOptions = media?.dash;
         this.drm = media?.drm;
+    }
+
+    /** SCTE-35 sinyallerini okumayı aç / kapat — sonraki `load()`'da uygulanır. */
+    setScte35(sink: Scte35Sink | null): void {
+        this.scte35 = sink;
     }
 
     /** Bu kaynak zaten yüklü ve hatasız mı — aynı kaynak için yeniden yükleme (başa sarma) gerekmez. */
@@ -236,7 +245,8 @@ export class SourceManager {
         }
         // Safari / iOS: native HLS (başarısız olursa probeNativeHls hls.js'e geçer). MSE yoksa da tek yol native.
         // `engine: 'hls.js'` bunu atlar — Safari'de de kalite/ses menüsü için hls.js (iOS 17.1+ ManagedMediaSource).
-        if (engine !== 'hls.js' && canNative && (prefersNativeHls() || !hasMse())) {
+        // SCTE-35 açıkken MSE varsa hls.js: yerel oynatıcı CUE-OUT gibi etiketleri vermez (yalnızca DATERANGE).
+        if (engine !== 'hls.js' && canNative && (prefersNativeHls() || !hasMse()) && !(this.scte35 && engine === 'auto' && hasMse())) {
             await this.prepareNativeDrm();
             if (this.last?.src !== src) return;
             this.loadNativeHls(src, prefersNativeHls() ? 'apple-native' : 'no-mse');
@@ -254,6 +264,11 @@ export class SourceManager {
     /** hls.js ile oynatılıyorsa instance (gelişmiş kullanım: olaylar, istatistik); değilse null. */
     get hlsInstance(): HlsInstance | null {
         return this.hls;
+    }
+
+    /** dash.js ile oynatılıyorsa MediaPlayer (DAI olay iletimi için); değilse null. */
+    get dashPlayer(): unknown {
+        return this.dash?.mediaPlayer ?? null;
     }
 
     /** Native oynatmada şifreli içerik için EME işleyicisi (kaynak atanmadan önce). */
@@ -281,10 +296,12 @@ export class SourceManager {
             this.callbacks.onFatalError('unsupported');
             return;
         }
-        const { DashEngine } = await import('./dashEngine');
+        const sink = this.scte35;
+        const [{ DashEngine }, scte] = await Promise.all([import('./dashEngine'), sink ? import('../scte35') : null]);
         if (this.last?.src !== src) return;
         this.engineInfo = { engine: 'dash.js' };
-        this.dash = new DashEngine(this.video, src, { dash: this.dashOptions, drm: this.drm, autoplay: this.video.autoplay, fitPlayer: !!this.qualityLimit?.fitPlayer, cmcd: this.cmcd && getPrivacy().analytics ? { ...this.cmcd, sessionId: this.sid } : null }, {
+        const scte35 = scte && sink ? (player: unknown) => scte.watchDash(player as Parameters<typeof scte.watchDash>[0], this.video, sink) : null;
+        this.dash = new DashEngine(this.video, src, { dash: this.dashOptions, drm: this.drm, autoplay: this.video.autoplay, fitPlayer: !!this.qualityLimit?.fitPlayer, cmcd: this.cmcd && getPrivacy().analytics ? { ...this.cmcd, sessionId: this.sid } : null, scte35 }, {
             onLevels: (levels, active) => this.callbacks.onLevelsChanged(levels, active),
             onAudioTracks: (tracks, active) => this.callbacks.onAudioTracksChanged(tracks, active),
             onFatal: (kind) => this.callbacks.onFatalError(kind),
@@ -316,6 +333,14 @@ export class SourceManager {
         this.engineInfo = { engine: 'native-hls', reason };
         this.probeNativeHls(src);
         this.watchNativeAudioTracks();
+        const sink = this.scte35;
+        if (sink) {
+            void import('../scte35').then(({ watchNativeCues }) => {
+                if (this.last?.src !== src || this.hls) return;
+                this.scte35Cleanup?.();
+                this.scte35Cleanup = watchNativeCues(this.video, sink);
+            });
+        }
         this.video.src = src;
     }
 
@@ -374,7 +399,8 @@ export class SourceManager {
         // Diğer tarayıcılar: hls.js'i yalnızca gerektiğinde yükle. İki paket ayrı parçalarda — biri seçilince öbürü inmez.
         // Hafif pakette EME ve CMCD yok — o zaman tam paket.
         const build = this.hlsOptions.build === 'light' && !hasDrm(this.drm) && !this.cmcd ? 'light' : 'full';
-        const { default: Hls } = build === 'light' ? await import('hls.js/light') : await import('hls.js');
+        const sink = this.scte35;
+        const [{ default: Hls }, scte] = await Promise.all([build === 'light' ? import('hls.js/light') : import('hls.js'), sink ? import('../scte35') : null]);
         // import sırasında başka bir kaynak yüklenmiş olabilir.
         if (this.last?.src !== src) return;
 
@@ -391,6 +417,10 @@ export class SourceManager {
 
         this.hls = hls;
         this.engineInfo = { engine: 'hls.js', build };
+        if (scte && sink) {
+            this.scte35Cleanup?.();
+            this.scte35Cleanup = scte.watchHlsJs(hls as unknown as Parameters<typeof scte.watchHlsJs>[0], Hls.Events.FRAG_CHANGED, this.video, sink);
+        }
         let parsed = false;
         let mediaRecoveryTried = false;
 
@@ -556,6 +586,8 @@ export class SourceManager {
     destroy(): void {
         this.nativeHlsProbe?.();
         this.nativeAudioCleanup?.();
+        this.scte35Cleanup?.();
+        this.scte35Cleanup = null;
         if (this.hls) {
             this.hls.destroy();
             this.hls = null;

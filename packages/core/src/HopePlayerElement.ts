@@ -1,9 +1,10 @@
 import tailwindCss from './theme/tailwind.css?inline';
-import type { HopeSourceOption, AdsOptions, HopePlayerOptions, HopeQoeMetrics, WatchPartyMessage, CourseProgress, PrivacyConsent, HopeQualityInfo, HopeSubtitleInfo } from './types';
+import type { HopeSourceOption, AdsOptions, HopePlayerOptions, HopeQoeMetrics, WatchPartyMessage, CourseProgress, PrivacyConsent, HopeQualityInfo, HopeSubtitleInfo, Scte35Signal } from './types';
 import type Hls from 'hls.js';
 import { SourceManager, type HlsQualityLevel, type PlaybackEngineInfo, type StreamAudioTrack, type StreamTextTrack } from './hls/SourceManager';
 import { cannotPlay, groupSources, sourceFormat, type SourceGroup } from './hls/sourceGroups';
 import { ControlBar } from './controls/ControlBar';
+import { LIVE_EDGE_TOLERANCE_SEC } from './controls/SeekBar';
 import { TooltipController } from './controls/Tooltip';
 import { KeyboardController } from './keyboard/KeyboardController';
 import { LoadingSpinner } from './screens/LoadingSpinner';
@@ -405,9 +406,14 @@ export class HopePlayerElement extends HTMLElement {
 
         this.sourceManager = new SourceManager(this.videoEl, {
             onLevelsChanged: this.onHlsLevelsChanged,
-            onRendition: ({ height, bitrate }, auto) =>
-                this.dispatchEvent(new CustomEvent('hp:qualitychange', { detail: { label: `${height}p`, auto, height, bitrate } })),
-            onSourceLoad: (src, format) => this.dispatchEvent(new CustomEvent('hp:sourcechange', { detail: { src, format } })),
+            // Çözünürlüğü bildirilmeyen (RESOLUTION'sız) seviyede "0p" gibi anlamsız bir kalite bildirilmez.
+            onRendition: ({ height, bitrate }, auto) => {
+                if (height > 0) this.dispatchEvent(new CustomEvent('hp:qualitychange', { detail: { label: `${height}p`, auto, height, bitrate } }));
+            },
+            onSourceLoad: (src, format) => {
+                this.scte35Tracker?.reset();
+                this.dispatchEvent(new CustomEvent('hp:sourcechange', { detail: { src, format } }));
+            },
             onAudioTracksChanged: this.onStreamAudioTracks,
             onTextTracksFound: this.onStreamTextTracks,
             onCues: this.onStreamCues,
@@ -1255,6 +1261,7 @@ export class HopePlayerElement extends HTMLElement {
         const cmcd = options.cmcd ? { ...(options.cmcd === true ? {} : options.cmcd) } : null;
         if (cmcd && !cmcd.contentId && options.id) cmcd.contentId = options.id;
         this.sourceManager.configure(options.hls, { dash: options.dash, drm: options.drm, qualityLimit: options.qualityLimit, cmcd });
+        this.applyScte35(!!(options.scte35 || (typeof options.ads === 'object' && options.ads.live?.scte35)));
         await this.applyAnalytics(options);
         this.errorScreen.dismiss();
         await this.applyRewardedUnlock(options);
@@ -1602,7 +1609,8 @@ export class HopePlayerElement extends HTMLElement {
                     videoEl: this.videoEl,
                     hostEl: this,
                     adUiEl: this.adLayerEl,
-                    loadStreamUrl: (url) => this.sourceManager.load(url),
+                    loadStreamUrl: (url, type) => this.sourceManager.load(url, type),
+                    engines: () => ({ hls: this.sourceManager.hlsInstance, dash: this.sourceManager.dashPlayer }),
                     disableSeeking: () => this.disableSeeking(),
                     enableSeeking: () => this.enableSeeking(),
                 },
@@ -2373,6 +2381,56 @@ export class HopePlayerElement extends HTMLElement {
         this.dispatchEvent(new CustomEvent('hp:qualitychange', { detail: { label: source.label, auto: false, height: this.sourceHeight(source) ?? null, bitrate: null } }));
     }
 
+    // ── SCTE-35 (ayrı parça) ──
+    private scte35Tracker: import('./scte35').Scte35Tracker | null = null;
+    private scte35Queue: Scte35Signal[] | null = null;
+    private readonly scte35Sink = (s: Scte35Signal): void => {
+        if (this.scte35Tracker) this.scte35Tracker.push(s);
+        else this.scte35Queue?.push(s);
+    };
+
+    /** `scte35` / `ads.live.scte35`: sinyal okuma açılır; parça inene kadar gelen sinyaller sırada bekler. */
+    private applyScte35(on: boolean): void {
+        this.sourceManager.setScte35(on ? this.scte35Sink : null);
+        if (!on) {
+            this.scte35Tracker?.destroy();
+            this.scte35Tracker = null;
+            this.scte35Queue = null;
+            return;
+        }
+        if (this.scte35Tracker || this.scte35Queue) return;
+        this.scte35Queue = [];
+        void import('./scte35').then(({ Scte35Tracker }) => {
+            if (!this.scte35Queue) return;
+            const tracker = new Scte35Tracker(this);
+            this.scte35Tracker = tracker;
+            for (const s of this.scte35Queue) tracker.push(s);
+            this.scte35Queue = null;
+        });
+    }
+
+    /** Canlı yayında hedef uç: hls.js'in canlı konumu ya da seekable sonu. */
+    private liveEdgeTarget(): number | null {
+        const sync = this.sourceManager.hlsInstance?.liveSyncPosition;
+        if (sync != null && Number.isFinite(sync)) return sync;
+        const { seekable, buffered } = this.videoEl;
+        if (seekable.length) return Math.max(0, seekable.end(seekable.length - 1) - 1);
+        if (buffered.length) return Math.max(0, buffered.end(buffered.length - 1) - 1);
+        return null;
+    }
+
+    /** Canlı yayında izleyici canlı uçta mı (CANLI rozetinin kırmızı olduğu durum). */
+    private isAtLiveEdge(): boolean {
+        if (this.videoEl.duration !== Infinity) return false;
+        const target = this.liveEdgeTarget();
+        return target !== null && target - this.videoEl.currentTime <= LIVE_EDGE_TOLERANCE_SEC;
+    }
+
+    private seekToLiveEdge(): void {
+        const target = this.liveEdgeTarget();
+        if (target !== null && this.videoEl.duration === Infinity) this.videoEl.currentTime = target;
+    }
+
     /** Altyazı seçimi değişince hp:subtitlechange (aynı seçim tekrar gelirse olay yok). */
     private emitSubtitle(label: string | null, srclang?: string): void {
         if (label === this.lastSubtitle) return;
@@ -3012,6 +3070,8 @@ export class HopePlayerElement extends HTMLElement {
                         })(),
                         transformTag: (url, type) => this.adTagTransform(url, type),
                         labels: () => this.i18n,
+                        isAtLiveEdge: () => this.isAtLiveEdge(),
+                        seekToLiveEdge: () => this.seekToLiveEdge(),
                         surface: {
                             videoEl: this.videoEl,
                             containerEl: this.videoArea,

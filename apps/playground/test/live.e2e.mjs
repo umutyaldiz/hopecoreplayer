@@ -61,25 +61,9 @@ async function testPluginIsolation(browser) {
     ok([...withDai].some((u) => !baseline.has(u)), '?feature=dai → en az 1 yeni chunk');
 }
 
-async function addMetadataCue(page, text) {
-    await page.evaluate((cueText) => {
-        const video = document.getElementById('player').shadowRoot.querySelector('video');
-        let track = Array.from(video.textTracks).find((t) => t.kind === 'metadata' && t.label === 'scte-test');
-        if (!track) {
-            track = video.addTextTrack('metadata', 'scte-test');
-        }
-        track.mode = 'hidden';
-        const cue = new VTTCue(video.currentTime, video.currentTime + 0.5, '');
-        cue.text = cueText;
-        // Native TextTrack.addCue bazı tarayıcılarda cue.text okunabilir olsun
-        // diye VTTCue kullanıyoruz; Scte35LiveAdManager hem cue.value hem
-        // cue.text'i kontrol ediyor — burada text yolu kullanılıyor.
-        track.addCue(cue);
-        // activeCues/cuechange tetiklensin diye currentTime'ı ufak kaydır.
-        video.currentTime = Math.min(video.duration || 0.6, video.currentTime + 0.01);
-    }, text);
-    // cuechange event'i currentTime güncellemesiyle asenkron gelir.
-    await page.waitForTimeout(200);
+/** Player'ın SCTE-35 okuyucusunun yayınladığı reklam arası olayı (sinyal çözümü scte35.e2e.mjs'te). */
+async function breakEvent(page, type, detail) {
+    await page.evaluate(({ type, detail }) => document.getElementById('player').dispatchEvent(new CustomEvent(type, { detail })), { type, detail });
 }
 
 async function testScte35(browser) {
@@ -88,7 +72,7 @@ async function testScte35(browser) {
     await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').play());
     await page.waitForTimeout(100);
 
-    await addMetadataCue(page, 'EXT-X-CUE-OUT:5');
+    await breakEvent(page, 'hp:adbreakstart', { id: 't1', duration: 5, remaining: 5 });
     await page.waitForFunction(() => window.__adsLog.some((e) => e.ev === 'requestAds'), { timeout: 2000 });
     const log1 = await page.evaluate(() => window.__adsLog);
     const req = log1.find((e) => e.ev === 'requestAds');
@@ -105,7 +89,7 @@ async function testScte35(browser) {
     await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').paused, { timeout: 2000 });
 
     // IN sinyali gelir — reklam IMA tarafında hâlâ "oynuyor" olsa bile içeriğe dönülmeli.
-    await addMetadataCue(page, 'EXT-X-CUE-IN');
+    await breakEvent(page, 'hp:adbreakend', { id: 't1', reason: 'signal' });
     await page.waitForFunction(() => !document.getElementById('player').shadowRoot.querySelector('video').paused, { timeout: 2000 });
     ok(true, 'IN sinyali sonrası içerik (reklam tamamlanmamış olsa bile) devam etti');
     await page.close();
@@ -117,7 +101,7 @@ async function testScte35Timeout(browser) {
     await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').play());
     await page.waitForTimeout(100);
 
-    await addMetadataCue(page, 'EXT-X-CUE-OUT:5');
+    await breakEvent(page, 'hp:adbreakstart', { id: 't1', duration: 5, remaining: 5 });
     await page.waitForFunction(() => window.__adsLog.some((e) => e.ev === 'requestAds'), { timeout: 2000 });
     // IMA'dan hiç cevap simüle ETMİYORUZ — demo config breakTimeoutMs=2000.
     await page.waitForFunction(() => !document.getElementById('player').shadowRoot.querySelector('video').paused, { timeout: 4000 });
@@ -698,6 +682,25 @@ async function testDai(browser) {
     await page.close();
 }
 
+async function testDaiDash(browser) {
+    console.log("\n[5b] DAI DASH: format 'dash' isteğe gidiyor, dönen adres dash.js ile oynuyor");
+    const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+    await page.addInitScript(MOCK_DAI);
+    await page.goto(`${BASE}/`);
+    await page.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('video'));
+    await page.evaluate(() => (document.getElementById('player').options = { muted: true, dai: { assetKey: 'dash-key', format: 'dash' } }));
+    await page.waitForFunction(() => window.__daiLog?.some((e) => e.ev === 'requestStream'), null, { timeout: 5000 });
+    const req = await page.evaluate(() => window.__daiLog.find((e) => e.ev === 'requestStream'));
+    ok(req?.assetKey === 'dash-key' && req.format === 'dash', `requestStream format: 'dash' (${req?.format})`);
+    await page.evaluate(() => {
+        const sm = window.__mockDai.streamManagerInstances[0];
+        sm.dispatch('loaded', new window.google.ima.dai.api.StreamEvent('loaded', { streamId: 's2', url: '/dash/clear.mpd?dai=1' }));
+    });
+    await page.waitForFunction(() => document.getElementById('player').sourceManager.engine.engine === 'dash.js', null, { timeout: 8000 }).catch(() => {});
+    ok((await page.evaluate(() => document.getElementById('player').sourceManager.engine.engine)) === 'dash.js', 'DAI DASH adresi dash.js ile yüklendi');
+    await page.close();
+}
+
 (async () => {
     const browser = await launchBrowser();
     try {
@@ -716,6 +719,7 @@ async function testDai(browser) {
         await testLiveDvrSeekBar(browser);
         await testHlsFatalErrorScreen(browser);
         await testDai(browser);
+        await testDaiDash(browser);
     } finally {
         await browser.close();
     }

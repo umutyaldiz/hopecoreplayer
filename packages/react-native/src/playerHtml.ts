@@ -86,6 +86,9 @@ const FORWARDED_EVENTS = [
     'hp:adclick',
     'hp:adskip',
     'hp:adprogress',
+    'hp:scte35',
+    'hp:adbreakstart',
+    'hp:adbreakend',
 ];
 
 /** React Native'den `call` komutuyla çağrılabilen player yöntemleri. */

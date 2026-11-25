@@ -56,7 +56,7 @@ That's it: HLS, the quality menu, captions and keyboard shortcuts work out of th
 
 > Use the full `…/dist/hope-player.js` path on CDNs — the player loads its plugins as relative chunks next to that file. unpkg (`https://unpkg.com/@hopeplayer/core@1/dist/hope-player.js`) and esm.sh work the same way.
 >
-> **In production, pin an exact version** (`@hopeplayer/core@1.13.0/dist/hope-player.js`): CDNs cache version ranges like `@1` for a while, so a new release can take time to show up, while an exact version URL never changes and is cached for good. Plugin chunks have content hashes in their names (`ads-DPL7m9PV.js`), so a new release never serves a stale chunk.
+> **In production, pin an exact version** (`@hopeplayer/core@1.14.0/dist/hope-player.js`): CDNs cache version ranges like `@1` for a while, so a new release can take time to show up, while an exact version URL never changes and is cached for good. Plugin chunks have content hashes in their names (`ads-DPL7m9PV.js`), so a new release never serves a stale chunk.
 
 ## Install with npm
 
@@ -108,7 +108,7 @@ See the [install guide](https://umutyaldiz.com/hopecoreplayer/install) for Vue, 
 - **Real code-splitting** — every plugin is a dynamic import; nothing you don't configure is downloaded or parsed.
 - **Theming** — 4 presets plus CSS custom properties (`--hp-color-accent`…) and `::part()` hooks.
 - **i18n** — every label and ad-UI string follows `locale` / `labels` (Turkish and English included).
-- **One event API** — 67 namespaced DOM `CustomEvent`s (`hp:timeupdate`, `hp:qualitychange`, `hp:adstart`…) and a scriptable element (`player.currentTime`, `volume`, `setQuality()`, `setSubtitle()`, `toggleFullscreen()`…), from any framework. [Live event list](https://umutyaldiz.com/hopecoreplayer/en/events).
+- **One event API** — 70 namespaced DOM `CustomEvent`s (`hp:timeupdate`, `hp:qualitychange`, `hp:adstart`…) and a scriptable element (`player.currentTime`, `volume`, `setQuality()`, `setSubtitle()`, `toggleFullscreen()`…), from any framework. [Live event list](https://umutyaldiz.com/hopecoreplayer/en/events).
 - **Tested** — a Playwright end-to-end suite, an accessibility scan and a bundle-size budget (about 77 KB gzip on first load) run on every change in Chromium; Firefox and WebKit run nightly and before every release on Linux, and `npm run test:linux` reproduces that exact environment locally with Docker; real Safari (macOS) and Safari on the iOS Simulator run nightly on GitHub's macOS machines.
 
 ## Browser support

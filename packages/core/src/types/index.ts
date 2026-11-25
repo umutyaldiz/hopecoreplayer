@@ -156,13 +156,9 @@ export interface AdsOptions {
     /** VideoPrebid header bidding entegrasyonu — preroll + (opsiyonel) midroll. */
     prebid?: PrebidOptions;
     /**
-     * Canlı yayında SCTE-35 tetiklemeli reklam — normal preroll/midroll
-     * zamanlayıcısı yerine yayın içindeki SCTE-35 OUT/IN sinyalleri reklamı
-     * tetikler/bitirir (`video.textTracks` metadata cue'ları üzerinden,
-     * hem hls.js hem Safari native HLS için). `adTagLive`, OUT sinyali
-     * geldiğinde `generateVastUrl` ile işlenip istenir — VMAP/preroll
-     * mekanizmasından bağımsız, kendi retry/fallback zincirini kullanmaz
-     * (bkz. `breakTimeoutMs` — IMA bu sürede cevap vermezse içerik devam eder).
+     * Canlı yayında SCTE-35 tetiklemeli reklam: yayındaki reklam arası sinyali (HLS ve DASH, bkz. `scte35` seçeneği)
+     * gelince `adTagLive` istenir; reklam bitince (izleyici canlıdaysa) canlı uca dönülür. Reklam gelmezse yayının kendi
+     * ara içeriği oynar.
      */
     live?: LiveAdsOptions;
     /**
@@ -190,10 +186,101 @@ export interface AdsOptions {
 }
 
 export interface LiveAdsOptions {
+    /** SCTE-35 sinyallerini okur (üst düzey `scte35: true` ile aynı) ve arada `adTagLive`'ı ister. */
     scte35?: boolean;
+    /**
+     * Reklam arasında istenecek VAST / VMAP etiketi. Makrolar: `[break_duration]` (sn, tam sayı),
+     * `[break_duration_ms]`, `[break_id]`, `[break_num]` (bu oturumdaki kaçıncı ara).
+     * GAM reklam bloğu için ör. `…&pmxd=[break_duration_ms]&pmad=4`.
+     */
     adTagLive?: string;
-    /** IMA bu sürede reklamla cevap vermezse (ms) break'ten vazgeçilir, içerik devam eder. Varsayılan 10000. */
+    /** IMA bu sürede reklamla cevap vermezse (ms) aradan vazgeçilir, yayının kendi ara içeriği sürer. Varsayılan 10000. */
     breakTimeoutMs?: number;
+    /** Kalan süresi bundan kısa araya (sn) reklam istenmez (ör. aranın sonunda katılan izleyici). Varsayılan 5. */
+    minBreakSec?: number;
+    /** İki reklamlı ara arasında en az bu kadar (sn). Varsayılan 0. */
+    minIntervalSec?: number;
+    /** İzleme başladıktan sonraki ilk N saniyede gelen aralara reklam istenmez. Varsayılan 0. */
+    skipFirstSec?: number;
+    /** Ara bitiş sinyali (IN) gelince oynayan reklam kesilip yayına dönülür. Varsayılan true. */
+    cutOnBreakEnd?: boolean;
+    /** Reklam bitince, ara başladığında canlı uçta olan izleyici canlı uca döner; geride olan geride kalır. Varsayılan true. */
+    returnToLive?: boolean;
+}
+
+/** SCTE-35 segmentation_descriptor (tip, süre, UPID). */
+export interface Scte35SegmentationDescriptor {
+    eventId: number;
+    cancel: boolean;
+    /** segmentation_type_id (ör. 0x34 Provider Placement Opportunity Start); iptalde null. */
+    typeId: number | null;
+    /** Tipin adı (SCTE 35 Tablo 22). */
+    type: string | null;
+    /** segmentation_duration (sn). */
+    duration: number | null;
+    upidType: number;
+    /** UPID: metin tabanlıysa metin, değilse hex. */
+    upid: string;
+    segmentNum: number;
+    segmentsExpected: number;
+    subSegmentNum?: number;
+    subSegmentsExpected?: number;
+    restrictions?: { webDeliveryAllowed: boolean; noRegionalBlackout: boolean; archiveAllowed: boolean; deviceRestrictions: number };
+}
+
+/** Çözülmüş SCTE-35 splice_info_section. */
+export interface Scte35SpliceInfo {
+    protocolVersion: number;
+    sapType: number;
+    encrypted: boolean;
+    /** pts_adjustment (sn). */
+    ptsAdjustment: number;
+    tier: number;
+    commandType: number;
+    command: 'splice_null' | 'splice_schedule' | 'splice_insert' | 'time_signal' | 'bandwidth_reservation' | 'private_command' | 'unknown';
+    spliceInsert?: {
+        eventId: number;
+        cancel: boolean;
+        outOfNetwork: boolean;
+        programSplice: boolean;
+        immediate: boolean;
+        /** pts_time + pts_adjustment (sn); hemen ise null. */
+        spliceTime: number | null;
+        breakDuration: { autoReturn: boolean; seconds: number } | null;
+        uniqueProgramId: number;
+        availNum: number;
+        availsExpected: number;
+    };
+    timeSignal?: { spliceTime: number | null };
+    privateIdentifier?: number;
+    /** avail_descriptor provider_avail_id. */
+    availId?: number;
+    descriptors: Scte35SegmentationDescriptor[];
+    /** CRC-32 doğru mu (XML'den gelen sinyallerde true). */
+    crcValid: boolean;
+}
+
+/** Yayından okunan bir SCTE-35 sinyali (`hp:scte35` olayının detayı). */
+export interface Scte35Signal {
+    /** start: reklam arası başlıyor · end: bitti · cancel: iptal · info: arayla ilgisiz (ör. program başlangıcı, splice_null). */
+    action: 'start' | 'end' | 'cancel' | 'info';
+    /** splice_event_id / segmentation_event_id / DATERANGE ID. */
+    id: string | null;
+    /** Ara süresi (sn); bilinmiyorsa null. */
+    duration: number | null;
+    /** Aranın başından bu yana geçen süre (sn) — aranın ortasında katılınca (CUE-OUT-CONT, DATERANGE, DASH). */
+    elapsed: number;
+    source: 'hls' | 'dash';
+    format: 'cue-out' | 'cue-out-cont' | 'cue-in' | 'oatcls' | 'ext-x-scte35' | 'splicepoint' | 'daterange' | 'event-stream' | 'emsg' | 'metadata-cue';
+    /** Sinyalin etkili olduğu medya zamanı (sn). */
+    time: number;
+    command?: Scte35SpliceInfo['command'];
+    segmentationTypeId?: number;
+    segmentationType?: string;
+    upid?: string;
+    /** splice_info_section (hex), varsa. */
+    raw?: string;
+    spliceInfo?: Scte35SpliceInfo;
 }
 
 /** Basılı tutma: mobilde ileri sarma (step), masaüstünde playbackRate. */
@@ -1884,6 +1971,13 @@ export interface HopePlayerOptions {
     liveWallClock?: boolean | LiveWallClockOptions;
     /** Google IMA DAI (sunucu taraflı reklam ekleme) — canlı stream manifest'i StreamManager üzerinden istenir. */
     dai?: DaiOptions;
+    /**
+     * SCTE-35 reklam arası sinyallerini okur — HLS (EXT-X-CUE-OUT / CUE-OUT-CONT / CUE-IN, EXT-OATCLS-SCTE35, EXT-X-SCTE35,
+     * EXT-X-SPLICEPOINT-SCTE35, EXT-X-DATERANGE SCTE35-OUT/IN/CMD) ve DASH (EventStream / emsg, urn:scte:scte35:2013:xml,
+     * 2014:xml+bin, 2013:bin). `hp:scte35`, `hp:adbreakstart`, `hp:adbreakend` olaylarını yayınlar. Reklam istemek için
+     * `ads.live.adTagLive`. Açıkken Safari'de de (MSE varsa) hls.js kullanılır: yerel oynatıcı CUE-OUT etiketlerini vermez.
+     */
+    scte35?: boolean;
 }
 
 export interface LiveWallClockOptions {
@@ -1898,7 +1992,9 @@ export interface DaiOptions {
     /** GAM DAI canlı yayın asset key'i. */
     assetKey: string;
     apiKey?: string;
-    /** Stream isteği başarısız olursa yüklenecek normal (reklamsız) HLS URL'i. */
+    /** Yayın biçimi: 'hls' (varsayılan) ya da 'dash' — asset'in GAM'deki biçimiyle aynı olmalı. */
+    format?: 'hls' | 'dash';
+    /** Stream isteği başarısız olursa yüklenecek normal (reklamsız) yayın adresi (HLS ya da DASH). */
     fallbackStreamUrl?: string;
     adTagParameters?: Record<string, string>;
 }
@@ -2084,6 +2180,12 @@ export type HopePlayerEventMap = {
     'hp:sponsorclick': CustomEvent<{ id: string; sponsor: string }>;
     /** "Bu yayın … sunar" girişi gösterildi (`count`: kaçıncı kez). */
     'hp:sponsorintro': CustomEvent<{ id: string; sponsor: string; count: number }>;
+    /** Yayından bir SCTE-35 sinyali okundu (`scte35`) — reklam arasıyla ilgisiz olanlar dahil (`action: 'info'`). */
+    'hp:scte35': CustomEvent<Scte35Signal>;
+    /** Reklam arası başladı. `remaining`: kalan süre (aranın ortasında katılınca kısalır); bilinmiyorsa null. */
+    'hp:adbreakstart': CustomEvent<{ id: string | null; duration: number | null; remaining: number | null; signal: Scte35Signal }>;
+    /** Reklam arası bitti: bitiş sinyali (`signal`), süre doldu (`duration`), iptal (`cancel`) ya da kaynak değişti (`source`). */
+    'hp:adbreakend': CustomEvent<{ id: string | null; reason: 'signal' | 'duration' | 'cancel' | 'source' }>;
 };
 
 /** `getQualities()` satırı. */

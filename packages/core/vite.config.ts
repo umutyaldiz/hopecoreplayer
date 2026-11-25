@@ -27,6 +27,9 @@ const camel = (s: string): string => s.replace(/-([a-z])/g, (_, c: string) => c.
 function chunkName(name: string, facade: string | null): string {
     const plugin = /[\\/]plugins[\\/]([^\\/]+)[\\/]index\.ts$/.exec(facade ?? '');
     if (plugin) return OPTION_NAMES[plugin[1]!] ?? camel(plugin[1]!);
+    // src/ altındaki diğer klasör girişleri (ör. scte35/index.ts) klasör adını alır — "player" değil.
+    const folder = /[\\/]src[\\/]([^\\/]+)[\\/]index\.ts$/.exec(facade ?? '');
+    if (folder) return camel(folder[1]!);
     return FILE_NAMES[name] ?? name;
 }
 

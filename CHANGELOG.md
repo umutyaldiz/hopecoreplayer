@@ -14,6 +14,34 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.14.0] — 2026-11-25
+
+### Added
+
+- **SCTE-35 ad breaks for HLS and DASH (`scte35`).** The player reads the ad break signals in live streams:
+  - HLS: `EXT-X-CUE-OUT` / `EXT-X-CUE-OUT-CONT` / `EXT-X-CUE-IN`, `EXT-OATCLS-SCTE35`, `EXT-X-SCTE35`, `EXT-X-SPLICEPOINT-SCTE35`, and `EXT-X-DATERANGE` `SCTE35-OUT` / `SCTE35-IN` / `SCTE35-CMD` (timed with `PROGRAM-DATE-TIME`).
+  - DASH: MPD `EventStream` and in-segment `emsg`, schemes `urn:scte:scte35:2013:xml`, `2014:xml+bin` and `2013:bin`.
+
+  The binary `splice_info_section` is decoded completely (all splice commands, `segmentation_descriptor` with type, duration, UPID and restrictions, `avail_descriptor`, `pts_adjustment`, CRC-32). A break starts on `splice_insert` out-of-network and on the Break / Advertisement / Placement Opportunity / Ad Block segmentation types, and ends on the matching end, on cancel or when its duration runs out. Ad starts inside a break are not counted as new breaks. A viewer who joins mid-break gets the remaining time. New events `hp:scte35` (every signal, with the full decode), `hp:adbreakstart` and `hp:adbreakend`; types `Scte35Signal`, `Scte35SpliceInfo` and `Scte35SegmentationDescriptor`. The code is a separate chunk (6.6 KB gzip) loaded only when `scte35` is on. When it is on, hls.js is used on Safari too if MSE is available, because Safari's built-in player exposes only DATERANGE.
+- **SCTE-35 ads (`ads.live`).** In a break, `adTagLive` is requested with the macros `[break_duration]`, `[break_duration_ms]`, `[break_id]` and `[break_num]`, for example to size a GAM ad pod: `pmxd=[break_duration_ms]`. If no ad fills, the stream's own break content keeps playing.
+  - Returning to the stream: when the ad ends, a viewer who was at the live edge when the break started goes back to the live edge; a viewer who was behind stays where they were (`returnToLive`).
+  - End signal: the break end cuts a playing ad (`cutOnBreakEnd`, default true).
+  - New options `minBreakSec` (5), `minIntervalSec` and `skipFirstSec`. No ad is requested while the viewer has paused.
+- **DAI: DASH streams (`dai.format: 'dash'`).** The stream request asks Google for DASH and the returned MPD plays with dash.js; ad timing (`urn:google:dai:2018` events) is forwarded to the DAI SDK.
+- **Docs: DAI demo** with Google's sample live streams (HLS `c-rArva4ShKVIAkNfy6HUQ`, DASH `PSzZMzAkSXCmlJOWDmRj8Q`), started only on a click, and a short setup guide for broadcasters already streaming on YouTube (what DAI needs, the Ad Manager 360 requirement, how pricing works).
+- **Docs: SCTE-35 page** with a live demo (an HLS playlist with `EXT-X-CUE-OUT` / `EXT-X-CUE-IN` and Google's sample ad). The three new events are on the Events page; the Vue wrapper emits them and React Native forwards them.
+
+### Changed
+
+- **`ads.live.scte35`:** signals were read only from metadata text tracks, which hls.js does not create for `EXT-X-CUE-OUT` / `EXT-OATCLS-SCTE35`, so the old option rarely fired on real streams. They are now read from the playlist and the DASH events. Content resumes at the live edge after the ad.
+
+### Fixed
+
+- **DAI on hls.js:** ad timing is now forwarded from hls.js's ID3 samples (`FRAG_PARSING_METADATA`), as Google documents. The metadata text-track objects that were forwarded before did not match what the SDK expects, so ad breaks could go unnoticed. Safari's built-in player uses `onTimedMetadata`.
+- **DAI autoplay:** playback starts once the new stream can play, instead of calling `play()` too early, which was lost when dash.js attached the stream.
+- `hp:qualitychange` no longer fires with `"0p"` for an HLS level that has no `RESOLUTION`.
+- Chunks from a folder's `index.ts` under `src/` are named after the folder (`scte35-…js`) instead of `player-…js`.
+
 ## [1.13.0] — 2026-11-24
 
 ### Added

@@ -14,6 +14,8 @@ declare namespace google.ima.dai.api {
         assetKey: string;
         apiKey?: string;
         adTagParameters?: Record<string, string>;
+        /** 'hls' (varsayılan) ya da 'dash'. */
+        format?: string;
     }
 
     interface StreamData {

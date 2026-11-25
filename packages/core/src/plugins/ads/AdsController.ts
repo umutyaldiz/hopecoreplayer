@@ -4,7 +4,6 @@ import { loadImaSdk } from './loadImaSdk';
 import { generateVastUrl, mergeCustParams, toCustRecord } from './generateVastUrl';
 import { RetryController, type AdBreakType } from './RetryController';
 import { initConsentAware } from './consent';
-import { Scte35LiveAdManager } from './scte35';
 import { AdNotice, resolveNotices } from './AdNotice';
 import type { HopeLocaleStrings } from '../../i18n/types';
 import type { AdsOptions, PrebidBreakOptions } from '../../types';
@@ -40,6 +39,10 @@ export interface AdsPlayerContext {
     transformTag?(url: string, type: 'preroll' | 'midroll' | 'postroll'): Promise<string>;
     /** Player'ın dil sözlüğü (ads.notices metinleri). */
     labels?(): HopeLocaleStrings;
+    /** Canlı yayında izleyici canlı uçta mı (SCTE-35 arası sonrası dönüş kararı). */
+    isAtLiveEdge?(): boolean;
+    /** Canlı uca atla. */
+    seekToLiveEdge?(): void;
 }
 
 /** Bir IMA hatasının ayrıntıları — hp:aderror olayı ve hata ayıklama kaydı için. */
@@ -85,9 +88,14 @@ export class AdsController {
     private adVolumeBeforeMute = 1;
     private readonly prebidIdSuffix: string;
     private readonly prebidInstances: Partial<Record<AdBreakType, VideoPrebid>> = {};
-    private scte35Manager: Scte35LiveAdManager | null = null;
+    /** SCTE-35 reklam arası açık (hp:adbreakstart → hp:adbreakend). */
     private scte35BreakActive = false;
     private scte35BreakTimeout: ReturnType<typeof setTimeout> | null = null;
+    /** Ara başladığında izleyici canlı uçtaydı: reklam bitince canlı uca dönülür. */
+    private scte35ReturnToLive = false;
+    private scte35BreakNum = 0;
+    private scte35LastAdAt = 0;
+    private contentStartedAt = 0;
     /**
      * Preroll yüklendi ama içerik henüz oynatılmak istenmedi — init() + start() oynatma isteğine kadar bekler.
      * init() de ertelenir: VMAP'te IMA, start() beklemeden init() anında 0 noktasındaki preroll'u kendiliğinden
@@ -226,14 +234,12 @@ export class AdsController {
 
         this.requestInitialPrerollOrVmap();
 
-        // Canlı + SCTE-35: normal preroll/midroll zamanlayıcısı yerine yayın
-        // içindeki OUT/IN sinyalleri reklamı tetikler/bitirir — preroll YOK
-        // (yayının "başlangıcı" olmadığı için auto-request edilmiyor).
-        if (this.options.live?.scte35 && this.options.live.adTagLive) {
-            this.scte35Manager = new Scte35LiveAdManager(this.ctx.videoEl, {
-                onAdBreakStart: (duration) => this.onScte35AdBreakStart(duration),
-                onAdBreakEnd: () => this.onScte35AdBreakEnd(),
-            });
+        // Canlı + SCTE-35: player'ın okuduğu reklam arası sinyalleri (hp:adbreakstart / hp:adbreakend) reklamı
+        // tetikler / bitirir. Sinyal okuma player'da (`scte35`), burada yalnızca reklam.
+        if (this.options.live?.adTagLive) {
+            this.ctx.hostEl.addEventListener('hp:adbreakstart', this.onScte35AdBreakStart);
+            this.ctx.hostEl.addEventListener('hp:adbreakend', this.onScte35AdBreakEnd);
+            this.ctx.videoEl.addEventListener('playing', this.onFirstPlaying);
         }
     }
 
@@ -330,27 +336,59 @@ export class AdsController {
         this.adsManager?.destroy();
         this.adsLoader?.destroy();
         this.adDisplayContainer?.destroy();
-        this.scte35Manager?.destroy();
+        this.ctx.hostEl.removeEventListener('hp:adbreakstart', this.onScte35AdBreakStart);
+        this.ctx.hostEl.removeEventListener('hp:adbreakend', this.onScte35AdBreakEnd);
+        this.ctx.videoEl.removeEventListener('playing', this.onFirstPlaying);
         if (this.scte35BreakTimeout) clearTimeout(this.scte35BreakTimeout);
     }
 
-    /** SCTE-35 OUT sinyali: IMA'ya reklam iste (normal midroll gibi) + IMA cevap vermezse N ms sonra vazgeç. */
-    private onScte35AdBreakStart(_duration: number | null): void {
-        this.scte35BreakActive = true;
-        this.requestAd('Midroll', this.options.live!.adTagLive!);
+    private readonly onFirstPlaying = (): void => {
+        if (!this.contentStartedAt) this.contentStartedAt = Date.now();
+    };
 
-        const timeoutMs = this.options.live?.breakTimeoutMs ?? 10000;
+/** SCTE-35 reklam arası başladı: koşullar uygunsa `adTagLive` (makrolarla) istenir; IMA cevap vermezse vazgeçilir. */
+    private readonly onScte35AdBreakStart = (e: Event): void => {
+        const live = this.options.live;
+        const tag = live?.adTagLive;
+        const { id, remaining } = (e as CustomEvent<{ id: string | null; remaining: number | null }>).detail;
+        if (!tag || this.scte35BreakActive || this.linearBreakActive) return;
+        const v = this.ctx.videoEl;
+        const now = Date.now();
+        const skip = (reason: string): void => this.ctx.log?.({ message: `SCTE-35: reklam istenmedi (${reason})`, details: { id: id ?? undefined, remaining: remaining ?? undefined } });
+        // İzleyici duraklattıysa ya da henüz başlatmadıysa araya reklam girmez; yayının kendi ara içeriği oynar.
+        if (v.paused) return skip('paused');
+        if (remaining !== null && remaining < (live.minBreakSec ?? 5)) return skip('short');
+        if (live.skipFirstSec && (!this.contentStartedAt || now - this.contentStartedAt < live.skipFirstSec * 1000)) return skip('skipFirstSec');
+        if (live.minIntervalSec && this.scte35LastAdAt && now - this.scte35LastAdAt < live.minIntervalSec * 1000) return skip('minIntervalSec');
+
+        this.scte35BreakActive = true;
+        this.scte35BreakNum++;
+        this.scte35ReturnToLive = live.returnToLive !== false && !!this.ctx.isAtLiveEdge?.();
+        const dur = remaining ?? 0;
+        const url = tag
+            .split('[break_duration_ms]').join(String(Math.round(dur * 1000)))
+            .split('[break_duration]').join(String(Math.round(dur)))
+            .split('[break_id]').join(encodeURIComponent(id ?? ''))
+            .split('[break_num]').join(String(this.scte35BreakNum));
+        void this.requestAd('Midroll', url);
+
+        const timeoutMs = live.breakTimeoutMs ?? 10000;
         if (this.scte35BreakTimeout) clearTimeout(this.scte35BreakTimeout);
         this.scte35BreakTimeout = setTimeout(() => {
             // Ad gerçekten başladıysa (onContentPauseRequested) bu timer zaten iptal edilmiş olur.
             this.endScte35Break();
         }, timeoutMs);
-    }
+    };
 
-    /** SCTE-35 IN sinyali: yayıncının sinyaline güvenilir — reklam hâlâ oynuyor olsa bile içeriğe dönülür. */
-    private onScte35AdBreakEnd(): void {
+    /** SCTE-35 ara bitti: `cutOnBreakEnd` (varsayılan) ise oynayan reklam kesilip yayına dönülür. */
+    private readonly onScte35AdBreakEnd = (): void => {
+        if (this.options.live?.cutOnBreakEnd === false && this.linearBreakActive) {
+            // Reklam sonuna kadar oynar; dönüş onContentResumeRequested'da.
+            this.scte35BreakActive = false;
+            return;
+        }
         this.endScte35Break();
-    }
+    };
 
     private endScte35Break(): void {
         if (!this.scte35BreakActive) return;
@@ -359,11 +397,27 @@ export class AdsController {
             clearTimeout(this.scte35BreakTimeout);
             this.scte35BreakTimeout = null;
         }
+        const adWasPlaying = this.linearBreakActive;
         this.adsManager?.destroy();
         this.adsManager = null;
         this.hideAdLayer();
         this.notice?.empty(false);
         this.notice?.reveal();
+        if (adWasPlaying) {
+            // Reklam kesildi: IMA "içeriğe dön" demeyecek — ara kapanışı burada.
+            this.linearBreakActive = false;
+            this.surfaceGuard?.onBreakEnd(true);
+            markLinearAd(this.ctx.hostEl, this.ctx.adLayerEl, false);
+            this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:adend', { detail: { type: this.activeBreak } }));
+            this.resumeAfterScte35();
+        }
+    }
+
+    /** SCTE-35 reklamından sonra yayına dön: ara başında canlıdaysa canlı uca, değilse kaldığı yerden. */
+    private resumeAfterScte35(): void {
+        this.scte35LastAdAt = Date.now();
+        if (this.scte35ReturnToLive) this.ctx.seekToLiveEdge?.();
+        this.scte35ReturnToLive = false;
         if (this.ctx.videoEl.paused) this.ctx.videoEl.play().catch(() => {});
     }
 
@@ -753,10 +807,18 @@ export class AdsController {
             markLinearAd(this.ctx.hostEl, this.ctx.adLayerEl, false);
             this.ctx.hostEl.dispatchEvent(new CustomEvent('hp:adend', { detail: { type: finished } }));
         }
-        // Reklam IMA tarafında doğal yoldan (ALL_ADS_COMPLETED) bitti — SCTE-35
-        // IN sinyali hiç gelmemiş olabilir (broadcaster planlanan süreden
-        // kısa kesmiş olabilir), bu yüzden flag'i burada da temizliyoruz.
+        // Reklam IMA tarafında doğal yoldan bitti — SCTE-35 IN sinyali henüz gelmemiş olabilir; yayının kalan ara
+        // içeriğine dönülür (canlıdaysa canlı uca).
+        const fromScte35 = this.scte35BreakActive || this.scte35ReturnToLive;
         this.scte35BreakActive = false;
+        if (this.scte35BreakTimeout) {
+            clearTimeout(this.scte35BreakTimeout);
+            this.scte35BreakTimeout = null;
+        }
+        if (fromScte35 && finished === 'midroll') {
+            this.resumeAfterScte35();
+            return;
+        }
 
         if (finished === 'preroll') {
             this.maybeRequestVmapAfterPreroll();

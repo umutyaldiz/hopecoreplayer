@@ -45,7 +45,7 @@ class MockStreamManager {
     (this._listeners[type] || []).forEach((l) => l(event));
   }
   requestStream(request) {
-    window.__daiLog.push({ ev: 'requestStream', assetKey: request.assetKey, apiKey: request.apiKey });
+    window.__daiLog.push({ ev: 'requestStream', assetKey: request.assetKey, apiKey: request.apiKey, format: request.format });
   }
   processMetadata(type, payload, timestamp) {
     window.__daiLog.push({ ev: 'processMetadata', type, payload, timestamp });

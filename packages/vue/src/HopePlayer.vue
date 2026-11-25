@@ -35,10 +35,13 @@ const emit = defineEmits<{
     controls: [visible: boolean];
     chapterchange: [detail: HopePlayerEventMap['hp:chapterchange']['detail']];
     live: [detail: HopePlayerEventMap['hp:live']['detail']];
+    scte35: [detail: HopePlayerEventMap['hp:scte35']['detail']];
+    adbreakstart: [detail: HopePlayerEventMap['hp:adbreakstart']['detail']];
+    adbreakend: [detail: HopePlayerEventMap['hp:adbreakend']['detail']];
 }>();
 
 /** Ayrıntısıyla aynen iletilen olaylar (`hp:` öneki atılır). */
-const DETAIL_EVENTS = ['timeupdate', 'volumechange', 'seeking', 'seeked', 'loadedmetadata', 'sourcechange', 'subtitlechange', 'dubbing', 'fullscreen', 'chapterchange', 'live'] as const;
+const DETAIL_EVENTS = ['timeupdate', 'volumechange', 'seeking', 'seeked', 'loadedmetadata', 'sourcechange', 'subtitlechange', 'dubbing', 'fullscreen', 'chapterchange', 'live', 'scte35', 'adbreakstart', 'adbreakend'] as const;
 
 const instance = getCurrentInstance();
 

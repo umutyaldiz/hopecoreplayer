@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const src = resolve(dirname(fileURLToPath(import.meta.url)), '../src');
 const types = readFileSync(join(src, 'types/index.ts'), 'utf8');
 const map = /export (?:interface|type) HopePlayerEventMap\s*=?\s*\{([\s\S]*?)\r?\n\};?/.exec(types)?.[1] ?? '';
-const declared = [...map.matchAll(/^\s+'(hp:[a-z]+)':/gm)].map((m) => m[1]);
+const declared = [...map.matchAll(/^\s+'(hp:[a-z0-9]+)':/gm)].map((m) => m[1]);
 
 const files = [];
 const walk = (dir) => {
