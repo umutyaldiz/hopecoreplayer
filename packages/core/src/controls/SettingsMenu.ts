@@ -353,6 +353,8 @@ export class SettingsMenu {
         this.renderMain();
         this.fitToPlayer();
         this.onOpenChange?.(true);
+        // Hız / altyazı görünümü panelleri: tıklanınca beklenmesin diye parça şimdiden yüklenir.
+        if (this.playbackRates.length || this.captionAppearance) void import('../plugins/settings-panels');
     }
 
     get isOpen(): boolean {
@@ -432,7 +434,7 @@ export class SettingsMenu {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className =
-            'hp:flex hp:items-center hp:justify-between hp:w-full hp:px-3 hp:py-2 hp:text-left hp:bg-transparent hp:border-0 hp:cursor-pointer hp:text-on-surface hp:hover:bg-on-surface/10';
+            'hp:flex hp:items-center hp:justify-between hp:w-full hp:px-3 hp:py-2 hp:text-left hp:bg-transparent hp:border-0 hp:cursor-pointer hp:text-on-surface hp:hover:bg-on-surface/10 hp:active:bg-on-surface/15';
         const labelEl = document.createElement('span');
         labelEl.textContent = label;
         const valueEl = document.createElement('span');
@@ -448,7 +450,7 @@ export class SettingsMenu {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className =
-            'hp:flex hp:items-center hp:gap-2 hp:w-full hp:px-3 hp:py-2 hp:text-left hp:bg-transparent hp:border-0 hp:cursor-pointer hp:text-on-surface hp:font-medium hp:hover:bg-on-surface/10';
+            'hp:flex hp:items-center hp:gap-2 hp:w-full hp:px-3 hp:py-2 hp:text-left hp:bg-transparent hp:border-0 hp:cursor-pointer hp:text-on-surface hp:font-medium hp:hover:bg-on-surface/10 hp:active:bg-on-surface/15';
         btn.appendChild(createIcon('chevron-left', 'hp:text-sm'));
         const span = document.createElement('span');
         span.textContent = title;

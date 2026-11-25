@@ -317,11 +317,23 @@ export class SeekBar {
     /** Sarma sürerken gelen son hedef — o sarma bitince uygulanır. */
     private pendingSeek: number | null = null;
     private readonly onSeeked = (): void => {
-        if (this.pendingSeek === null) return;
+        if (this.pendingSeek === null) return this.render();
         const t = this.pendingSeek;
         this.pendingSeek = null;
         this.video.currentTime = t;
     };
+
+    /** Bırakınca thumb'ı tutmanın son anı (ms) — video oturmasa da en geç o zaman bırakılır. */
+    private holdUntil = 0;
+    /** Bırakıldıktan sonra video hedefe oturdu mu (sarma bitti, devam edecekse oynuyor ve hedefe ulaştı). */
+    private holdSettled(hold: number): boolean {
+        if (performance.now() > this.holdUntil) return true;
+        if (this.video.seeking || this.pendingSeek !== null) return false;
+        if (this.resuming || (this.holdResume && this.video.paused)) return false;
+        return !this.holdResume || this.video.currentTime >= hold - 0.05;
+    }
+    /** Bırakılan sürükleme oynatmayı sürdürecek mi (thumb tutma kararı için). */
+    private holdResume = false;
 
     /** Sürüklerken video durur (parmak beklerken ilerlemesin); bırakınca oynuyorduysa devam eder. */
     private resumeAfterScrub = false;
@@ -336,6 +348,7 @@ export class SeekBar {
     private readonly onPointerDown = (e: PointerEvent): void => {
         if (this.dragging) return;
         this.dragging = true;
+        this.el.setAttribute('data-dragging', '');
         this.hoverDotEl.removeAttribute('data-visible');
         this.el.setPointerCapture(e.pointerId);
         this.resumeAfterScrub = !this.video.paused;
@@ -365,8 +378,12 @@ export class SeekBar {
         const resume = this.resumeAfterScrub;
         this.resumeAfterScrub = false;
         this.dragging = false;
+        this.el.removeAttribute('data-dragging');
         if (this.pendingSeek !== null && !this.video.seeking) this.onSeeked();
-        this.scrubTime = null;
+        // Thumb bırakılan yerde kalır; video oraya oturunca (render) kendi konumuna döner — geri / ileri kayma yok.
+        this.holdResume = resume;
+        this.holdUntil = performance.now() + 1500;
+        this.render();
         if (!resume) return this.notifyScrub();
         // play olayı ayrı bir görevde gelir: o ana kadar "sürükleme sürüyor" sayılır (hp:play gönderilmez).
         this.resuming = true;
@@ -399,6 +416,7 @@ export class SeekBar {
     private readonly onKeyDown = (e: KeyboardEvent): void => {
         const tl = this.timeline();
         if (!tl) return;
+        if (!this.dragging) this.scrubTime = null;
 
         if (e.key === 'ArrowRight') {
             this.video.currentTime = vodSeekTarget(this.video, Math.min(tl.end, this.video.currentTime + this.keyboardStep));
@@ -428,8 +446,38 @@ export class SeekBar {
         this.render();
     }
 
+    /** Kontroller görünür mü — gizliyken kare döngüsü durur (konum timeupdate ile güncel kalır). */
+    private shown = true;
+    get isShown(): boolean {
+        return this.shown;
+    }
+    setShown(shown: boolean): void {
+        if (shown === this.shown) return;
+        this.shown = shown;
+        if (!shown) {
+            if (this.rafId !== null) cancelAnimationFrame(this.rafId);
+            this.rafId = null;
+            return;
+        }
+        this.render();
+        if (!this.video.paused) this.startLoop();
+    }
+
+    /** Son yazılan stil / nitelik değerleri — aynısı tekrar yazılmaz (her karede gereksiz stil hesabı olmasın). */
+    private readonly written = new WeakMap<HTMLElement, Record<string, string>>();
+    private put(el: HTMLElement, prop: 'transform' | 'translate', value: string): void {
+        let w = this.written.get(el);
+        if (!w) this.written.set(el, (w = {}));
+        if (w[prop] === value) return;
+        w[prop] = value;
+        el.style[prop] = value;
+    }
+    private attr(name: string, value: string): void {
+        if (this.el.getAttribute(name) !== value) this.el.setAttribute(name, value);
+    }
+
     private readonly startLoop = (): void => {
-        if (this.rafId !== null) return;
+        if (this.rafId !== null || !this.shown) return;
         const tick = (): void => {
             this.render();
             this.rafId = requestAnimationFrame(tick);
@@ -453,19 +501,20 @@ export class SeekBar {
         if (!tl) {
             this.hoverTimeEl.removeAttribute('data-visible');
             this.hoverDotEl.removeAttribute('data-visible');
-            this.playedEl.style.transform = 'scaleX(0)';
-            this.thumbEl.style.translate = '-50% 0';
-            this.bufferedEl.style.transform = 'scaleX(0)';
+            this.put(this.playedEl, 'transform', 'scaleX(0)');
+            this.put(this.thumbEl, 'translate', '-50% 0');
+            this.put(this.bufferedEl, 'transform', 'scaleX(0)');
             return;
         }
         const span = tl.end - tl.start;
         const toRatio = (t: number): number => Math.min(1, Math.max(0, (t - tl.start) / span));
 
         // Canlıda, canlı konumdayken thumb sağ uçta — rozet "canlı" derken seek bar "geride" göstermesin.
+        if (this.scrubTime !== null && !this.dragging && this.holdSettled(this.scrubTime)) this.scrubTime = null;
         const shown = this.scrubTime ?? this.video.currentTime;
         const playedRatio = tl.live && this.atLiveEdge(tl) && this.scrubTime === null ? 1 : toRatio(shown);
         // `translate` (transform DEĞİL): CSS'teki `scale` transform'u da ölçekleyip konumu kaydırırdı.
-        this.thumbEl.style.translate = `calc(${this.xAtRatio(playedRatio)}px - 50%) 0`;
+        this.put(this.thumbEl, 'translate', `calc(${this.xAtRatio(playedRatio).toFixed(1)}px - 50%) 0`);
 
         let bufferedEnd = 0;
         for (let i = 0; i < this.video.buffered.length; i++) {
@@ -480,20 +529,20 @@ export class SeekBar {
             for (const c of this.chapters) {
                 const span = c.end - c.start;
                 const local = (r: number): number => (span > 0 ? Math.min(1, Math.max(0, (r - c.start) / span)) : 0);
-                c.playedEl.style.transform = `scaleX(${local(playedRatio)})`;
-                c.bufferedEl.style.transform = `scaleX(${local(bufferedRatio)})`;
+                this.put(c.playedEl, 'transform', `scaleX(${local(playedRatio).toFixed(4)})`);
+                this.put(c.bufferedEl, 'transform', `scaleX(${local(bufferedRatio).toFixed(4)})`);
             }
         } else {
-            this.playedEl.style.transform = `scaleX(${playedRatio})`;
-            this.bufferedEl.style.transform = `scaleX(${bufferedRatio})`;
+            this.put(this.playedEl, 'transform', `scaleX(${playedRatio.toFixed(4)})`);
+            this.put(this.bufferedEl, 'transform', `scaleX(${bufferedRatio.toFixed(4)})`);
         }
 
         // Geçilen işaretler soluklaşır.
         for (const m of this.markerEls) m.toggleAttribute('data-passed', Number(m.dataset.ratio) <= playedRatio);
 
-        this.el.setAttribute('aria-valuemin', String(Math.floor(tl.start)));
-        this.el.setAttribute('aria-valuemax', String(Math.floor(tl.end)));
-        this.el.setAttribute('aria-valuenow', String(Math.floor(this.video.currentTime)));
+        this.attr('aria-valuemin', String(Math.floor(tl.start)));
+        this.attr('aria-valuemax', String(Math.floor(tl.end)));
+        this.attr('aria-valuenow', String(Math.floor(this.video.currentTime)));
     };
 
     /** 0–1 arası oranda, çizginin ortasına bir işaret noktası ekler (markers, etkileşimli öğeler, A-B döngü). */

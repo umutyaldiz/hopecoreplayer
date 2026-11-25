@@ -12,8 +12,13 @@
 .hp-heatmap[hidden] {
     display: none;
 }
+@media (hover: hover) {
+    .hp-seekbar:hover .hp-heatmap {
+        opacity: 1;
+    }
+}
 .hp-heatmap[data-show='always'],
-.hp-seekbar:hover .hp-heatmap,
+.hp-seekbar[data-dragging] .hp-heatmap,
 .hp-seekbar:focus-visible .hp-heatmap {
     opacity: 1;
 }

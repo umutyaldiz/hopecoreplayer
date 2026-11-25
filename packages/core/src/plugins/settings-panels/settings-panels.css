@@ -101,3 +101,23 @@
     outline: 2px solid currentColor;
     outline-offset: 2px;
 }
+/* Dokunmatik: parmağa uygun thumb ve basma alanı. */
+@media (pointer: coarse) {
+    .hp-speed-range {
+        height: 32px;
+        touch-action: pan-y;
+    }
+    .hp-speed-range::-webkit-slider-thumb {
+        width: 22px;
+        height: 22px;
+        margin-top: -9px;
+    }
+    .hp-speed-range::-moz-range-thumb {
+        width: 22px;
+        height: 22px;
+    }
+    .hp-speed-step {
+        width: 36px;
+        height: 36px;
+    }
+}

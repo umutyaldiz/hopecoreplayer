@@ -11,6 +11,8 @@ import type { HopeLocaleStrings } from '../i18n/types';
 const COMPACT_MAX_WIDTH = 480;
 /** Bundan kısa beklemelerde (ms) yükleme halkası hiç görünmez — kısa takılmalarda yanıp sönmesin. */
 const LOADING_RING_DELAY_MS = 150;
+/** Göründüyse halka en az bu kadar (ms) kalır — açılıp hemen kapanarak yanıp sönmesin. */
+const LOADING_RING_MIN_MS = 400;
 
 /** Sarma butonu: yuvarlak ok ikonu + ortasında süre. */
 const LOADING_START_EVENTS = ['waiting', 'seeking'] as const;
@@ -98,6 +100,9 @@ export class ControlBar {
     private seekingEnabled = true;
     private readonly leftGroup: HTMLDivElement;
     private loadingTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Medya halkasının kapanması (en az görünme süresi dolunca). */
+    private loadingOffTimer: ReturnType<typeof setTimeout> | null = null;
+    private mediaLoadingAt = 0;
     /** Halkayı açık tutan sebepler: 'media' (buffer bekleniyor) ve player'ın verdikleri (ör. 'preroll'). */
     private readonly loadingReasons = new Set<string>();
     /** Preroll beklenirken video duraklatılmış olsa da kullanıcı oynatmak istedi — buton "duraklat" görünür. */
@@ -752,9 +757,13 @@ export class ControlBar {
     private readonly onLoadingStart = (e: Event): void => {
         // Buffer'lı bir yere atlarken (veri hazır) halka gösterilmez.
         if (e.type === 'seeking' && this.video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) return;
+        // Kapanmak üzereyken yeniden beklemeye girdi: açık kalır.
+        if (this.loadingOffTimer) clearTimeout(this.loadingOffTimer);
+        this.loadingOffTimer = null;
         if (this.loadingTimer || this.loadingReasons.has('media')) return;
         this.loadingTimer = setTimeout(() => {
             this.loadingTimer = null;
+            this.mediaLoadingAt = performance.now();
             this.setLoading('media', true);
         }, LOADING_RING_DELAY_MS);
     };
@@ -764,7 +773,13 @@ export class ControlBar {
         if (e.type === 'seeked' && this.video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA && !this.video.paused) return;
         if (this.loadingTimer) clearTimeout(this.loadingTimer);
         this.loadingTimer = null;
-        this.setLoading('media', false);
+        if (!this.loadingReasons.has('media') || this.loadingOffTimer) return;
+        const left = LOADING_RING_MIN_MS - (performance.now() - this.mediaLoadingAt);
+        if (left <= 0) return this.setLoading('media', false);
+        this.loadingOffTimer = setTimeout(() => {
+            this.loadingOffTimer = null;
+            this.setLoading('media', false);
+        }, left);
     };
 
     private readonly goToLive = (): void => {
@@ -789,6 +804,7 @@ export class ControlBar {
         for (const ev of LOADING_START_EVENTS) this.video.removeEventListener(ev, this.onLoadingStart);
         for (const ev of LOADING_END_EVENTS) this.video.removeEventListener(ev, this.onLoadingEnd);
         if (this.loadingTimer) clearTimeout(this.loadingTimer);
+        if (this.loadingOffTimer) clearTimeout(this.loadingOffTimer);
         this.resizeObserver.disconnect();
         this.topEl.remove();
         this.seekBar.destroy();

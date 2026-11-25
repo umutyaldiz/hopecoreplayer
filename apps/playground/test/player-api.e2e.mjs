@@ -281,9 +281,28 @@ async function testScrub(browser) {
     const later = await el(page, (p) => p.currentTime);
     ok(held.paused && held.flag && Math.abs(later - held.t) < 0.05, `basılı tutarken video durdu, konum sabit (${held.t.toFixed(2)} → ${later.toFixed(2)})`);
     ok(Math.abs(held.t - 15) < 1.5, `sürüklenen yere sarıldı (${held.t.toFixed(2)} sn)`);
+    // Bırakınca thumb'ın konumunu her karede kaydet: geri gitmemeli, sıçramamalı.
+    await page.evaluate(() => {
+        const s = document.getElementById('player').shadowRoot;
+        const bar = s.querySelector('[part="seek-bar"]').getBoundingClientRect();
+        const thumb = s.querySelector('[part="seek-thumb"]');
+        window.__thumb = [];
+        const t0 = performance.now();
+        const tick = () => {
+            const r = thumb.getBoundingClientRect();
+            window.__thumb.push((r.left + r.width / 2 - bar.left) / bar.width);
+            if (performance.now() - t0 < 700) requestAnimationFrame(tick);
+        };
+        tick();
+    });
     await page.mouse.up();
     await page.waitForTimeout(800);
-    const after = await el(page, (p) => ({ t: p.currentTime, paused: p.paused, flag: p.hasAttribute('data-scrubbing') }));
+    const xs = await page.evaluate(() => window.__thumb);
+    const span = await el(page, (p) => p.duration);
+    const steps = xs.slice(1).map((x, i) => (x - xs[i]) * span);
+    const back = Math.min(0, ...steps), jump = Math.max(0, ...steps);
+    ok(back > -0.1 && jump < 0.5, `bırakınca thumb geri gitmedi / sıçramadı (en geri ${back.toFixed(2)} sn, en büyük adım ${jump.toFixed(2)} sn)`);
+    const after =await el(page, (p) => ({ t: p.currentTime, paused: p.paused, flag: p.hasAttribute('data-scrubbing') }));
     ok(!after.paused && after.t > held.t + 0.3 && !after.flag, `bırakınca kaldığı yerden devam etti (${after.t.toFixed(2)} sn)`);
     const pp = (await page.evaluate(() => window.__ev.filter((e) => e.t === 'hp:play' || e.t === 'hp:pause').map((e) => e.t)));
     ok(pp.length === 0, `sürükleme izleyicinin duraklat / oynatı sayılmadı (${pp.join(',') || 'olay yok'})`);
@@ -316,10 +335,172 @@ async function testScrub(browser) {
     await context.close();
 }
 
+async function testVolumeSlider(browser) {
+    console.log('\n[8] Ses çubuğu: aynı karede çizilir, sürüklerken kapanmaz, iptalde takılmaz');
+    // Video duraklatılmış kalır — ses açılsa da hoparlörden bir şey çıkmaz.
+    const { context, page } = await open(browser, { src: '/sample-30s.mp4' });
+    const btn = await page.evaluate(() => {
+        const r = document.getElementById('player').shadowRoot.querySelector('[part="volume-button"]').getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    await page.mouse.move(btn.x, btn.y);
+    await page.waitForTimeout(250);
+    const box = await page.evaluate(() => {
+        const r = document.getElementById('player').shadowRoot.querySelector('[part="volume-slider"]').getBoundingClientRect();
+        return { x: r.left + r.width / 2, top: r.top, h: r.height };
+    });
+    const state = () =>
+        page.evaluate(() => {
+            const s = document.getElementById('player').shadowRoot;
+            const slider = s.querySelector('[part="volume-slider"]');
+            const v = s.querySelector('video');
+            const fill = slider.firstElementChild.firstElementChild.getBoundingClientRect().height;
+            const track = slider.firstElementChild.getBoundingClientRect().height;
+            return { vol: v.muted ? 0 : v.volume, fill: track ? fill / track : 0, open: slider.style.opacity === '1' };
+        });
+    await page.mouse.move(box.x, box.top + box.h * 0.8);
+    await page.mouse.down();
+    await page.mouse.move(box.x, box.top + box.h * 0.3, { steps: 4 });
+    const mid = await state();
+    ok(Math.abs(mid.fill - mid.vol) < 0.05, `doluluk sesi aynı karede izliyor (ses ${mid.vol.toFixed(2)}, dolu ${mid.fill.toFixed(2)})`);
+    // Sürüklerken panelin çok dışına çık: panel açık kalmalı.
+    await page.mouse.move(box.x + 300, box.top - 40, { steps: 3 });
+    await page.waitForTimeout(400);
+    const outside = await state();
+    ok(outside.open, 'sürüklerken panel dışına çıkınca panel açık kaldı');
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+    ok(!(await state()).open, 'bırakınca (imleç dışarıda) panel kapandı');
+
+    // pointercancel: sürükleme biter, sonraki hareket sesi değiştirmez.
+    await page.mouse.move(btn.x, btn.y);
+    await page.waitForTimeout(250);
+    await page.mouse.move(box.x, box.top + box.h * 0.5);
+    await page.mouse.down();
+    await page.evaluate(() => {
+        const s = document.getElementById('player').shadowRoot.querySelector('[part="volume-slider"]');
+        s.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 1, bubbles: true }));
+    });
+    const before = (await state()).vol;
+    await page.mouse.move(box.x, box.top + box.h * 0.1, { steps: 3 });
+    const afterCancel = (await state()).vol;
+    ok(Math.abs(afterCancel - before) < 0.01, `pointercancel sonrası hareket sesi değiştirmedi (${before.toFixed(2)} → ${afterCancel.toFixed(2)})`);
+    await page.mouse.up();
+    ok((await el(page, (p) => p.paused)) === true, 'video duraklatılmış kaldı (test sessiz)');
+    ok(page.__errors.length === 0, `sayfa hatası yok (${page.__errors.join(' | ')})`);
+    await context.close();
+}
+
+async function testSettingsInstant(browser) {
+    console.log('\n[9] Ayarlar: menü açılınca hız paneli parçası önceden yüklenir, "Hız"a basınca panel hemen açılır');
+    const { context, page } = await open(browser, { src: '/sample-30s.mp4' });
+    const chunk = () => page.evaluate(() => performance.getEntriesByType('resource').some((e) => /settings-?panels/i.test(e.name)));
+    ok(!(await chunk()), 'başlangıçta hız paneli parçası yüklenmemiş');
+    await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[aria-label="Ayarlar"]').click());
+    await page.waitForTimeout(400);
+    ok(await chunk(), 'menü açılınca parça önceden yüklendi');
+    const ms = await page.evaluate(async () => {
+        const s = document.getElementById('player').shadowRoot;
+        const row = [...s.querySelectorAll('button')].find((b) => /Oynatma hızı|Playback speed/i.test(b.textContent));
+        const t0 = performance.now();
+        row.click();
+        for (let i = 0; i < 60; i++) {
+            if (s.querySelector('.hp-speed')) return performance.now() - t0;
+            await new Promise((r) => requestAnimationFrame(r));
+        }
+        return -1;
+    });
+    ok(ms >= 0 && ms < 50, `hız paneli ${ms.toFixed(0)} ms içinde açıldı`);
+    ok(page.__errors.length === 0, `sayfa hatası yok (${page.__errors.join(' | ')})`);
+    await context.close();
+}
+
+async function testHiddenChromeIdle(browser) {
+    console.log('\n[10] Performans: kontroller gizliyken seek bar her karede yazılmaz, görünürken akıcı');
+    const { context, page } = await open(browser, { src: '/sample-30s.mp4', autoHideDelayMs: 300 });
+    await el(page, (p) => p.play());
+    // Fare player'ın dışında: kontroller gizlenir.
+    await page.mouse.move(5, 590);
+    await page.waitForTimeout(1500);
+    const count = (ms) =>
+        page.evaluate((ms) => new Promise((res) => {
+            const s = document.getElementById('player').shadowRoot;
+            const thumb = s.querySelector('[part="seek-thumb"]');
+            let n = 0;
+            const chrome = s.querySelector('.hp-chrome').style.opacity;
+            const mo = new MutationObserver((l) => (n += l.length));
+            mo.observe(thumb, { attributes: true, attributeFilter: ['style'] });
+            setTimeout(() => { mo.disconnect(); res({ n, chrome }); }, ms);
+        }), ms);
+    const hidden = await count(1000);
+    ok(hidden.chrome === '0' && hidden.n <= 8, `gizliyken 1 sn'de ${hidden.n} yazım (kare döngüsü durdu)`);
+    const box = await page.evaluate(() => { const r = document.getElementById('player').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    await page.mouse.move(box.x, box.y);
+    await page.mouse.move(box.x + 10, box.y + 5);
+    const shown = await count(250);
+    ok(shown.chrome === '1' && shown.n >= 4, `görünürken 0,25 sn'de ${shown.n} yazım (akıcı)`);
+    ok(page.__errors.length === 0, `sayfa hatası yok (${page.__errors.join(' | ')})`);
+    await context.close();
+}
+
+async function testLoadingNoFlicker(browser) {
+    console.log('\n[11] Yükleme göstergesi: kısa beklemede hiç görünmez, uzun beklemede gelir ve yanıp sönmez');
+    const { context, page } = await open(browser, { src: '/sample-30s.mp4' });
+    // Ortadaki gösterge ve kontrol çubuğundaki halka, zaman çizelgesiyle.
+    const trace = (steps) =>
+        page.evaluate(async (steps) => {
+            const s = document.getElementById('player').shadowRoot;
+            const v = s.querySelector('video');
+            const sp = s.querySelector('.hp-loading-spinner');
+            const ring = s.querySelector('.hp-group-left');
+            const out = {};
+            const t0 = performance.now();
+            for (const [at, what] of steps) {
+                while (performance.now() - t0 < at) await new Promise((r) => setTimeout(r, 10));
+                if (what.startsWith('ev:')) v.dispatchEvent(new Event(what.slice(3)));
+                else out[what] = { spinner: !sp.classList.contains('hp:hidden') && sp.style.opacity === '1', ring: ring.hasAttribute('data-loading') };
+            }
+            return out;
+        }, steps);
+    const short = await trace([[0, 'ev:waiting'], [100, 'ev:playing'], [600, 'after']]);
+    ok(!short.after.spinner && !short.after.ring, `100 ms'lik bekleme: gösterge hiç görünmedi (${JSON.stringify(short.after)})`);
+    // Halka 150 ms'de, orta gösterge 350 ms'de açılır; ikisi de en az 400 ms kalır.
+    const ring = await trace([[0, 'ev:waiting'], [220, 'shown'], [240, 'ev:playing'], [320, 'held'], [900, 'gone']]);
+    ok(ring.shown.ring && ring.held.ring && !ring.gone.ring, `halka: geldi, veri gelince hemen kapanmadı, sonra kayboldu (${JSON.stringify(ring)})`);
+    // Orta gösterge: görünene kadar beklenir (yavaş makinede zamanlama kayar), sonra veri gelir.
+    const spin = await page.evaluate(async () => {
+        const s = document.getElementById('player').shadowRoot;
+        const v = s.querySelector('video');
+        const sp = s.querySelector('.hp-loading-spinner');
+        const on = () => !sp.classList.contains('hp:hidden') && sp.style.opacity === '1';
+        const t0 = performance.now();
+        v.dispatchEvent(new Event('waiting'));
+        let early = false;
+        while (!on() && performance.now() - t0 < 3000) {
+            if (performance.now() - t0 < 250 && on()) early = true;
+            await new Promise((r) => setTimeout(r, 10));
+        }
+        const shownAfter = Math.round(performance.now() - t0);
+        v.dispatchEvent(new Event('playing'));
+        await new Promise((r) => setTimeout(r, 80));
+        const held = on();
+        await new Promise((r) => setTimeout(r, 900));
+        return { early, shownAfter, held, gone: !on() };
+    });
+    ok(!spin.early && spin.shownAfter >= 300 && spin.shownAfter < 3000, `orta gösterge gecikmeyle geldi (${spin.shownAfter} ms)`);
+    ok(spin.held && spin.gone, `veri gelince hemen kapanmadı, sonra kayboldu (${JSON.stringify(spin)})`);
+    ok(page.__errors.length === 0, `sayfa hatası yok (${page.__errors.join(' | ')})`);
+    await context.close();
+}
+
 (async () => {
     const browser = await launchBrowser();
     try {
+        await testLoadingNoFlicker(browser);
+        await testHiddenChromeIdle(browser);
         await testScrub(browser);
+        await testSettingsInstant(browser);
+        await testVolumeSlider(browser);
         await testTimeVolumeSeek(browser);
         await testQualitySubtitlesDubbing(browser);
         if (only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok')) await testHlsQuality(browser);

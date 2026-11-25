@@ -73,7 +73,7 @@ export class VolumePanel {
             'hp-chip hp:absolute hp:bottom-full hp:left-1/2 hp-center-x hp:mb-2 ' +
             'hp:w-7 hp:h-20 hp:rounded-full hp:cursor-pointer ' +
             'hp:flex hp:items-end hp:justify-center hp:p-1.5 ' +
-            'hp:pointer-events-none hp:transition-opacity hp:duration-150 hp:will-change-[opacity]';
+            'hp:pointer-events-none hp:touch-none hp:select-none hp:transition-opacity hp:duration-150 hp:will-change-[opacity]';
         this.slider.style.opacity = '0';
         // .hp-chip'in kendi --hp-chip-radius'u (plain CSS, Tailwind utility'lerinden
         // SONRA derleniyor) rounded-full'u ezer — tam pil şekli için inline override.
@@ -90,7 +90,10 @@ export class VolumePanel {
         this.slider.appendChild(track);
 
         this.sliderFill = document.createElement('div');
-        this.sliderFill.className = 'hp:absolute hp:inset-x-0 hp:bottom-0 hp:bg-accent';
+        this.sliderFill.className = 'hp:absolute hp:inset-0 hp:bg-accent';
+        // height yerine transform: her harekette layout yok.
+        this.sliderFill.style.transformOrigin = 'bottom';
+        this.sliderFill.style.willChange = 'transform';
         track.appendChild(this.sliderFill);
 
         this.el.appendChild(this.slider);
@@ -122,6 +125,8 @@ export class VolumePanel {
     };
 
     private readonly scheduleHide = (): void => {
+        // Sürüklerken panelin dışına çıkmak onu kapatmasın.
+        if (this.dragging) return;
         if (this.hideTimer) clearTimeout(this.hideTimer);
         this.hideTimer = setTimeout(() => {
             this.hideTimer = null;
@@ -165,36 +170,57 @@ export class VolumePanel {
         if (!this.video.muted && this.video.volume === 0) this.video.volume = 0.5;
     };
 
+    /** Sürükleme başında ölçülen çubuk (her harekette yeniden ölçüp layout zorlamasın). */
+    private dragRect: DOMRect | null = null;
+
     /** Dikey çubukta: üst = tam ses (1), alt = sessiz (0) — Y ekseni ters çevrilir. */
     private setFromClientY(clientY: number): void {
-        const rect = this.slider.getBoundingClientRect();
+        const rect = this.dragRect ?? this.slider.getBoundingClientRect();
         const ratio = rect.height > 0 ? 1 - Math.min(1, Math.max(0, (clientY - rect.top) / rect.height)) : 0;
         if (this.adHooks.isAdActive()) {
             this.adHooks.setVolume(ratio);
-            this.render();
-            return;
+        } else {
+            this.video.volume = ratio;
+            this.video.muted = ratio === 0;
         }
-        this.video.volume = ratio;
-        this.video.muted = ratio === 0;
+        // volumechange beklenmez: çubuk aynı karede parmağı izler.
+        this.render();
     }
 
     private readonly onSliderPointerDown = (e: PointerEvent): void => {
+        if (this.dragging) return;
+        e.preventDefault();
         this.dragging = true;
+        this.slider.setAttribute('data-dragging', '');
         this.slider.setPointerCapture(e.pointerId);
+        // preventDefault odağı da engeller — klavyeyle devam edilebilsin.
+        this.slider.focus({ preventScroll: true });
+        this.dragRect = this.slider.getBoundingClientRect();
         this.setFromClientY(e.clientY);
         this.slider.addEventListener('pointermove', this.onSliderPointerMove);
         this.slider.addEventListener('pointerup', this.onSliderPointerUp);
+        this.slider.addEventListener('pointercancel', this.onSliderPointerUp);
+        this.slider.addEventListener('lostpointercapture', this.onSliderPointerUp);
     };
 
     private readonly onSliderPointerMove = (e: PointerEvent): void => {
         if (this.dragging) this.setFromClientY(e.clientY);
     };
 
+    /** Bırakma, iptal ya da yakalamanın kaybı — sürükleme takılı kalmaz. */
     private readonly onSliderPointerUp = (e: PointerEvent): void => {
+        if (!this.dragging) return;
         this.dragging = false;
-        this.slider.releasePointerCapture(e.pointerId);
+        this.dragRect = null;
+        this.slider.removeAttribute('data-dragging');
         this.slider.removeEventListener('pointermove', this.onSliderPointerMove);
         this.slider.removeEventListener('pointerup', this.onSliderPointerUp);
+        this.slider.removeEventListener('pointercancel', this.onSliderPointerUp);
+        this.slider.removeEventListener('lostpointercapture', this.onSliderPointerUp);
+        if (this.slider.hasPointerCapture(e.pointerId)) this.slider.releasePointerCapture(e.pointerId);
+        // Sürüklerken panelden çıkıldıysa bırakınca kapanır.
+        const active = (this.el.getRootNode() as Document | ShadowRoot).activeElement;
+        if (!this.el.matches(':hover') && !this.el.contains(active)) this.scheduleHide();
     };
 
     private readonly onSliderKeyDown = (e: KeyboardEvent): void => {
@@ -223,7 +249,7 @@ export class VolumePanel {
 
     private readonly render = (): void => {
         const effectiveVolume = this.adHooks.isAdActive() ? this.adHooks.getVolume() : this.video.muted ? 0 : this.video.volume;
-        this.sliderFill.style.height = `${effectiveVolume * 100}%`;
+        this.sliderFill.style.transform = `scaleY(${effectiveVolume})`;
         this.slider.setAttribute('aria-valuenow', String(Math.round(effectiveVolume * 100)));
 
         const label = effectiveVolume === 0 ? this.labels.unmute : this.labels.mute;

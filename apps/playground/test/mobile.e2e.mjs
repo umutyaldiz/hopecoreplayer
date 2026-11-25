@@ -545,6 +545,81 @@ async function testAndroidJitterTap(browser) {
     }
 }
 
+async function testTouchQuality(browser) {
+    console.log('\n[11] Dokunmatik kalite: sayfa yakınlaşmıyor, iki parmak dokunuş sayılmıyor, sürükleme bitince kontroller gizleniyor');
+    if (!only(['chromium'], 'CDP ile dokunma olayları')) return;
+    const { context, page } = await openPlayer(browser, { width: 360, touch: true });
+    try {
+        const cdp = await context.newCDPSession(page);
+        await page.evaluate(() => { document.getElementById('player').options = { src: '/sample.mp4', muted: true, loop: true }; });
+        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').readyState >= 2);
+        const css = await page.evaluate(() => {
+            const a = getComputedStyle(document.getElementById('player').shadowRoot.querySelector('.video-area'));
+            return { touch: a.touchAction, select: a.userSelect || a.webkitUserSelect };
+        });
+        ok(css.touch === 'manipulation' && css.select === 'none', `video alanı: çift dokunuşta yakınlaşma ve seçim yok (${JSON.stringify(css)})`);
+
+        await page.evaluate(async () => { await document.getElementById('player').shadowRoot.querySelector('video').play(); });
+        await page.waitForTimeout(2200);
+        const chrome = () => page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('.hp-chrome').style.opacity);
+        const pt = await page.evaluate(() => {
+            const r = document.getElementById('player').shadowRoot.querySelector('.video-area').getBoundingClientRect();
+            return { x: r.left + r.width * 0.5, y: r.top + r.height * 0.3 };
+        });
+        // İki parmak: dokunuş değil — kontroller açılmaz, video durmaz.
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: pt.x - 30, y: pt.y, id: 1 }] });
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: pt.x - 30, y: pt.y, id: 1 }, { x: pt.x + 30, y: pt.y, id: 2 }] });
+        await page.waitForTimeout(60);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await page.waitForTimeout(400);
+        const pinch = { chrome: await chrome(), paused: await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').paused) };
+        ok(pinch.chrome === '0' && !pinch.paused, `iki parmak dokunuşu yok sayıldı (${JSON.stringify(pinch)})`);
+
+        // Kontrolleri aç, seek bar'da parmakla sürükle, bırak: oynamaya döner ve kontroller birkaç sn sonra gizlenir.
+        await page.touchscreen.tap(pt.x, pt.y);
+        await page.waitForTimeout(300);
+        const bar = await page.evaluate(() => {
+            const r = document.getElementById('player').shadowRoot.querySelector('[part="seek-bar"]').getBoundingClientRect();
+            return { x: r.left, y: r.top + r.height / 2, w: r.width };
+        });
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: bar.x + bar.w * 0.2, y: bar.y, id: 1 }] });
+        for (let i = 1; i <= 5; i++) {
+            await page.waitForTimeout(40);
+            await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: bar.x + bar.w * (0.2 + i * 0.06), y: bar.y, id: 1 }] });
+        }
+        const dragging = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="seek-bar"]').hasAttribute('data-dragging'));
+        await page.waitForTimeout(1500);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        ok(dragging, 'parmakla sürüklerken seek bar sürükleme durumunda (thumb büyük)');
+        await page.waitForTimeout(600);
+        const resumed = await page.evaluate(() => !document.getElementById('player').shadowRoot.querySelector('video').paused);
+        await page.waitForTimeout(3600);
+        ok(resumed && (await chrome()) === '0', `bırakınca oynamaya döndü ve kontroller gizlendi (oynuyor=${resumed})`);
+
+        // Dokunma hedefi: seek bar en az 28px; basılan buton hover rengiyle yapışık kalmaz.
+        const hit = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="seek-bar"]').getBoundingClientRect().height);
+        ok(hit >= 28, `seek bar dokunma alanı ${hit}px`);
+        await page.touchscreen.tap(pt.x, pt.y);
+        await page.waitForTimeout(300);
+        const btnState = () => page.evaluate(() => {
+            const b = document.getElementById('player').shadowRoot.querySelector('[aria-label="Resim içinde resim"]');
+            const r = b.getBoundingClientRect();
+            return { bg: getComputedStyle(b).backgroundColor, hover: b.matches(":hover"), x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        });
+        const before = await btnState();
+        await page.evaluate(() => {
+            // PiP açılmasın: yalnızca basma görünümü ölçülüyor.
+            document.getElementById('player').shadowRoot.querySelector('[aria-label="Resim içinde resim"]').addEventListener('click', (e) => e.stopImmediatePropagation(), { capture: true });
+        });
+        await page.touchscreen.tap(before.x, before.y);
+        await page.waitForTimeout(400);
+        const after = await btnState();
+        ok(after.bg === before.bg, `basılan buton vurgulu kalmadı (${before.bg} → ${after.bg}, :hover=${after.hover})`);
+    } finally {
+        await context.close();
+    }
+}
+
 async function testUnmuteBadge(browser) {
     console.log('\n[2] Mobil: sessiz oynayan videoda "Sesi aç" rozeti görünüyor, dokununca ses açılıyor ve rozet kayboluyor');
     const { context, page } = await openPlayer(browser, { width: 360, touch: true });
@@ -655,6 +730,7 @@ async function testCaptionsDropToBottom(browser) {
         await testTapToPlayCompact(browser);
         await testCenterPlayClearOfSeekBar(browser);
         await testAndroidJitterTap(browser);
+        await testTouchQuality(browser);
     } finally {
         await browser.close();
     }

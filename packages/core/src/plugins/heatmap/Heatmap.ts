@@ -4,7 +4,7 @@ import css from './heatmap.css?inline';
 
 export interface HeatmapPlayerContext {
     videoEl: HTMLVideoElement;
-    seekBar: { readonly el: HTMLElement; addMarker(ratio: number, extraClass?: string, label?: string): HTMLElement };
+    seekBar: { readonly el: HTMLElement; readonly isShown?: boolean; addMarker(ratio: number, extraClass?: string, label?: string): HTMLElement };
     i18n: { heatmapPeak: string };
     log?: (entry: { message: string; details?: Record<string, string> }) => void;
 }
@@ -129,11 +129,13 @@ export class Heatmap {
     }
 
     private rafId: number | null = null;
+    private lastP = '';
 
     private readonly startLoop = (): void => {
         if (this.rafId !== null) return;
         const tick = (): void => {
-            this.onTime();
+            // Kontroller gizliyken yazma; görünür olunca ilk karede yetişir.
+            if (this.ctx.seekBar.isShown !== false) this.onTime();
             this.rafId = requestAnimationFrame(tick);
         };
         this.rafId = requestAnimationFrame(tick);
@@ -187,6 +189,7 @@ export class Heatmap {
         const ratio = Number.isFinite(v.duration) && v.duration > 0 ? Math.min(1, Math.max(0, v.currentTime / v.duration)) : 0;
         // Gizliyken (canlı yayın / veri yok) stil yazma.
         if (this.el.hidden) return;
-        this.el.style.setProperty('--hp-heatmap-p', `${(ratio * 100).toFixed(3)}%`);
+        const p = `${(ratio * 100).toFixed(2)}%`;
+        if (p !== this.lastP) this.el.style.setProperty('--hp-heatmap-p', (this.lastP = p));
     };
 }

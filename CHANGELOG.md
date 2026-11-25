@@ -17,6 +17,15 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 ### Fixed
 
 - **Seek bar scrubbing** — dragging the progress bar while playing no longer lets the video keep running (iOS Safari / Chrome, Android, desktop). Playback pauses for the drag and resumes on release; no `hp:pause` / `hp:play` is emitted for it and plugins (pause ad, ad triggers, QR resume, sticky, QoE, watch party, plugin ads) ignore it. `pointercancel` / lost pointer capture now end the drag, and intermediate seeks are coalesced so WebKit lands on the release position.
+- **Seek bar release** — the thumb stays where it was released until the video has landed there and resumed, so it no longer slides forward or back after a drag. Controls auto-hide again after a touch drag (they used to stay up).
+- **Volume slider** — follows the pointer in the same frame (transform instead of height), stays open while dragging outside it, and `pointercancel` / lost capture end the drag.
+- **Touch** — no page double-tap zoom, text selection or iOS callout on the player; a two-finger pinch is not taken as a tap; hover styles (buttons, seek thumb, chapters, markers, heatmap) apply only on hover-capable devices, so tapped buttons no longer stay highlighted on iOS; `:active` press feedback works on iOS; seek bar touch area 22 → 28px; bigger speed slider thumb and −/+ buttons on touch.
+- **Settings menu** — the speed / caption-appearance panel chunk is preloaded when the menu opens, so the first tap on "Playback speed" opens it at once; rows have press feedback.
+- **Loading indicators** — the center spinner appears only after 350 ms of waiting, fades in and out and stays at least 400 ms; the control bar ring also stays at least 400 ms — no flicker on short stalls or seeks.
+
+### Performance
+
+- The seek bar (and heatmap) stop their per-frame loop while the controls are hidden (`timeupdate` keeps the position current), and unchanged styles / ARIA values are no longer rewritten every frame.
 
 ## [1.14.0] — 2026-11-25
 

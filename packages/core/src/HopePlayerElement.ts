@@ -75,6 +75,7 @@ import { preconnectAdHosts } from './plugins/ads/preconnect';
 import type { HopeLocaleStrings } from './i18n/types';
 
 const DEFAULT_PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const noop = (): void => {};
 /** options.autoHideDelayMs verilmezse kullanılan varsayılan. */
 const DEFAULT_AUTO_HIDE_DELAY_MS = 1200;
 /** Dokunmayla açılan kontroller en az bu kadar (ms) açık kalır — fare süresi (1,2 sn) parmak için çok kısa. */
@@ -460,7 +461,12 @@ export class HopePlayerElement extends HTMLElement {
         );
         this.chromeEl.appendChild(this.controlBar.el);
         // İlerleme çubuğu sürüklenirken `data-scrubbing`: eklentiler bu sıradaki duraklatmayı yok sayar.
-        this.controlBar.seekBar.onScrubChange = (on) => this.toggleAttribute('data-scrubbing', on);
+        this.controlBar.seekBar.onScrubChange = (on) => {
+            this.toggleAttribute('data-scrubbing', on);
+            // Sürüklerken kontroller açık kalır; bitince (oynuyorsa) normal gizleme sayacı başlar.
+            if (on && this.hideTimer) clearTimeout(this.hideTimer);
+            else if (!on && !this.videoEl.paused && !this.isChromeBlocked) this.scheduleAutoHide();
+        };
         // Kompakt (küçük player) düzende sağ grubun taşındığı üst bar — chrome'la birlikte otomatik gizlenir.
         this.chromeEl.appendChild(this.controlBar.topEl);
         // "Sesi aç" rozeti chrome'un DIŞINDA: kontroller gizlense de sessiz videoda görünür kalmalı.
@@ -552,6 +558,8 @@ export class HopePlayerElement extends HTMLElement {
         this.videoEl.addEventListener('touchstart', this.onVideoPressStart, { passive: true });
         this.videoEl.addEventListener('touchend', this.onVideoPressEnd);
         this.videoEl.addEventListener('touchcancel', this.onVideoPressCancel);
+        // iOS Safari :active basma geri bildirimini yalnızca touchstart dinleyicisi varsa uygular.
+        this.videoArea.addEventListener('touchstart', noop, { passive: true });
 
         // Bir mikro görev sonra: `import '@hopeplayer/core'` element'i senkron upgrade ediyor — hemen ardından
         // `addEventListener('hp:ready', …)` ekleyen sayfa (README örneği) olayı eskiden kaçırıyordu. Önceden bağlanan
@@ -2755,6 +2763,11 @@ export class HopePlayerElement extends HTMLElement {
     };
 
     private readonly onVideoPressStart = (e: MouseEvent | TouchEvent): void => {
+        // İki parmak (yakınlaştırma) dokunuş sayılmaz.
+        if ('touches' in e && e.touches.length > 1) {
+            this.tapCandidate = false;
+            return;
+        }
         this.tapCandidate = true;
         const point = 'touches' in e ? e.touches[0] : e;
         if (!point) return;
@@ -2885,6 +2898,8 @@ export class HopePlayerElement extends HTMLElement {
         this.videoArea?.toggleAttribute('data-chrome-hidden', !this.chromeVisible);
         // captionRenderer constructor'da chrome'dan SONRA kuruluyor — o ana kadarki çağrılar için güvenli.
         this.captionRenderer?.setChromeVisible(this.chromeVisible);
+        // Gizli seek bar her karede çizilmez.
+        this.controlBar?.seekBar.setShown(this.chromeVisible);
         this.updateMiniProgress();
     }
 
