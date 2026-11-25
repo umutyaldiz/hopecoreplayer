@@ -72,6 +72,11 @@ async function drag(page, toX, toY) {
 
 /** Köşe tutamacını (dx, dy) kadar çeker. */
 async function pull(page, c, dx, dy) {
+    // Duraklatıp oynatınca köşeden ayrılıp yeniden yapışır — tutamaç yavaş makinede biraz sonra gelir.
+    await page.waitForFunction((c) => {
+        const h = document.getElementById('player').shadowRoot.querySelector(`.hp-sticky-resize[data-c="${c}"]`);
+        return !!h && getComputedStyle(h).display !== 'none' && h.getBoundingClientRect().width > 0;
+    }, c, { timeout: 5000 });
     const box = await page.evaluate((c) => {
         const h = document.getElementById('player').shadowRoot.querySelector(`.hp-sticky-resize[data-c="${c}"]`);
         const r = h.getBoundingClientRect();
@@ -111,6 +116,9 @@ async function testDragAndResize(browser) {
     await page.waitForTimeout(300);
     ok((await info(page)).paused, 'sürüklemeden tıklama duraklattı');
     await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').play());
+    // Oynatma sürünce yeniden köşeye yapışması beklenir (requirePlaying: duraklatınca ayrılır).
+    await page.waitForFunction(() => document.getElementById('player').hasAttribute('data-sticky') && !document.getElementById('player').shadowRoot.querySelector('video').paused, null, { timeout: 5000 });
+    await page.waitForFunction(() => !document.getElementById('player').getAnimations().length, null, { timeout: 3000 }).catch(() => {});
 
     // Sol altta: sağ üst tutamaçla büyüt.
     const w0 = (await info(page)).width;
