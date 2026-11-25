@@ -65,7 +65,8 @@ export class EngagementController {
         const base = { hostEl: h.hostEl, videoEl: h.videoEl, overlayEl: h.videoArea, i18n: h.i18n };
         const isLive = (): boolean => h.videoEl.duration === Infinity;
         const isAdActive = (): boolean => h.isAdPlaying();
-        const addButton = (label: string, icon: string, onClick: () => void) => h.controlBar.addButton(label, icon, onClick);
+        /** Kontrol çubuğu butonu — anahtar `controlsOrder`'da kullanılır. */
+        const buttonFor = (key: string) => (label: string, icon: string, onClick: () => void) => h.controlBar.addButton(label, icon, onClick, key);
         const menu = h.controlBar.settingsMenu;
         const registerToggle = (row: { key: string; label: string; getValueLabel(): string; onToggle(): void }): void => menu.registerToggle(row.key, row);
         const unregisterToggle = (k: string): void => menu.unregisterToggle(k);
@@ -104,7 +105,7 @@ export class EngagementController {
                 const { installClips } = await import('../clips');
                 if (this.keys.clips === clKey)
                     this.clips = installClips(
-                        { ...base, seekBarEl: seekBar.el, ratioAtClientX: (x) => seekBar.ratioAtClientX(x), addButton, isLive, holdChrome: (hold) => h.holdChrome('clips', hold) },
+                        { ...base, seekBarEl: seekBar.el, ratioAtClientX: (x) => seekBar.ratioAtClientX(x), addButton: buttonFor('clip'), isLive, holdChrome: (hold) => h.holdChrome('clips', hold) },
                         cl
                     );
             }
@@ -129,7 +130,7 @@ export class EngagementController {
             if (re) {
                 const { installReactions } = await import('../reactions');
                 if (this.keys.reactions === reKey)
-                    this.reactions = installReactions({ ...base, addButton, registerToggle, unregisterToggle, isAdActive, holdChrome: (hold) => h.holdChrome('reactions', hold) }, re);
+                    this.reactions = installReactions({ ...base, addButton: buttonFor('reactions'), registerToggle, unregisterToggle, isAdActive, holdChrome: (hold) => h.holdChrome('reactions', hold) }, re);
             }
         }
 
@@ -146,7 +147,7 @@ export class EngagementController {
                             ...base,
                             seekBarEl: seekBar.el,
                             addSeekBarMarker: (ratio, cls, label) => seekBar.addMarker(ratio, cls, label),
-                            addButton,
+                            addButton: buttonFor('notes'),
                             isAdActive,
                             isLive,
                             holdChrome: (hold) => h.holdChrome('course', hold),
@@ -186,7 +187,7 @@ export class EngagementController {
             this.signLanguage = null;
             if (sl) {
                 const { installSignLanguage } = await import('../sign-language');
-                if (this.keys.signLanguage === slKey) this.signLanguage = installSignLanguage({ ...base, addButton, registerToggle, unregisterToggle, isAdActive }, sl);
+                if (this.keys.signLanguage === slKey) this.signLanguage = installSignLanguage({ ...base, addButton: buttonFor('signLanguage'), registerToggle, unregisterToggle, isAdActive }, sl);
             }
         }
 
@@ -221,7 +222,7 @@ export class EngagementController {
         } else if (this.snapshot) this.snapshot.setOptions(sn);
         else if (this.changed('snapshot', 'on')) {
             const { installSnapshot } = await import('../snapshot');
-            if (this.keys.snapshot === 'on' && !this.snapshot) this.snapshot = installSnapshot({ ...base, addButton }, sn);
+            if (this.keys.snapshot === 'on' && !this.snapshot) this.snapshot = installSnapshot({ ...base, addButton: buttonFor('snapshot') }, sn);
         }
         const tl = opt(options.touchLock);
         if (!tl) {

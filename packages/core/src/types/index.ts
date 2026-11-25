@@ -1840,6 +1840,14 @@ export interface HopePlayerOptions {
      */
     fullscreenButton?: boolean;
     /**
+     * Kontrol çubuğundaki butonların sırası ve grubu. Anahtarlar: sol `play`, `skipBack`, `skipForward`, `volume`, `time`;
+     * sağ `settings`, `pip`, `fullscreen`; eklentiler `loop`, `liveClock`, `transcript`, `share`, `clip`, `reactions`,
+     * `notes`, `signLanguage`, `snapshot`, `multiview`, `cast` ve kendi eklentilerinizin id'si. Listede olmayanlar
+     * `'...'` yerine (yoksa grubun sonuna) gelir; bir anahtar öbür gruba da taşınabilir. Varsayılan:
+     * `{ left: ['play', 'skipBack', 'skipForward', 'volume', 'time'], right: ['...', 'settings', 'pip', 'fullscreen'] }`.
+     */
+    controlsOrder?: { left?: string[]; right?: string[] };
+    /**
      * Fullscreen API'si olmayan tarayıcılarda (iPhone Safari) tam ekran. `'auto'` (varsayılan): iOS'un yerleşik
      * video oynatıcısına geçer — bizim kontroller, altyazı stili ve eklentiler görünmez; lineer reklamda tam ekrandan çıkılır.
      * `'browser'`: player tarayıcı penceresini kaplar (CSS) — kontroller, eklentiler ve reklam player içinde kalır,

@@ -32,6 +32,15 @@ export interface PluginButtonOptions {
     icon: string;
     /** Varsayılan `'right'`. */
     position?: 'left' | 'right';
+    /**
+     * Butonun adı — sitenin `controlsOrder` listesinde bu adla sıralanır. Varsayılan eklentinin adı (bir eklenti
+     * birden fazla buton ekliyorsa her birine ayrı id verin).
+     */
+    id?: string;
+    /** Bu kontrolün önüne yerleştir: `'settings'`, `'fullscreen'`, `'play'`… ya da başka bir butonun id'si. */
+    before?: string;
+    /** Bu kontrolün arkasına yerleştir. `before` ile birlikte verilirse `before` geçerli. */
+    after?: string;
     /** Verilirse aç / kapa butonu (`aria-pressed`). */
     active?: boolean;
     onClick?(event: MouseEvent, button: PluginButtonHandle): void;

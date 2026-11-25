@@ -27,6 +27,14 @@ During the initial 1.0.x line, new features were released as patch versions; tha
   - Returning to the stream: when the ad ends, a viewer who was at the live edge when the break started goes back to the live edge; a viewer who was behind stays where they were (`returnToLive`).
   - End signal: the break end cuts a playing ad (`cutOnBreakEnd`, default true).
   - New options `minBreakSec` (5), `minIntervalSec` and `skipFirstSec`. No ad is requested while the viewer has paused.
+- **Control bar order (`controlsOrder`).** `{ left: [...], right: [...] }` sets the order of the control bar buttons and which group they sit in. Keys:
+  - built-in controls: `play`, `skipBack`, `skipForward`, `volume`, `time`, `settings`, `pip`, `fullscreen`;
+  - built-in plugin buttons: `share`, `clip`, `snapshot`, `cast`, `transcript`, …;
+  - your own plugins' button ids.
+
+  Unlisted buttons go where `'...'` is, or at the end of the group without it. A key listed in the other group moves the button there. Without the option the bar looks exactly as before.
+- **Plugin API: button placement.** `player.ui.addButton({ id, before, after })` places a plugin button before or after a control (`'settings'`, `'play'`, another button's id). The `id` is the button's name in the site's `controlsOrder`; it defaults to the plugin name.
+- **Docs: Control Bar Order page** with a live demo (preset layouts plus a sample plugin button placed with `before: 'settings'`), and a "Button order" control in the Playground.
 - **DAI: DASH streams (`dai.format: 'dash'`).** The stream request asks Google for DASH and the returned MPD plays with dash.js; ad timing (`urn:google:dai:2018` events) is forwarded to the DAI SDK.
 - **Docs: DAI demo** with Google's sample live streams (HLS `c-rArva4ShKVIAkNfy6HUQ`, DASH `PSzZMzAkSXCmlJOWDmRj8Q`), started only on a click, and a short setup guide for broadcasters already streaming on YouTube (what DAI needs, the Ad Manager 360 requirement, how pricing works).
 - **Docs: SCTE-35 page** with a live demo (an HLS playlist with `EXT-X-CUE-OUT` / `EXT-X-CUE-IN` and Google's sample ad). The three new events are on the Events page; the Vue wrapper emits them and React Native forwards them.

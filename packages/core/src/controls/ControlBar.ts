@@ -71,6 +71,12 @@ export interface ControlBarCallbacks {
 }
 
 /** Alt kontrol çubuğunu kurar; alt bileşenleri (SeekBar/VolumePanel/SettingsMenu) birleştirir. */
+/** Kontrol çubuğu sıralaması (`controlsOrder`). */
+export interface ControlsOrder {
+    left?: readonly string[];
+    right?: readonly string[];
+}
+
 export class ControlBar {
     readonly el: HTMLDivElement;
     readonly seekBar: SeekBar;
@@ -127,6 +133,11 @@ export class ControlBar {
     private readonly callbacks: ControlBarCallbacks;
     private row!: HTMLDivElement;
     private extraButtonAnchor!: HTMLElement;
+    private ringEl!: HTMLElement;
+    /** Kullanıcının sıralaması (`controlsOrder`); null = varsayılan. */
+    private order: ControlsOrder | null = null;
+    /** Doğal (varsayılan) sıra ve grup: kuruluş sırası + eklentilerin eklendiği yer. Sıralama hep buradan kurulur. */
+    private natural: Array<{ el: HTMLElement; group: 'left' | 'right' }> = [];
 
     constructor(video: HTMLVideoElement, playbackRates: number[], callbacks: ControlBarCallbacks, labels: HopeLocaleStrings) {
         this.video = video;
@@ -163,6 +174,7 @@ export class ControlBar {
         const ring = document.createElement('span');
         ring.className = 'hp-loading-ring';
         ring.setAttribute('aria-hidden', 'true');
+        this.ringEl = ring;
         // Dış katman parıltı (filter), iç katman kenara kırpan maske — filter maskeden önce uygulandığı için ayrı.
         const ringMask = document.createElement('span');
         ringMask.className = 'hp-loading-ring-mask';
@@ -174,6 +186,7 @@ export class ControlBar {
         this.playButton = play.btn;
         this.playIcon = play.icon;
         this.playButton.setAttribute('part', 'play-pause-button');
+        this.playButton.dataset.ctrl = 'play';
         this.playButton.addEventListener('click', () => this.togglePlay());
         leftGroup.appendChild(this.playButton);
 
@@ -181,14 +194,18 @@ export class ControlBar {
         this.skipBack.btn.addEventListener('click', () => this.skip(-(this.skipSeconds.back ?? 0)));
         this.skipForward = skipButton('forward', 'skip-forward-button');
         this.skipForward.btn.addEventListener('click', () => this.skip(this.skipSeconds.forward ?? 0));
+        this.skipBack.btn.dataset.ctrl = 'skipBack';
+        this.skipForward.btn.dataset.ctrl = 'skipForward';
         leftGroup.append(this.skipBack.btn, this.skipForward.btn);
 
         this.volumePanel = new VolumePanel(video, labels, callbacks.adVolume);
+        this.volumePanel.el.dataset.ctrl = 'volume';
         leftGroup.appendChild(this.volumePanel.el);
 
         this.timeLabel = document.createElement('button');
         this.timeLabel.type = 'button';
         this.timeLabel.setAttribute('part', 'time-display');
+        this.timeLabel.dataset.ctrl = 'time';
         this.timeLabel.className =
             'hp:text-xs hp:text-on-surface hp:tabular-nums hp:whitespace-nowrap hp:px-1 hp:bg-transparent hp:border-0 hp:cursor-pointer hp:select-none hp:p-0 hp:hover:opacity-80 hp:transition-opacity hp:rounded';
         this.timeLabel.textContent = '0:00 / 0:00';
@@ -234,12 +251,14 @@ export class ControlBar {
         this.rightGroup = rightGroup;
 
         this.settingsMenu = new SettingsMenu(video, playbackRates, labels);
+        this.settingsMenu.el.dataset.ctrl = 'settings';
         rightGroup.appendChild(this.settingsMenu.el);
         this.extraButtonAnchor = this.settingsMenu.el;
         this.row = rightGroup;
 
         const pip = iconButton(labels.pip, 'pip');
         this.pipButton = pip.btn;
+        this.pipButton.dataset.ctrl = 'pip';
         this.pipButton.addEventListener('click', () => this.togglePip());
         rightGroup.appendChild(this.pipButton);
 
@@ -260,8 +279,13 @@ export class ControlBar {
         const fullscreen = iconButton(labels.fullscreenEnter, 'fullscreen-enter', 'F');
         this.fullscreenButton = fullscreen.btn;
         this.fullscreenIcon = fullscreen.icon;
+        this.fullscreenButton.dataset.ctrl = 'fullscreen';
         this.fullscreenButton.addEventListener('click', () => this.toggleFullscreen());
         rightGroup.appendChild(this.fullscreenButton);
+        this.natural = [
+            ...[this.playButton, this.skipBack.btn, this.skipForward.btn, this.volumePanel.el, this.timeLabel].map((el) => ({ el, group: 'left' as const })),
+            ...[this.settingsMenu.el, this.pipButton, this.fullscreenButton].map((el) => ({ el, group: 'right' as const })),
+        ];
         // PiP desteklenmiyorsa baştan gizli (applyButtonVisibility).
         if (!document.pictureInPictureEnabled) this.pipButton.style.display = 'none';
 
@@ -311,6 +335,7 @@ export class ControlBar {
             this.fullscreenSlot.style.display = 'none';
         }
         this.moreOpen = false;
+        this.applyOrder();
         this.updateOverflow();
     }
 
@@ -481,10 +506,12 @@ export class ControlBar {
     }
 
     /** Plugin'lerin (loop-section vb.) kontrol çubuğuna kendi butonlarını eklemesi için — ayarlar menüsünden önce yerleştirilir. */
-    addButton(label: string, iconName: string, onClick: () => void): { btn: HTMLButtonElement; icon: HTMLElement } {
+    addButton(label: string, iconName: string, onClick: () => void, key?: string): { btn: HTMLButtonElement; icon: HTMLElement } {
         const { btn, icon } = iconButton(label, iconName);
         btn.addEventListener('click', onClick);
+        if (key) btn.dataset.ctrl = key;
         this.row.insertBefore(btn, this.extraButtonAnchor);
+        this.addNatural(btn, 'right', 'before', this.settingsMenu.el);
         return { btn, icon };
     }
 
@@ -509,15 +536,91 @@ export class ControlBar {
         return this.showRemaining;
     }
 
-    /** Eklenti butonu: sol grubun sonu ya da ayarlardan önce. */
-    addPluginButton(btn: HTMLButtonElement, position: 'left' | 'right'): void {
-        if (position === 'left') this.leftGroup.appendChild(btn);
-        else this.row.insertBefore(btn, this.extraButtonAnchor);
+    /**
+     * Eklenti butonu: sol grubun sonu ya da ayarlardan önce; `before` / `after` verilirse o kontrolün yanına
+     * (anahtarla: 'settings', 'play', başka bir eklentinin id'si…). `key`: `controlsOrder`'da kullanılan ad.
+     */
+    addPluginButton(btn: HTMLButtonElement, position: 'left' | 'right', place: { key?: string; before?: string; after?: string } = {}): void {
+        if (place.key) btn.dataset.ctrl = place.key;
+        const target = this.findControl(place.before ?? place.after);
+        const targetGroup = target ? this.natural.find((n) => n.el === target)?.group : undefined;
+        this.leftGroup.appendChild(btn);
+        if (target && targetGroup) this.addNatural(btn, targetGroup, place.before ? 'before' : 'after', target);
+        else if (position === 'left') this.addNatural(btn, 'left', 'end');
+        else this.addNatural(btn, 'right', 'before', this.settingsMenu.el);
     }
 
     /** Plugin'lerin (live-wall-clock vb.) kontrol çubuğuna buton olmayan bir element (ör. saat göstergesi) eklemesi için. */
-    addElement(el: HTMLElement): void {
+    addElement(el: HTMLElement, key?: string): void {
+        if (key) el.dataset.ctrl = key;
         this.row.insertBefore(el, this.extraButtonAnchor);
+        this.addNatural(el, 'right', 'before', this.settingsMenu.el);
+    }
+
+    /** Doğal sıraya ekler (`before` / `after` hedefin yanına, `end` grubun sonuna) ve sıralamayı uygular. */
+    private addNatural(el: HTMLElement, group: 'left' | 'right', where: 'before' | 'after' | 'end', target?: HTMLElement): void {
+        this.natural = this.natural.filter((n) => n.el !== el);
+        const i = target ? this.natural.findIndex((n) => n.el === target) : -1;
+        if (where === 'end' || i < 0) {
+            let last = -1;
+            this.natural.forEach((n, j) => {
+                if (n.group === group) last = j;
+            });
+            this.natural.splice(last + 1, 0, { el, group });
+        } else this.natural.splice(where === 'before' ? i : i + 1, 0, { el, group });
+        this.applyOrder();
+    }
+
+    /** `controlsOrder`: kontrollerin sırası ve grubu. null = varsayılan sıra. */
+    setOrder(order: ControlsOrder | null): void {
+        this.order = order && (order.left?.length || order.right?.length) ? order : null;
+        this.applyOrder();
+    }
+
+    private findControl(key: string | undefined): HTMLElement | null {
+        if (!key) return null;
+        for (const g of [this.leftGroup, this.rightGroup, this.fullscreenSlot]) {
+            for (const c of Array.from(g.children) as HTMLElement[]) if (c.dataset.ctrl === key) return c;
+        }
+        return null;
+    }
+
+    /**
+     * Sıralama doğal sıradan kurulur: `controlsOrder` listesindeki anahtarlar verilen sırayla; listede olmayanlar kendi
+     * doğal sıralarıyla `'...'` yer tutucusunun yerine, yoksa grubun sonuna. Başka gruptaki bir anahtar o gruba taşınır.
+     * Süre etiketinin yanındaki canlı rozeti ve reklam sayacı onunla birlikte, "daha fazla" butonu grubun sonunda kalır.
+     */
+    private applyOrder(): void {
+        this.natural = this.natural.filter((n) => n.el.isConnected);
+        const byKey = (key: string): HTMLElement | undefined => this.natural.find((n) => n.el.dataset.ctrl === key)?.el;
+        const usable = (el: HTMLElement): boolean => !(this.compact && el === this.fullscreenButton);
+        const lists = { left: this.order?.left ?? [], right: this.order?.right ?? [] };
+        const listedAnywhere = new Set<HTMLElement>();
+        for (const k of [...lists.left, ...lists.right]) {
+            const el = byKey(k);
+            if (el) listedAnywhere.add(el);
+        }
+        for (const side of ['left', 'right'] as const) {
+            const group = side === 'left' ? this.leftGroup : this.rightGroup;
+            const keys = lists[side];
+            const pick = (k: readonly string[]): HTMLElement[] => k.map(byKey).filter((el): el is HTMLElement => !!el && usable(el));
+            const rest = keys.indexOf('...');
+            const head = pick(rest < 0 ? keys : keys.slice(0, rest));
+            const tail = rest < 0 ? [] : pick(keys.slice(rest + 1));
+            const others = this.natural.filter((n) => n.group === side && !listedAnywhere.has(n.el) && usable(n.el)).map((n) => n.el);
+            const final = keys.length ? [...head, ...others, ...tail] : others;
+            if (side === 'left') group.appendChild(this.ringEl);
+            for (const el of final) {
+                group.appendChild(el);
+                if (el === this.timeLabel) group.append(this.liveBadge, this.adInfoEl);
+            }
+            if (side === 'right') {
+                // "Daha fazla" (kompakt) en sonda; tam ekran butonu sondaysa ondan önce.
+                const last = group.lastElementChild;
+                if (last === this.fullscreenButton) group.insertBefore(this.moreBtn, last);
+                else group.appendChild(this.moreBtn);
+            }
+        }
     }
 
     private togglePlay(): void {

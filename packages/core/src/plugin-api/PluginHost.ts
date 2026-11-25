@@ -34,7 +34,7 @@ export interface PluginHostContext {
     blockAds(): void;
     unblockAds(): void;
     isFullscreen(): boolean;
-    addControlButton(button: HTMLButtonElement, position: 'left' | 'right'): void;
+    addControlButton(button: HTMLButtonElement, position: 'left' | 'right', place?: { key?: string; before?: string; after?: string }): void;
     settings: {
         registerToggle(row: { key: string; label: string; getValueLabel(): string; onToggle(): void }): void;
         unregisterToggle(key: string): void;
@@ -527,7 +527,7 @@ export class PluginHost {
                 click(e);
             });
         }
-        this.ctx.addControlButton(btn, o.position ?? 'right');
+        this.ctx.addControlButton(btn, o.position ?? 'right', { key: o.id ?? inst.plugin.name, before: o.before, after: o.after });
         track(() => btn.remove());
         return handle;
     }

@@ -987,7 +987,7 @@ export class HopePlayerElement extends HTMLElement {
                 blockAds: () => this.blockChrome('ads', 'hidden'),
                 unblockAds: () => this.unblockChrome('ads'),
                 isFullscreen: () => this.isFullscreenActive(),
-                addControlButton: (btn, position) => this.controlBar.addPluginButton(btn, position),
+                addControlButton: (btn, position, place) => this.controlBar.addPluginButton(btn, position, place),
                 settings: {
                     registerToggle: (row) => this.controlBar.settingsMenu.registerToggle(row.key, row),
                     unregisterToggle: (key) => this.controlBar.settingsMenu.unregisterToggle(key),
@@ -1120,6 +1120,7 @@ export class HopePlayerElement extends HTMLElement {
         // Eskiden okunmuyordu — menü hep varsayılan hızlarla kuruluyordu.
         this.controlBar.settingsMenu.setPlaybackRates(options.playbackRates ?? DEFAULT_PLAYBACK_RATES);
         this.controlBar.setLiveSeekBar(options.liveSeekBar !== false);
+        this.controlBar.setOrder(options.controlsOrder ?? null);
         this.controlBar.setButtonsVisible({ pip: options.pipButton !== false, fullscreen: options.fullscreenButton !== false });
         this.docPipOptions = options.documentPip && 'documentPictureInPicture' in window ? (options.documentPip === true ? {} : options.documentPip) : null;
         this.controlBar.setDocPip(this.docPipOptions !== null, this.docPip?.active ?? false);
@@ -1318,7 +1319,7 @@ export class HopePlayerElement extends HTMLElement {
                     videoEl: this.videoEl,
                     seekBarEl: this.controlBar.seekBar.el,
                     markers: this.controlBar.seekBar,
-                    addControlButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick),
+                    addControlButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick, 'loop'),
                     i18n: this.i18n,
                 },
                 loopOptions
@@ -1585,7 +1586,7 @@ export class HopePlayerElement extends HTMLElement {
                 {
                     videoEl: this.videoEl,
                     seekBarEl: this.controlBar.seekBar.el,
-                    addControlElement: (el) => this.controlBar.addElement(el),
+                    addControlElement: (el) => this.controlBar.addElement(el, 'liveClock'),
                     i18n: this.i18n,
                     getPlayingDate: () => {
                         const playing = this.sourceManager.hlsInstance?.playingDate;
@@ -1645,7 +1646,7 @@ export class HopePlayerElement extends HTMLElement {
                 i18n: this.i18n,
                 getTracks: () => this.subtitleTracks.map(({ label, track }) => ({ label, track })),
                 activeLabel: () => this.activeCaptionLabel,
-                addButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick),
+                addButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick, 'transcript'),
             },
             options.transcript === true ? {} : options.transcript
         );
@@ -1667,7 +1668,7 @@ export class HopePlayerElement extends HTMLElement {
                 videoEl: this.videoEl,
                 overlayEl: this.videoArea,
                 i18n: this.i18n,
-                addButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick),
+                addButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick, 'share'),
                 isLive: () => this.videoEl.duration === Infinity,
             },
             options.share === true ? {} : options.share
@@ -1791,7 +1792,7 @@ export class HopePlayerElement extends HTMLElement {
                 isAdActive: () => this.isAdPlaying(),
                 loadSource: (src, type) => this.sourceManager.load(src, type),
                 mainHls: () => this.sourceManager.hlsInstance as unknown as import('./plugins/multiview').HlsLike | null,
-                addButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick),
+                addButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick, 'multiview'),
             },
             opts
         );
@@ -2272,7 +2273,7 @@ export class HopePlayerElement extends HTMLElement {
                     overlayEl: this.videoArea,
                     i18n: this.i18n,
                     log: (entry) => this.log.add({ source: 'player', ...entry }),
-                    addButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick),
+                    addButton: (label, icon, onClick) => this.controlBar.addButton(label, icon, onClick, 'cast'),
                     getMedia: () => this.castMedia(),
                     isAdPlaying: () => this.isAdPlaying(),
                     isMse: () => this.sourceManager.engine.engine === 'hls.js' || this.sourceManager.engine.engine === 'dash.js',
