@@ -254,8 +254,15 @@ async function testCloseOnEnd(browser) {
     for (const [closeOnEnd, expectSticky] of [[undefined, false], [false, true]]) {
         const page = await stuck(context, closeOnEnd === undefined ? {} : { closeOnEnd });
         ok(await isSticky(page), 'oynarken yapıştı');
-        await page.evaluate(() => { const v = document.getElementById('player').shadowRoot.querySelector('video'); v.currentTime = v.duration - 0.5; });
-        await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').ended, null, { timeout: 5000 });
+        // Sona çok yakın sarma: WebKit (GStreamer) yavaş makinede son parçayı çözmeden takılabiliyor — 1.5 sn pay.
+        await page.evaluate(() => { const v = document.getElementById('player').shadowRoot.querySelector('video'); v.currentTime = v.duration - 1.5; });
+        const ended = await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('video').ended, null, { timeout: 10000 }).then(() => true, () => false);
+        if (!ended) {
+            const s = await page.evaluate(() => { const v = document.getElementById('player').shadowRoot.querySelector('video'); return { t: v.currentTime, d: v.duration, paused: v.paused, rs: v.readyState, err: v.error?.code ?? null }; });
+            ok(false, `video sona gelmedi ${JSON.stringify(s)}`);
+            await page.close();
+            continue;
+        }
         await page.waitForTimeout(300);
         ok((await isSticky(page)) === expectSticky, `closeOnEnd ${closeOnEnd ?? '(varsayılan)'} → bitince ${expectSticky ? 'köşede kaldı' : 'kapandı'}`);
         await page.close();
