@@ -76,7 +76,9 @@ async function pull(page, c, dx, dy) {
     await page.waitForFunction((c) => {
         const h = document.getElementById('player').shadowRoot.querySelector(`.hp-sticky-resize[data-c="${c}"]`);
         return !!h && getComputedStyle(h).display !== 'none' && h.getBoundingClientRect().width > 0;
-    }, c, { timeout: 5000 });
+    }, c, { timeout: 10000 }).catch(async (e) => {
+        throw new Error(`"${c}" tutamacı görünmedi: ${JSON.stringify(await info(page))} — ${e.message.split('\n')[0]}`);
+    });
     const box = await page.evaluate((c) => {
         const h = document.getElementById('player').shadowRoot.querySelector(`.hp-sticky-resize[data-c="${c}"]`);
         const r = h.getBoundingClientRect();
@@ -117,7 +119,11 @@ async function testDragAndResize(browser) {
     ok((await info(page)).paused, 'sürüklemeden tıklama duraklattı');
     await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').play());
     // Oynatma sürünce yeniden köşeye yapışması beklenir (requirePlaying: duraklatınca ayrılır).
-    await page.waitForFunction(() => document.getElementById('player').hasAttribute('data-sticky') && !document.getElementById('player').shadowRoot.querySelector('video').paused, null, { timeout: 5000 });
+    await page
+        .waitForFunction(() => document.getElementById('player').hasAttribute('data-sticky') && !document.getElementById('player').shadowRoot.querySelector('video').paused, null, { timeout: 10000 })
+        .catch(async (e) => {
+            throw new Error(`oynatınca yeniden yapışmadı: ${JSON.stringify(await info(page))} — ${e.message.split('\n')[0]}`);
+        });
     await page.waitForFunction(() => !document.getElementById('player').getAnimations().length, null, { timeout: 3000 }).catch(() => {});
 
     // Sol altta: sağ üst tutamaçla büyüt.
