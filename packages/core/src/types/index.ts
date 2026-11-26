@@ -1782,6 +1782,8 @@ export interface HopePlayerOptions {
     liveSeekBar?: boolean;
     /** Kontrol çubuğundaki Picture-in-Picture butonu. Varsayılan true (tarayıcı destekliyorsa); `false` gizler. */
     pipButton?: boolean;
+    /** Ses çubuğu: `'horizontal'` (varsayılan, butonun yanında açılır) ya da `'vertical'` (butonun üstünde). Dokunmatikte buton yalnızca sessize alır. */
+    volumeSlider?: 'horizontal' | 'vertical';
     /**
      * Document Picture-in-Picture (Chrome / Edge 116+): PiP penceresinde player'ın kendi kontrolleri, altyazı, menüler
      * ve reklam katmanı. Desteklemeyen tarayıcıda normal PiP. Varsayılan kapalı.

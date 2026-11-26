@@ -14,6 +14,15 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+### Added
+
+- **`volumeSlider: 'horizontal' | 'vertical'`** — the volume slider can open next to the volume button (horizontal, the new default: it slides open on hover, with a thumb) or above it as before (vertical). Arrow keys, Home / End and the mouse wheel work in both.
+- **Animated volume icon** — the speaker shows one or two waves depending on the level, the waves grow slightly with the volume, a cross draws in when muted, and the icon gives a small bump when the level changes. Respects `prefers-reduced-motion`.
+
+### Changed
+
+- **Volume button on touch screens** — it is shown again on phones and tablets and mutes / unmutes on tap (the level stays on the device keys; iOS does not let pages change it). The "Unmute" badge at the top left still appears while playing muted.
+
 ## [1.14.1] — 2026-11-26
 
 ### Fixed

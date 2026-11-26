@@ -46,20 +46,32 @@ const layout = (page) =>
             fullscreenInBottom: !!fullscreen.closest('[part="control-bar"]'),
             fullscreenInside: inside(fullscreen),
             allGroupsInside: Array.from(root.querySelectorAll('.hp-group')).filter((g) => g.getBoundingClientRect().width > 0).every(inside),
-            volumeVisible: getComputedStyle(volume.parentElement).display !== 'none',
+            volumeVisible: getComputedStyle(volume.parentElement).display !== 'none' && volume.getBoundingClientRect().width > 0,
+            sliderHidden: getComputedStyle(root.querySelector('[part="volume-slider"]')).display === 'none',
             badgeVisible: getComputedStyle(root.querySelector('[part="unmute-badge"]')).display !== 'none',
         };
     });
 
 async function testCompactTouchLayout(browser) {
-    console.log('\n[1] Mobil (360px, dokunmatik): sağ grup üst sağda, tam ekran altta, hiçbir buton taşmıyor, ses butonu gizli');
+    console.log('\n[1] Mobil (360px, dokunmatik): sağ grup üst sağda, tam ekran altta, hiçbir buton taşmıyor, ses butonu sessize alıyor');
     const { context, page } = await openPlayer(browser, { width: 360, touch: true });
     const l = await layout(page);
     ok(l.compact, 'küçük player kompakt düzene geçti');
     ok(l.settingsInTop, 'ayarlar butonu üst sağdaki bara taşındı');
     ok(l.fullscreenInBottom && l.fullscreenInside, 'tam ekran altta kaldı ve player içinde (eskiden ekran dışına taşıyordu)');
     ok(l.allGroupsInside, 'hiçbir buton grubu player sınırlarını aşmıyor');
-    ok(!l.volumeVisible, 'dokunmatikte ses butonu gizli (ses donanım tuşlarıyla)');
+    ok(l.volumeVisible && l.sliderHidden, 'dokunmatikte ses butonu görünür, ses çubuğu yok (seviye donanım tuşlarıyla)');
+    // Dokunmak sessize alır / açar; çubuk açılmaz.
+    const volPos = await page.evaluate(() => {
+        const r = document.getElementById('player').shadowRoot.querySelector('[part="volume-button"]').getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    const mutedBefore = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').muted);
+    await page.touchscreen.tap(volPos.x, volPos.y);
+    await page.waitForTimeout(200);
+    const mutedAfter = await page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').muted);
+    ok(mutedAfter === !mutedBefore, `dokununca sessiz durumu değişti (${mutedBefore} → ${mutedAfter})`);
+    await page.touchscreen.tap(volPos.x, volPos.y);
 
     // Butona dokununca tooltip boşuna açılmamalı (hover yok).
     const settingsPos = await page.evaluate(() => {

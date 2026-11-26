@@ -159,8 +159,13 @@ async function testTapToTogglePlayPause(browser) {
 }
 
 async function testVolumePanel(browser) {
-    console.log('\n[2c] VolumePanel: butondan panele hover geçişi kaybolmuyor mu (gerçek bug), scroll ile ses ayarlanıyor mu?');
+    console.log('\n[2c] VolumePanel (dikey): butondan panele hover geçişi kaybolmuyor mu (gerçek bug), scroll ile ses ayarlanıyor mu?');
     const page = await openFeature(browser, 'none');
+    await page.evaluate(() => {
+        const el = document.getElementById('player');
+        el.options = { ...el.options, volumeSlider: 'vertical' };
+    });
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('.hp-volume')?.dataset.orientation === 'vertical');
 
     const btnHandle = await page.evaluateHandle(() => document.getElementById('player').shadowRoot.querySelector('[part="volume-button"]'));
     const sliderHandle = await page.evaluateHandle(() => document.getElementById('player').shadowRoot.querySelector('[part="volume-slider"]'));

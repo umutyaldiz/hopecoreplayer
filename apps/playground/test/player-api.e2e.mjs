@@ -336,59 +336,79 @@ async function testScrub(browser) {
 }
 
 async function testVolumeSlider(browser) {
-    console.log('\n[8] Ses çubuğu: aynı karede çizilir, sürüklerken kapanmaz, iptalde takılmaz');
-    // Video duraklatılmış kalır — ses açılsa da hoparlörden bir şey çıkmaz.
-    const { context, page } = await open(browser, { src: '/sample-30s.mp4' });
-    const btn = await page.evaluate(() => {
-        const r = document.getElementById('player').shadowRoot.querySelector('[part="volume-button"]').getBoundingClientRect();
-        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-    });
-    await page.mouse.move(btn.x, btn.y);
-    await page.waitForTimeout(250);
-    const box = await page.evaluate(() => {
-        const r = document.getElementById('player').shadowRoot.querySelector('[part="volume-slider"]').getBoundingClientRect();
-        return { x: r.left + r.width / 2, top: r.top, h: r.height };
-    });
-    const state = () =>
-        page.evaluate(() => {
-            const s = document.getElementById('player').shadowRoot;
-            const slider = s.querySelector('[part="volume-slider"]');
-            const v = s.querySelector('video');
-            const fill = slider.firstElementChild.firstElementChild.getBoundingClientRect().height;
-            const track = slider.firstElementChild.getBoundingClientRect().height;
-            return { vol: v.muted ? 0 : v.volume, fill: track ? fill / track : 0, open: slider.style.opacity === '1' };
+    for (const orientation of ['horizontal', 'vertical']) {
+        console.log(`
+[8] Ses çubuğu (${orientation}): aynı karede çizilir, sürüklerken kapanmaz, iptalde takılmaz, ikon seviyeyi gösterir`);
+        // Video duraklatılmış kalır — ses açılsa da hoparlörden bir şey çıkmaz.
+        const { context, page } = await open(browser, { src: '/sample-30s.mp4', ...(orientation === 'vertical' ? { volumeSlider: 'vertical' } : {}) });
+        const btn = await page.evaluate(() => {
+            const r = document.getElementById('player').shadowRoot.querySelector('[part="volume-button"]').getBoundingClientRect();
+            return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
         });
-    await page.mouse.move(box.x, box.top + box.h * 0.8);
-    await page.mouse.down();
-    await page.mouse.move(box.x, box.top + box.h * 0.3, { steps: 4 });
-    const mid = await state();
-    ok(Math.abs(mid.fill - mid.vol) < 0.05, `doluluk sesi aynı karede izliyor (ses ${mid.vol.toFixed(2)}, dolu ${mid.fill.toFixed(2)})`);
-    // Sürüklerken panelin çok dışına çık: panel açık kalmalı.
-    await page.mouse.move(box.x + 300, box.top - 40, { steps: 3 });
-    await page.waitForTimeout(400);
-    const outside = await state();
-    ok(outside.open, 'sürüklerken panel dışına çıkınca panel açık kaldı');
-    await page.mouse.up();
-    await page.waitForTimeout(400);
-    ok(!(await state()).open, 'bırakınca (imleç dışarıda) panel kapandı');
+        await page.mouse.move(btn.x, btn.y);
+        await page.waitForTimeout(350);
+        const box = await page.evaluate(() => {
+            const r = document.getElementById('player').shadowRoot.querySelector('[part="volume-slider"]').getBoundingClientRect();
+            return { left: r.left, top: r.top, w: r.width, h: r.height };
+        });
+        if (orientation === 'horizontal') ok(box.w > 40 && box.left > btn.x, `yatay çubuk butonun sağında açıldı (${Math.round(box.w)}px)`);
+        else ok(box.h > 40 && box.top + box.h < btn.y, `dikey çubuk butonun üstünde açıldı (${Math.round(box.h)}px)`);
+        // t: 0 = sessiz, 1 = tam ses.
+        const at = (t) => (orientation === 'vertical' ? { x: box.left + box.w / 2, y: box.top + box.h * (1 - t) } : { x: box.left + box.w * t, y: box.top + box.h / 2 });
+        const state = () =>
+            page.evaluate((vertical) => {
+                const s = document.getElementById('player').shadowRoot;
+                const slider = s.querySelector('[part="volume-slider"]');
+                const v = s.querySelector('video');
+                const fill = slider.firstElementChild.firstElementChild.getBoundingClientRect();
+                const track = slider.firstElementChild.getBoundingClientRect();
+                const ratio = vertical ? (track.height ? fill.height / track.height : 0) : track.width ? fill.width / track.width : 0;
+                return { vol: v.muted ? 0 : v.volume, fill: ratio, open: slider.style.opacity === '1', level: s.querySelector('.hp-vol-icon').dataset.level };
+            }, orientation === 'vertical');
+        let p = at(0.2);
+        await page.mouse.move(p.x, p.y);
+        await page.mouse.down();
+        p = at(0.75);
+        await page.mouse.move(p.x, p.y, { steps: 4 });
+        const mid = await state();
+        ok(Math.abs(mid.fill - mid.vol) < 0.05 && Math.abs(mid.vol - 0.75) < 0.08, `doluluk sesi aynı karede izliyor (ses ${mid.vol.toFixed(2)}, dolu ${mid.fill.toFixed(2)})`);
+        ok(mid.level === '2', `yüksek seste ikon iki dalga (level ${mid.level})`);
+        p = at(0.25);
+        await page.mouse.move(p.x, p.y, { steps: 2 });
+        ok((await state()).level === '1', 'düşük seste ikon tek dalga');
+        // Sürüklerken çubuğun çok dışına çık: açık kalmalı.
+        await page.mouse.move(box.left + 300, box.top - 40, { steps: 3 });
+        await page.waitForTimeout(400);
+        ok((await state()).open, 'sürüklerken dışarı çıkınca çubuk açık kaldı');
+        await page.mouse.up();
+        await page.waitForTimeout(400);
+        ok(!(await state()).open, 'bırakınca (imleç dışarıda) çubuk kapandı');
 
-    // pointercancel: sürükleme biter, sonraki hareket sesi değiştirmez.
-    await page.mouse.move(btn.x, btn.y);
-    await page.waitForTimeout(250);
-    await page.mouse.move(box.x, box.top + box.h * 0.5);
-    await page.mouse.down();
-    await page.evaluate(() => {
-        const s = document.getElementById('player').shadowRoot.querySelector('[part="volume-slider"]');
-        s.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 1, bubbles: true }));
-    });
-    const before = (await state()).vol;
-    await page.mouse.move(box.x, box.top + box.h * 0.1, { steps: 3 });
-    const afterCancel = (await state()).vol;
-    ok(Math.abs(afterCancel - before) < 0.01, `pointercancel sonrası hareket sesi değiştirmedi (${before.toFixed(2)} → ${afterCancel.toFixed(2)})`);
-    await page.mouse.up();
-    ok((await el(page, (p) => p.paused)) === true, 'video duraklatılmış kaldı (test sessiz)');
-    ok(page.__errors.length === 0, `sayfa hatası yok (${page.__errors.join(' | ')})`);
-    await context.close();
+        // pointercancel: sürükleme biter, sonraki hareket sesi değiştirmez.
+        await page.mouse.move(btn.x, btn.y);
+        await page.waitForTimeout(350);
+        p = at(0.5);
+        await page.mouse.move(p.x, p.y);
+        await page.mouse.down();
+        await page.evaluate(() => {
+            const s = document.getElementById('player').shadowRoot.querySelector('[part="volume-slider"]');
+            s.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 1, bubbles: true }));
+        });
+        const before = (await state()).vol;
+        p = at(0.95);
+        await page.mouse.move(p.x, p.y, { steps: 3 });
+        const afterCancel = (await state()).vol;
+        ok(Math.abs(afterCancel - before) < 0.01, `pointercancel sonrası hareket sesi değiştirmedi (${before.toFixed(2)} → ${afterCancel.toFixed(2)})`);
+        await page.mouse.up();
+
+        // Butona basınca sessiz: ikon çarpı.
+        await page.mouse.click(btn.x, btn.y);
+        await page.waitForTimeout(150);
+        ok((await state()).level === '0', 'sessize alınca ikon çarpı');
+        ok((await el(page, (p) => p.paused)) === true, 'video duraklatılmış kaldı (test sessiz)');
+        ok(page.__errors.length === 0, `sayfa hatası yok (${page.__errors.join(' | ')})`);
+        await context.close();
+    }
 }
 
 async function testSettingsInstant(browser) {

@@ -1,10 +1,23 @@
-import { createIcon, setIconName } from '../icons/Icon';
+import { createIcon } from '../icons/Icon';
 import type { HopeLocaleStrings } from '../i18n/types';
 
 /** Scroll ile ses adımı (tekerlek/trackpad cihazları arası tutarlılık için deltaY'in BÜYÜKLÜĞÜ değil YÖNÜ kullanılıyor — her "tık" sabit bir adım). */
 const WHEEL_VOLUME_STEP = 0.05;
 /** Butondan panele geçerken gerçek (0px) bir boşluk olmasa bile, fare bir an için ikisinin de dışına çıkarsa paneli hemen kapatmamak için kısa bir tolerans. */
 const HIDE_DELAY_MS = 150;
+/** Ok tuşlarıyla ses adımı. */
+const KEY_VOLUME_STEP = 0.1;
+
+/** Hoparlör + iki ses dalgası + sessiz çarpısı — seviyeye göre CSS ile canlandırılır (data-level). */
+const VOLUME_SVG =
+    '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    '<path class="hp-vol-spk" d="M4 9.5h3.2l4.4-3.9a.6.6 0 0 1 1 .45v11.9a.6.6 0 0 1-1 .45l-4.4-3.9H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z"/>' +
+    '<path class="hp-vol-w1" d="M15.3 9.2a4 4 0 0 1 0 5.6"/>' +
+    '<path class="hp-vol-w2" d="M17.9 6.6a7.6 7.6 0 0 1 0 10.8"/>' +
+    '<path class="hp-vol-x" d="M16.2 9.7l4.6 4.6M20.8 9.7l-4.6 4.6"/>' +
+    '</svg>';
+
+export type VolumeOrientation = 'horizontal' | 'vertical';
 
 /** Reklam sırasında ses reklamın sesini yönetir — IMA reklamı içerikten ayrı bir video'da oynatır. */
 export interface VolumePanelAdHooks {
@@ -14,10 +27,10 @@ export interface VolumePanelAdHooks {
     toggleMute(): void;
 }
 
-/** Mute toggle + hover'da açılan dikey ses çubuğu. */
+/** Sessize alma butonu (animasyonlu ikon) + fareyle açılan ses çubuğu: yatay (butonun yanında) ya da dikey (üstünde). */
 export class VolumePanel {
     readonly el: HTMLDivElement;
-    /** Dokunmatikte ses butonu gizli; sessiz oynarken görünen "Sesi aç" rozeti (chrome dışında monte edilir, otomatik gizlenmez). */
+    /** Sessiz oynarken görünen "Sesi aç" rozeti (dokunmatikte; chrome dışında monte edilir, otomatik gizlenmez). */
     readonly unmuteBadge: HTMLButtonElement;
     private readonly unmuteText: HTMLSpanElement;
     private readonly button: HTMLButtonElement;
@@ -27,8 +40,12 @@ export class VolumePanel {
     private readonly video: HTMLVideoElement;
     private readonly labels: HopeLocaleStrings;
     private readonly adHooks: VolumePanelAdHooks;
+    private orientation: VolumeOrientation = 'horizontal';
     private dragging = false;
     private hideTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Son çizilen seviye — değişince ikon "atar". */
+    private lastLevel: number | null = null;
+    private bump = false;
 
     constructor(video: HTMLVideoElement, labels: HopeLocaleStrings, adHooks: VolumePanelAdHooks) {
         this.video = video;
@@ -61,40 +78,33 @@ export class VolumePanel {
         this.button.setAttribute('aria-label', labels.mute);
         this.button.dataset.shortcut = 'M';
 
-        this.iconEl = createIcon('volume-high', 'hp:text-[length:var(--hp-ctrl-icon-size)]');
+        this.iconEl = createIcon(VOLUME_SVG, 'hp-vol-icon hp:text-[length:var(--hp-ctrl-icon-size)]');
         this.button.appendChild(this.iconEl);
         this.el.appendChild(this.button);
 
-        // Dikey panel butonun hemen üstünde, arada boşluk yok; görünürlük JS (mouseenter/mouseleave + kısa gecikme) —
-        // CSS :hover'da aradaki boşluk paneli kapatıyordu.
+        // Görünürlük JS (mouseenter/mouseleave + kısa gecikme) — CSS :hover'da aradaki boşluk paneli kapatıyordu.
         this.slider = document.createElement('div');
         this.slider.setAttribute('part', 'volume-slider');
-        this.slider.className =
-            'hp-chip hp:absolute hp:bottom-full hp:left-1/2 hp-center-x hp:mb-2 ' +
-            'hp:w-7 hp:h-20 hp:rounded-full hp:cursor-pointer ' +
-            'hp:flex hp:items-end hp:justify-center hp:p-1.5 ' +
-            'hp:pointer-events-none hp:touch-none hp:select-none hp:transition-opacity hp:duration-150 hp:will-change-[opacity]';
+        this.slider.className = 'hp-vol-slider';
         this.slider.style.opacity = '0';
-        // .hp-chip'in kendi --hp-chip-radius'u (plain CSS, Tailwind utility'lerinden
-        // SONRA derleniyor) rounded-full'u ezer — tam pil şekli için inline override.
-        this.slider.style.borderRadius = '9999px';
+        this.slider.style.pointerEvents = 'none';
         this.slider.setAttribute('role', 'slider');
         this.slider.setAttribute('tabindex', '0');
         this.slider.setAttribute('aria-label', labels.volume);
-        this.slider.setAttribute('aria-orientation', 'vertical');
         this.slider.setAttribute('aria-valuemin', '0');
         this.slider.setAttribute('aria-valuemax', '100');
 
         const track = document.createElement('div');
-        track.className = 'hp:relative hp:w-1.5 hp:h-full hp:rounded-full hp:bg-on-surface/25 hp:overflow-hidden';
+        track.className = 'hp-vol-track hp:bg-on-surface/25';
         this.slider.appendChild(track);
 
         this.sliderFill = document.createElement('div');
-        this.sliderFill.className = 'hp:absolute hp:inset-0 hp:bg-accent';
-        // height yerine transform: her harekette layout yok.
-        this.sliderFill.style.transformOrigin = 'bottom';
-        this.sliderFill.style.willChange = 'transform';
+        this.sliderFill.className = 'hp-vol-fill hp:bg-accent';
         track.appendChild(this.sliderFill);
+
+        const thumb = document.createElement('div');
+        thumb.className = 'hp-vol-thumb hp:bg-accent';
+        this.slider.appendChild(thumb);
 
         this.el.appendChild(this.slider);
 
@@ -112,6 +122,16 @@ export class VolumePanel {
         video.addEventListener('play', this.render);
         video.addEventListener('pause', this.render);
 
+        this.setOrientation('horizontal');
+    }
+
+    /** `options.volumeSlider` — yatay (varsayılan) ya da dikey çubuk. */
+    setOrientation(orientation: VolumeOrientation): void {
+        this.orientation = orientation;
+        this.el.dataset.orientation = orientation;
+        this.slider.setAttribute('aria-orientation', orientation);
+        // Dikey çubuk butonun üstünde ayrı bir cam panel; yatay çubuk kontrol grubunun içinde.
+        this.slider.classList.toggle('hp-chip', orientation === 'vertical');
         this.render();
     }
 
@@ -120,6 +140,7 @@ export class VolumePanel {
             clearTimeout(this.hideTimer);
             this.hideTimer = null;
         }
+        this.el.setAttribute('data-open', '');
         this.slider.style.opacity = '1';
         this.slider.style.pointerEvents = 'auto';
     };
@@ -130,6 +151,7 @@ export class VolumePanel {
         if (this.hideTimer) clearTimeout(this.hideTimer);
         this.hideTimer = setTimeout(() => {
             this.hideTimer = null;
+            this.el.removeAttribute('data-open');
             this.slider.style.opacity = '0';
             this.slider.style.pointerEvents = 'none';
         }, HIDE_DELAY_MS);
@@ -137,14 +159,14 @@ export class VolumePanel {
 
     private readonly onWheel = (e: WheelEvent): void => {
         e.preventDefault();
+        const step = e.deltaY < 0 ? WHEEL_VOLUME_STEP : -WHEEL_VOLUME_STEP;
         if (this.adHooks.isAdActive()) {
-            const current = this.adHooks.getVolume();
-            this.adHooks.setVolume(Math.min(1, Math.max(0, current + (e.deltaY < 0 ? WHEEL_VOLUME_STEP : -WHEEL_VOLUME_STEP))));
+            this.adHooks.setVolume(Math.min(1, Math.max(0, this.adHooks.getVolume() + step)));
             this.render();
             return;
         }
         const current = this.video.muted ? 0 : this.video.volume;
-        const next = Math.min(1, Math.max(0, current + (e.deltaY < 0 ? WHEEL_VOLUME_STEP : -WHEEL_VOLUME_STEP)));
+        const next = Math.min(1, Math.max(0, current + step));
         this.video.volume = next;
         this.video.muted = next === 0;
     };
@@ -170,21 +192,33 @@ export class VolumePanel {
         if (!this.video.muted && this.video.volume === 0) this.video.volume = 0.5;
     };
 
-    /** Sürükleme başında ölçülen çubuk (her harekette yeniden ölçüp layout zorlamasın). */
-    private dragRect: DOMRect | null = null;
-
-    /** Dikey çubukta: üst = tam ses (1), alt = sessiz (0) — Y ekseni ters çevrilir. */
-    private setFromClientY(clientY: number): void {
-        const rect = this.dragRect ?? this.slider.getBoundingClientRect();
-        const ratio = rect.height > 0 ? 1 - Math.min(1, Math.max(0, (clientY - rect.top) / rect.height)) : 0;
+    private set(volume: number): void {
+        const v = Math.min(1, Math.max(0, volume));
         if (this.adHooks.isAdActive()) {
-            this.adHooks.setVolume(ratio);
+            this.adHooks.setVolume(v);
         } else {
-            this.video.volume = ratio;
-            this.video.muted = ratio === 0;
+            this.video.volume = v;
+            this.video.muted = v === 0;
         }
         // volumechange beklenmez: çubuk aynı karede parmağı izler.
         this.render();
+    }
+
+    /** Sürükleme başında ölçülen çubuk (her harekette yeniden ölçüp layout zorlamasın). */
+    private dragRect: DOMRect | null = null;
+
+    /** Yatayda sol = sessiz, sağ = tam; dikeyde alt = sessiz, üst = tam. */
+    private setFromPointer(e: PointerEvent): void {
+        const r = this.dragRect ?? this.slider.getBoundingClientRect();
+        const ratio =
+            this.orientation === 'vertical'
+                ? r.height > 0
+                    ? 1 - (e.clientY - r.top) / r.height
+                    : 0
+                : r.width > 0
+                  ? (e.clientX - r.left) / r.width
+                  : 0;
+        this.set(ratio);
     }
 
     private readonly onSliderPointerDown = (e: PointerEvent): void => {
@@ -196,7 +230,7 @@ export class VolumePanel {
         // preventDefault odağı da engeller — klavyeyle devam edilebilsin.
         this.slider.focus({ preventScroll: true });
         this.dragRect = this.slider.getBoundingClientRect();
-        this.setFromClientY(e.clientY);
+        this.setFromPointer(e);
         this.slider.addEventListener('pointermove', this.onSliderPointerMove);
         this.slider.addEventListener('pointerup', this.onSliderPointerUp);
         this.slider.addEventListener('pointercancel', this.onSliderPointerUp);
@@ -204,7 +238,7 @@ export class VolumePanel {
     };
 
     private readonly onSliderPointerMove = (e: PointerEvent): void => {
-        if (this.dragging) this.setFromClientY(e.clientY);
+        if (this.dragging) this.setFromPointer(e);
     };
 
     /** Bırakma, iptal ya da yakalamanın kaybı — sürükleme takılı kalmaz. */
@@ -223,44 +257,46 @@ export class VolumePanel {
         if (!this.el.matches(':hover') && !this.el.contains(active)) this.scheduleHide();
     };
 
+    private current(): number {
+        if (this.adHooks.isAdActive()) return this.adHooks.getVolume();
+        return this.video.muted ? 0 : this.video.volume;
+    }
+
     private readonly onSliderKeyDown = (e: KeyboardEvent): void => {
-        if (this.adHooks.isAdActive()) {
-            if (e.key === 'ArrowUp') {
-                this.adHooks.setVolume(Math.min(1, this.adHooks.getVolume() + 0.1));
-                e.preventDefault();
-            } else if (e.key === 'ArrowDown') {
-                this.adHooks.setVolume(Math.max(0, this.adHooks.getVolume() - 0.1));
-                e.preventDefault();
-            } else {
-                return;
-            }
-            this.render();
-            return;
-        }
-        if (e.key === 'ArrowUp') {
-            this.video.volume = Math.min(1, this.video.volume + 0.1);
-            this.video.muted = false;
-            e.preventDefault();
-        } else if (e.key === 'ArrowDown') {
-            this.video.volume = Math.max(0, this.video.volume - 0.1);
-            e.preventDefault();
-        }
+        const map: Record<string, number> = { ArrowUp: KEY_VOLUME_STEP, ArrowRight: KEY_VOLUME_STEP, ArrowDown: -KEY_VOLUME_STEP, ArrowLeft: -KEY_VOLUME_STEP };
+        if (e.key in map) this.set(this.current() + map[e.key]!);
+        else if (e.key === 'Home') this.set(0);
+        else if (e.key === 'End') this.set(1);
+        else return;
+        e.preventDefault();
+        // Player'ın ←/→ sarma kısayolu çalışmasın.
+        e.stopPropagation();
     };
 
     private readonly render = (): void => {
-        const effectiveVolume = this.adHooks.isAdActive() ? this.adHooks.getVolume() : this.video.muted ? 0 : this.video.volume;
-        this.sliderFill.style.transform = `scaleY(${effectiveVolume})`;
-        this.slider.setAttribute('aria-valuenow', String(Math.round(effectiveVolume * 100)));
+        const v = this.current();
+        const vertical = this.orientation === 'vertical';
+        this.sliderFill.style.transform = vertical ? `scaleY(${v})` : `scaleX(${v})`;
+        this.slider.style.setProperty('--hp-vol', String(v));
+        this.slider.setAttribute('aria-valuenow', String(Math.round(v * 100)));
+        this.slider.setAttribute('aria-valuetext', `${Math.round(v * 100)}%`);
 
-        const label = effectiveVolume === 0 ? this.labels.unmute : this.labels.mute;
-        this.button.setAttribute('aria-label', label);
+        this.button.setAttribute('aria-label', v === 0 ? this.labels.unmute : this.labels.mute);
         // Rozet: sessizken ve oynarken (ya da reklam varken) — duraklatılmış bir kapak karesinde kalabalık etmesin.
         const playing = this.adHooks.isAdActive() || !this.video.paused;
-        this.unmuteBadge.toggleAttribute('data-visible', effectiveVolume === 0 && playing);
+        this.unmuteBadge.toggleAttribute('data-visible', v === 0 && playing);
         this.unmuteText.textContent = this.labels.unmute;
-        if (effectiveVolume === 0) setIconName(this.iconEl, 'volume-muted');
-        else if (effectiveVolume < 0.5) setIconName(this.iconEl, 'volume-low');
-        else setIconName(this.iconEl, 'volume-high');
+
+        // İkon: 0 = sessiz (çarpı), 1 = tek dalga, 2 = iki dalga; dalgalar seviyeyle hafifçe büyür.
+        const level = v === 0 ? 0 : v < 0.5 ? 1 : 2;
+        this.iconEl.dataset.level = String(level);
+        this.iconEl.style.setProperty('--hp-vol', String(v));
+        if (this.lastLevel !== null && level !== this.lastLevel) {
+            // İki animasyon adı arasında geçiş: yeniden başlatmak için reflow gerekmez.
+            this.bump = !this.bump;
+            this.iconEl.dataset.bump = this.bump ? 'a' : 'b';
+        }
+        this.lastLevel = level;
     };
 
     refreshLabels(): void {

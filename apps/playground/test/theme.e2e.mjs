@@ -636,6 +636,11 @@ async function testControlBarHasNoBackgroundButGroupsDo(browser) {
 async function testVolumeSliderAlignsWithSettingsPanel(browser) {
     console.log('\n[9] Ses çubuğu artık ayarlar menüsüyle AYNI boşlukla (mb-2) açılıyor mu? (istek üzerine: "hizası ayarlar menüsü ile aynı olmalı")');
     const page = await openBase(browser);
+    await page.evaluate(() => {
+        const el = document.getElementById('player');
+        el.options = { ...el.options, volumeSlider: 'vertical' };
+    });
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('.hp-volume')?.dataset.orientation === 'vertical');
     const result = await page.evaluate(() => {
         const root = document.getElementById('player').shadowRoot;
         const settingsBtn = root.querySelector('[aria-label="Ayarlar"]');

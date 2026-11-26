@@ -550,12 +550,177 @@ button.hp-chip:active {
     font-weight: 600;
     cursor: pointer;
 }
+/* Dokunmatikte ses butonu yalnızca sessize alır (ses donanım tuşlarıyla; iOS sayfaya ses seviyesini değiştirtmez). */
 @media (hover: none) and (pointer: coarse) {
-    .hp-volume {
+    .hp-volume .hp-vol-slider {
         display: none !important;
     }
     .hp-unmute-badge[data-visible] {
         display: inline-flex;
+    }
+}
+
+/* ── Ses çubuğu (options.volumeSlider): yatay (varsayılan) ya da dikey ── */
+.hp-vol-slider {
+    position: relative;
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    outline: none;
+    transition: opacity 150ms ease;
+}
+.hp-vol-track {
+    position: relative;
+    border-radius: 9999px;
+    overflow: hidden;
+}
+.hp-vol-fill {
+    position: absolute;
+    inset: 0;
+    will-change: transform;
+}
+.hp-vol-thumb {
+    position: absolute;
+    border-radius: 9999px;
+    pointer-events: none;
+}
+.hp-vol-slider:focus-visible {
+    outline: 2px solid var(--hp-color-accent, #fff);
+    outline-offset: 2px;
+    border-radius: 9999px;
+}
+
+/* Dikey: butonun üstünde cam panel (ayarlar menüsüyle aynı 8px boşluk). */
+.hp-volume[data-orientation='vertical'] .hp-vol-slider {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    translate: -50% 0;
+    margin-bottom: 8px;
+    width: 28px;
+    height: 80px;
+    padding: 6px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    border-radius: 9999px;
+}
+.hp-volume[data-orientation='vertical'] .hp-vol-track {
+    width: 6px;
+    height: 100%;
+}
+.hp-volume[data-orientation='vertical'] .hp-vol-fill {
+    transform-origin: bottom;
+}
+.hp-volume[data-orientation='vertical'] .hp-vol-thumb {
+    display: none;
+}
+
+/* Yatay: butonun sağında genişleyerek açılır, kontrol grubunun içinde. */
+.hp-volume[data-orientation='horizontal'] .hp-vol-slider {
+    display: flex;
+    align-items: center;
+    width: 0;
+    height: var(--hp-ctrl-btn-size);
+    margin-inline: 0;
+    transition:
+        width 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        margin 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        opacity 150ms ease;
+}
+.hp-volume[data-orientation='horizontal'][data-open] .hp-vol-slider {
+    width: var(--hp-vol-slider-w, 72px);
+    margin-inline: 2px 10px;
+}
+.hp-volume[data-orientation='horizontal'] .hp-vol-track {
+    width: 100%;
+    height: 4px;
+    transition: height 150ms ease;
+}
+.hp-volume[data-orientation='horizontal'] .hp-vol-slider:hover .hp-vol-track,
+.hp-volume[data-orientation='horizontal'] .hp-vol-slider[data-dragging] .hp-vol-track {
+    height: 5px;
+}
+.hp-volume[data-orientation='horizontal'] .hp-vol-fill {
+    transform-origin: left;
+}
+.hp-volume[data-orientation='horizontal'] .hp-vol-thumb {
+    top: 50%;
+    left: calc(var(--hp-vol, 0) * 100%);
+    width: 12px;
+    height: 12px;
+    translate: -50% -50%;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    transition: scale 150ms ease;
+}
+.hp-volume[data-orientation='horizontal'] .hp-vol-slider[data-dragging] .hp-vol-thumb {
+    scale: 1.2;
+}
+
+/* ── Ses ikonu: dalgalar seviyeyle görünür / büyür; sessizde söner, çarpı çizilir; seviye değişince "atar" ── */
+.hp-vol-icon svg path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.hp-vol-icon svg .hp-vol-spk {
+    fill: currentColor;
+    stroke: none;
+}
+.hp-vol-icon .hp-vol-w1,
+.hp-vol-icon .hp-vol-w2 {
+    transform-box: view-box;
+    transform-origin: 11px 12px;
+    transform: scale(calc(0.88 + var(--hp-vol, 1) * 0.12));
+    transition:
+        opacity 180ms ease,
+        transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hp-vol-icon .hp-vol-x {
+    stroke-dasharray: 7;
+    stroke-dashoffset: 7;
+    opacity: 0;
+    transition:
+        stroke-dashoffset 220ms ease,
+        opacity 120ms ease;
+}
+.hp-vol-icon[data-level='0'] .hp-vol-w1,
+.hp-vol-icon[data-level='0'] .hp-vol-w2,
+.hp-vol-icon[data-level='1'] .hp-vol-w2 {
+    opacity: 0;
+    transform: scale(0.6);
+}
+.hp-vol-icon[data-level='0'] .hp-vol-x {
+    stroke-dashoffset: 0;
+    opacity: 1;
+}
+.hp-vol-icon[data-bump='a'] svg {
+    animation: hp-vol-bump-a 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hp-vol-icon[data-bump='b'] svg {
+    animation: hp-vol-bump-b 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes hp-vol-bump-a {
+    40% {
+        transform: scale(1.14);
+    }
+}
+@keyframes hp-vol-bump-b {
+    40% {
+        transform: scale(1.14);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .hp-vol-icon svg,
+    .hp-vol-icon svg path,
+    .hp-vol-slider,
+    .hp-volume .hp-vol-slider {
+        animation: none !important;
+        transition: none !important;
     }
 }
 
