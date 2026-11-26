@@ -23,6 +23,8 @@
     "build:vue": "npm run build --workspace=packages/vue",
     "build:react-native": "npm run build --workspace=packages/react-native",
     "build:docs": "npm run build --workspace=apps/docs",
+    "build:wp": "node packages/wordpress/scripts/build.mjs",
+    "test:wp": "node packages/wordpress/test/wp.e2e.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test:types": "node tests/consumer-types/run.mjs",
     "test:ads": "node apps/playground/test/ads.e2e.mjs",

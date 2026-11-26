@@ -7,6 +7,9 @@ apps/*/dist/
 apps/*/.next/
 apps/*/.vite/
 examples/*/dist/
+# WordPress plugin: player copied from packages/core/dist by scripts/build.mjs
+packages/wordpress/assets/player/
+packages/wordpress/LICENSE
 
 # apps/docs is deployed separately (static export to umutyaldiz.com) and is
 # not part of this public repo or any published npm package.

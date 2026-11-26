@@ -1,0 +1,44 @@
+.hopecoreplayer-preview {
+	position: relative;
+	min-height: 80px;
+}
+.hopecoreplayer-preview-player hope-player {
+	display: block;
+	width: 100%;
+}
+.hopecoreplayer-preview-wait {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: #000;
+	aspect-ratio: 16 / 9;
+}
+.hopecoreplayer-row {
+	display: grid;
+	gap: 8px;
+	padding: 12px 0;
+	border-bottom: 1px solid #e0e0e0;
+}
+.hopecoreplayer-rows > .components-button.is-secondary {
+	margin-top: 12px;
+}
+.hopecoreplayer-upload-row {
+	display: grid;
+	gap: 4px;
+	justify-items: start;
+}
+.hopecoreplayer-poster {
+	display: grid;
+	gap: 8px;
+	justify-items: start;
+}
+.hopecoreplayer-poster img {
+	max-width: 100%;
+	border-radius: 4px;
+}
+.hopecoreplayer-code textarea {
+	font-family: ui-monospace, Menlo, Consolas, monospace;
+	font-size: 12px;
+}

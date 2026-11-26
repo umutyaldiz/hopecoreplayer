@@ -1,0 +1,49 @@
+# Local WordPress for the plugin tests: http://localhost:8890 (admin / admin).
+#   docker compose -f packages/wordpress/test/docker-compose.yml up -d
+#   node packages/wordpress/test/setup.mjs      → installs WordPress, activates the plugin
+#   node packages/wordpress/test/wp.e2e.mjs     → e2e tests
+# PHP version: WP_IMAGE=wordpress:php7.4-apache docker compose … up -d
+services:
+  db:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wp
+      MARIADB_PASSWORD: wp
+    tmpfs:
+      - /var/lib/mysql
+  wordpress:
+    image: ${WP_IMAGE:-wordpress:php8.3-apache}
+    depends_on: [db]
+    ports:
+      - "8890:80"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wp
+      WORDPRESS_DB_PASSWORD: wp
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DEBUG: "1"
+      WORDPRESS_CONFIG_EXTRA: |
+        define( 'WP_DEBUG_LOG', true );
+        define( 'WP_DEBUG_DISPLAY', false );
+    volumes:
+      - wp:/var/www/html
+      - ..:/var/www/html/wp-content/plugins/hopecoreplayer:ro
+      - ../../../apps/playground/public:/var/www/html/media:ro
+  cli:
+    image: ${WP_CLI_IMAGE:-wordpress:cli-php8.3}
+    depends_on: [wordpress]
+    user: "33:33"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wp
+      WORDPRESS_DB_PASSWORD: wp
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wp:/var/www/html
+      - ..:/var/www/html/wp-content/plugins/hopecoreplayer:ro
+    entrypoint: ["wp"]
+    profiles: [cli]
+volumes:
+  wp:

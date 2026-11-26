@@ -1,0 +1,20 @@
+/* Reserves the player's space before the script loads (no layout shift). */
+.hopecoreplayer-wrap {
+	max-width: 100%;
+}
+.hopecoreplayer-wrap hope-player {
+	display: block;
+	width: 100%;
+}
+.hopecoreplayer-wrap hope-player:not(:defined) {
+	aspect-ratio: var(--hp-aspect-ratio, 16 / 9);
+	background: #000;
+	border-radius: 8px;
+}
+.hopecoreplayer-wrap hope-player[data-hp-audio]:not(:defined) {
+	aspect-ratio: auto;
+	min-height: 120px;
+}
+.hopecoreplayer-core-video {
+	margin-inline: 0;
+}
