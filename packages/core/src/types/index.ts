@@ -1784,6 +1784,8 @@ export interface HopePlayerOptions {
     pipButton?: boolean;
     /** Ses çubuğu: `'horizontal'` (varsayılan, butonun yanında açılır) ya da `'vertical'` (butonun üstünde). Dokunmatikte buton yalnızca sessize alır. */
     volumeSlider?: 'horizontal' | 'vertical';
+    /** Altyazı varken kontrol çubuğundaki CC (aç / kapat) butonu, kısayol `C`. Varsayılan true; `false` gizler. */
+    captionsButton?: boolean;
     /** Ses seviyesi göstergesi: buton içi alttan seviye kadar dolar, tooltip'te "Sessize al · 70%". Varsayılan true; `false` kapatır. */
     volumePercent?: boolean;
     /**
@@ -1845,10 +1847,10 @@ export interface HopePlayerOptions {
     fullscreenButton?: boolean;
     /**
      * Kontrol çubuğundaki butonların sırası ve grubu. Anahtarlar: sol `play`, `skipBack`, `skipForward`, `volume`, `time`;
-     * sağ `settings`, `pip`, `fullscreen`; eklentiler `loop`, `liveClock`, `transcript`, `share`, `clip`, `reactions`,
+     * sağ `captions`, `settings`, `pip`, `fullscreen`; eklentiler `loop`, `liveClock`, `transcript`, `share`, `clip`, `reactions`,
      * `notes`, `signLanguage`, `snapshot`, `multiview`, `cast` ve kendi eklentilerinizin id'si. Listede olmayanlar
      * `'...'` yerine (yoksa grubun sonuna) gelir; bir anahtar öbür gruba da taşınabilir. Varsayılan:
-     * `{ left: ['play', 'skipBack', 'skipForward', 'volume', 'time'], right: ['...', 'settings', 'pip', 'fullscreen'] }`.
+     * `{ left: ['play', 'skipBack', 'skipForward', 'volume', 'time'], right: ['captions', '...', 'settings', 'pip', 'fullscreen'] }`.
      */
     controlsOrder?: { left?: string[]; right?: string[] };
     /**
@@ -1895,6 +1897,12 @@ export interface HopePlayerOptions {
     skipButtons?: boolean | SkipButtonsOptions;
     /** ←/→ ve J/L klavye kısayollarıyla kaç saniye sarılır. Varsayılan 5. */
     keyboardSeekStep?: number;
+    /**
+     * Klavye kısayolları player'a tıklamadan / odaklanmadan da sayfanın her yerinde çalışır (yazı alanları ve odaktaki
+     * buton / bağlantı hariç). Birden fazla player'da tuşu en son etkileşilen, yoksa ekranda en çok görünen alır.
+     * Varsayılan false (kısayollar yalnızca player odaktayken).
+     */
+    globalShortcuts?: boolean;
     /** `,` / `.` ile kare kare ilerlemede kare hızı (fps). Verilmezse oynarken ölçülür, ölçülemezse 30. */
     frameRate?: number;
     /** HLS oynatma ayarları — motor seçimi, hls.js config'i (buffer/ABR/düşük gecikme), kimlik bilgisi. */

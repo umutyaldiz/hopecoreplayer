@@ -37,6 +37,8 @@ const state = (page) =>
             collapsed: !!g?.hasAttribute('data-collapsed'),
             visible: g ? [...g.children].filter(shown).length : 0,
             settings: !!g && shown(g.querySelector('.hp-settings')),
+            // Altyazı varken CC de daralmadan görünür.
+            cc: !!g && !!g.querySelector('.hp-cc') && shown(g.querySelector('.hp-cc')),
             more: more ? { shown: shown(more), open: more.hasAttribute('data-open'), text: more.textContent, label: more.getAttribute('aria-label'), expanded: more.getAttribute('aria-expanded') } : null,
             fits: g ? g.getBoundingClientRect().left >= r.querySelector('.video-area').getBoundingClientRect().left : true,
         };
@@ -48,7 +50,7 @@ async function testCrowdedMobile(browser) {
     const page = await open(browser, 390, { clips: true, reactions: true, share: true, transcript: true, course: { id: 'overflow-test' } });
     try {
         let s = await state(page);
-        ok(s.inTop && s.collapsed && s.visible === 2 && s.settings, `daraltılmış: yalnızca ayarlar ve ok (${s.visible} görünür)`);
+        ok(s.inTop && s.collapsed && s.visible === 2 + (s.cc ? 1 : 0) && s.settings, `daraltılmış: yalnızca ayarlar${s.cc ? ', CC' : ''} ve ok (${s.visible} görünür)`);
         ok(s.more?.shown && s.more.text === '' && s.more.label === 'Diğer kontroller' && s.more.expanded === 'false', `"‹" butonu ${JSON.stringify(s.more)}`);
         await clickMore(page);
         await page.waitForTimeout(200);

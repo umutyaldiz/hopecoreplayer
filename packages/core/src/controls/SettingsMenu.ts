@@ -1,4 +1,5 @@
 import { createIcon } from '../icons/Icon';
+import { replayAnim } from '../utils/anim';
 import type { HopeLocaleStrings } from '../i18n/types';
 
 export interface SettingsQualityOption {
@@ -235,6 +236,8 @@ export class SettingsMenu {
     openSubmenu(def: SettingsSubmenuDef, parents: SettingsSubmenuDef[] = []): void {
         if (!this.open) {
             this.open = true;
+            this.el.setAttribute('data-open', '');
+            this.lastPanelKey = null;
             this.panel.classList.remove('hp:hidden');
             this.onOpenChange?.(true);
         }
@@ -265,8 +268,23 @@ export class SettingsMenu {
      * o an indirdiği kaliteyi gösterir; MP4, hls.js ve Safari'nin kendi HLS oynatıcısında aynı çalışır. Dikey videoda
      * kısa kenar sayılır (1080×1920 → HD). Ses modu / görüntüsüz kaynakta rozet yok.
      */
+    /** Son çizilen panel — değişince içerik kayarak gelir (ileri / geri); aynı panel tazelenirse kaymaz. */
+    private lastPanelKey: string | null = null;
+    private navBack = false;
+
+    /** @internal Panel çizilmeden önce: kayma yönü (`data-dir`) — yeni satırlar bu yönde kayarak gelir. */
+    beginRender(key: string): void {
+        const dir = this.lastPanelKey === null || key === this.lastPanelKey ? '' : this.navBack ? 'back' : 'fwd';
+        this.navBack = false;
+        this.lastPanelKey = key;
+        this.panel.dataset.dir = dir;
+    }
+
     private readonly updateBadge = (): void => {
         const text = this.badgeEnabled ? qualityBadgeText(this.video.videoWidth, this.video.videoHeight) : null;
+        // Kalite değişince (ör. ABR yükseltti) rozet kısa bir "pop" yapar.
+        const prev = this.badge.textContent;
+        if (text && prev && prev !== text) replayAnim(this.badge);
         this.badge.textContent = text ?? '';
         this.badge.hidden = !text;
         if (text) this.badge.setAttribute('data-quality', text);
@@ -348,6 +366,8 @@ export class SettingsMenu {
 
     private openMenu(): void {
         this.open = true;
+        this.el.setAttribute('data-open', '');
+        this.lastPanelKey = null;
         this.currentPanel = 'main';
         this.panel.classList.remove('hp:hidden');
         this.renderMain();
@@ -417,6 +437,7 @@ export class SettingsMenu {
     /** @internal */
     close(): void {
         this.open = false;
+        this.el.removeAttribute('data-open');
         this.quickOwner = null;
         this.panel.classList.add('hp:hidden');
         this.onOpenChange?.(false);
@@ -455,7 +476,10 @@ export class SettingsMenu {
         const span = document.createElement('span');
         span.textContent = title;
         btn.appendChild(span);
-        btn.addEventListener('click', onBack);
+        btn.addEventListener('click', () => {
+            this.navBack = true;
+            onBack();
+        });
         return btn;
     }
 
@@ -473,6 +497,7 @@ export class SettingsMenu {
 
     /** @internal */
     renderMain(): void {
+        this.beginRender('main');
         this.currentPanel = 'main';
         this.panel.innerHTML = '';
         // `playbackRates: []` → hız satırı yok.
@@ -529,6 +554,7 @@ export class SettingsMenu {
     private submenuStack: SettingsSubmenuDef[] = [];
 
     private renderSubmenu(def: SettingsSubmenuDef, parents: SettingsSubmenuDef[] = []): void {
+        this.beginRender(`custom:${def.key}:${parents.length}`);
         this.submenuStack = parents;
         this.panel.innerHTML = '';
         this.panel.appendChild(
@@ -560,6 +586,7 @@ export class SettingsMenu {
     }
 
     private renderQuality(): void {
+        this.beginRender('quality');
         this.panel.innerHTML = '';
         this.panel.appendChild(this.backRow(this.labels.quality, () => this.renderMain()));
         for (const q of this.qualities) {
@@ -575,6 +602,7 @@ export class SettingsMenu {
 
     /** @internal */
     renderCaptions(): void {
+        this.beginRender('captions');
         this.panel.innerHTML = '';
         this.panel.appendChild(this.backRow(this.labels.captions, () => this.renderMain()));
         for (const c of this.captions) {

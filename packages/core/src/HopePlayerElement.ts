@@ -30,6 +30,7 @@ import type { DebugPanel } from './plugins/debug';
 import { ErrorLog } from './debug/ErrorLog';
 import type { SettingsCaptionAppearance, SettingsColorOption } from './controls/SettingsMenu';
 import { createIcon } from './icons/Icon';
+import { haptic, replayAnim } from './utils/anim';
 import { injectIconFont } from './icons/injectIconFont';
 import type { AdsController, AdsPlayerContext } from './plugins/ads';
 import type { GestureControls } from './plugins/gesture';
@@ -140,6 +141,13 @@ export class HopePlayerElement extends HTMLElement {
     private readonly adLayerEl: HTMLDivElement;
     private readonly chromeEl: HTMLDivElement;
     private readonly centerPlayButton: HTMLButtonElement;
+    /** Oynatınca ortada beliren ikon (`.hp-flash`). */
+    private readonly flashEl: HTMLDivElement;
+    private lastUserInputAt = -Infinity;
+    /** Son 1 sn içinde izleyici bir şeye bastı mı (bildirim animasyonları otomatik oynatmada çıkmasın). */
+    private recentUserInput(): boolean {
+        return performance.now() - this.lastUserInputAt < 1000;
+    }
     private readonly captionRenderer: CaptionRenderer;
     /** options.miniProgress açıkken kurulur. */
     private miniProgress: MiniProgress | null = null;
@@ -396,6 +404,22 @@ export class HopePlayerElement extends HTMLElement {
             single();
         });
         this.videoArea.appendChild(this.centerPlayButton);
+        // İzleyici oynatınca ortada büyüyüp sönen oynat ikonu (duraklatınca ortadaki buton zaten "pop" ile gelir).
+        this.flashEl = document.createElement('div');
+        this.flashEl.className = 'hp-flash';
+        this.flashEl.setAttribute('part', 'play-flash');
+        this.flashEl.setAttribute('aria-hidden', 'true');
+        const flashChip = document.createElement('span');
+        flashChip.className = 'hp-chip';
+        flashChip.appendChild(createIcon('play'));
+        this.flashEl.appendChild(flashChip);
+        this.videoArea.appendChild(this.flashEl);
+        // Bildirim yalnızca izleyicinin hareketiyle (otomatik oynatmada değil).
+        const markInput = (): void => {
+            this.lastUserInputAt = performance.now();
+        };
+        this.addEventListener('pointerdown', markInput, true);
+        this.addEventListener('keydown', markInput, true);
         // Kompakt düzen ControlBar'ın kendi ResizeObserver'ında değişiyor — bir kare sonra ölç.
         this.centerPlayObserver = new ResizeObserver(() => requestAnimationFrame(() => this.layoutCenterPlay()));
         this.centerPlayObserver.observe(this.videoArea);
@@ -491,6 +515,8 @@ export class HopePlayerElement extends HTMLElement {
         this.controlBar.onSkip = (delta) => this.seekFeedback.show(delta);
         this.keyboard.onSeek = (delta) => this.seekFeedback.show(delta);
         this.keyboard.interceptTogglePlay = () => this.cancelPrerollWait();
+        this.keyboard.onToggleCaptions = () => this.toggleCaptions();
+        this.controlBar.onCaptionsToggle = () => void this.toggleCaptions();
         this.controlBar.seekBar.onKeyboardSeek = (delta) => this.seekFeedback.show(delta);
 
         // 'boot': gerçek `.options` (ör. countdownScreen) gelene kadar chrome
@@ -1134,6 +1160,7 @@ export class HopePlayerElement extends HTMLElement {
         this.controlBar.setButtonsVisible({ pip: options.pipButton !== false, fullscreen: options.fullscreenButton !== false });
         this.controlBar.volumePanel.setOrientation(options.volumeSlider === 'vertical' ? 'vertical' : 'horizontal');
         this.controlBar.volumePanel.setPercentVisible(options.volumePercent !== false);
+        this.controlBar.setCaptionsButtonEnabled(options.captionsButton !== false);
         this.docPipOptions = options.documentPip && 'documentPictureInPicture' in window ? (options.documentPip === true ? {} : options.documentPip) : null;
         this.controlBar.setDocPip(this.docPipOptions !== null, this.docPip?.active ?? false);
         if (options.miniProgress && !this.miniProgress) {
@@ -1152,6 +1179,7 @@ export class HopePlayerElement extends HTMLElement {
         if (!this.contextMenuConfig) this.contextMenu.close();
         const seekStep = options.keyboardSeekStep && options.keyboardSeekStep > 0 ? options.keyboardSeekStep : DEFAULT_KEYBOARD_SEEK_STEP;
         this.keyboard.seekStep = seekStep;
+        this.keyboard.setGlobal(options.globalShortcuts === true);
         this.keyboard.frameRate = options.frameRate && options.frameRate > 0 ? options.frameRate : null;
         this.controlBar.seekBar.keyboardStep = seekStep;
         const skip = options.skipButtons === true ? {} : options.skipButtons || null;
@@ -1549,6 +1577,8 @@ export class HopePlayerElement extends HTMLElement {
                         if (this.controlBar.seekBar.el.style.pointerEvents === 'none') return; // DAI reklam arası
                         seekBy(this.videoEl, delta);
                         this.seekFeedback.show(delta);
+                        // Çift dokunuşla sarma: kısa titreşim (Android).
+                        haptic();
                     },
                     togglePlay: () => (this.videoEl.paused ? void this.videoEl.play().catch(() => {}) : this.videoEl.pause()),
                     toggleFullscreen: () => (this.isFullscreenActive() ? this.exitFullscreenCompat() : this.requestFullscreenCompat()),
@@ -1925,6 +1955,19 @@ export class HopePlayerElement extends HTMLElement {
         this.transcript?.setOpen(force ?? !this.transcript.isOpen);
     }
 
+    /** CC butonu / `C`: açıksa kapatır, kapalıysa son açılanı (yoksa ilkini) açar. Altyazı yoksa false. */
+    private lastCaptionLabel: string | null = null;
+    private toggleCaptions(): boolean {
+        if (!this.selectCaption || !this.subtitleTracks.length) return false;
+        if (this.activeCaptionLabel) {
+            this.selectCaption(null);
+            return true;
+        }
+        const last = this.lastCaptionLabel;
+        this.selectCaption(last && this.subtitleTracks.some((t) => t.label === last) ? last : this.subtitleTracks[0]!.label);
+        return true;
+    }
+
     /** Altyazı menüsünü `options.subtitles` + yayın izlerinden kurar; `activeLabel` varsa onu seçer. */
     private rebuildCaptions(activeLabel: string | null): void {
         this.subtitleTracks = [...this.optionTracks, ...this.streamTracks];
@@ -1933,6 +1976,7 @@ export class HopePlayerElement extends HTMLElement {
             this.selectCaption = null;
             this.activeCaptionLabel = null;
             this.controlBar.setCaptions([], this.i18n.captionsOff);
+            this.controlBar.setCaptionsState(false, false);
             this.captionRenderer.setActiveTrack(null);
             this.captionTrackActive = false;
             this.controlBar.settingsMenu.setCaptionAppearance(null);
@@ -1951,6 +1995,8 @@ export class HopePlayerElement extends HTMLElement {
             this.controlBar.settingsMenu.setCaptionAppearance(track !== null ? this.buildCaptionAppearance() : null);
             this.transcript?.onTracksChanged();
             this.emitSubtitle(track ? label : null, track?.language);
+            if (track) this.lastCaptionLabel = label;
+            this.controlBar.setCaptionsState(true, track !== null);
         };
         this.selectCaption = selectCaption;
         const active = activeLabel && this.subtitleTracks.some((t) => t.label === activeLabel) ? activeLabel : null;
@@ -2726,6 +2772,7 @@ export class HopePlayerElement extends HTMLElement {
             this.centerPlayButton.style.opacity = '0';
             this.centerPlayButton.style.pointerEvents = 'none';
             this.scheduleAutoHide();
+            if (this.recentUserInput()) replayAnim(this.flashEl);
         }
         this.dispatchEvent(new CustomEvent('hp:play'));
     };
@@ -2739,6 +2786,7 @@ export class HopePlayerElement extends HTMLElement {
         if (!this.isChromeBlocked) {
             this.centerPlayButton.style.opacity = '1';
             this.centerPlayButton.style.pointerEvents = 'auto';
+            if (this.recentUserInput()) replayAnim(this.centerPlayButton);
             this.showChrome();
         }
         this.dispatchEvent(new CustomEvent('hp:pause'));

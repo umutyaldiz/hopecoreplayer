@@ -1,6 +1,7 @@
 import type { HopeLocaleStrings } from '../i18n/types';
 import { formatTime } from '../utils/format-time';
 import { vodSeekTarget } from '../utils/seek-by';
+import { haptic } from '../utils/anim';
 
 /**
  * Div tabanlı scrubber (role="slider"). Çizim transform ile (layout tetiklemez), oynarken rAF döngüsü.
@@ -378,6 +379,8 @@ export class SeekBar {
         const resume = this.resumeAfterScrub;
         this.resumeAfterScrub = false;
         this.dragging = false;
+        // Parmakla bırakınca kısa titreşim (Android) — iptal edilen dokunuşta değil.
+        if (e.type === 'pointerup' && e.pointerType === 'touch') haptic();
         this.el.removeAttribute('data-dragging');
         if (this.pendingSeek !== null && !this.video.seeking) this.onSeeked();
         // Thumb bırakılan yerde kalır; video oraya oturunca (render) kendi konumuna döner — geri / ileri kayma yok.

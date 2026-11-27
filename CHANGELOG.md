@@ -14,11 +14,26 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 
 ## [Unreleased]
 
+## [1.15.0] — 2026-11-27
+
 ### Added
 
 - **`volumeSlider: 'horizontal' | 'vertical'`** — the volume slider can open next to the volume button (horizontal, the new default: it slides open on hover, with a thumb) or above it as before (vertical). Arrow keys, Home / End and the mouse wheel work in both.
 - **`volumePercent`** (on by default, `false` turns it off) — the volume button fills from the bottom up to the volume level, with a thin wave on the surface that flows briefly when the level changes and while hovered (GPU-only `transform`, paused otherwise, off with `prefers-reduced-motion`). The tooltips of the button and the volume slider show the percentage ("Mute · 70%", "Volume · 70%"), updated live while the level changes. Tooltips can now carry a value next to their label (`data-tooltip-value`).
 - **Animated volume icon** — the speaker shows one or two waves depending on the level, the waves grow slightly with the volume, a cross draws in when muted, and the icon gives a small bump when the level changes. Respects `prefers-reduced-motion`.
+
+- **Captions (CC) button and `C` shortcut** (`captionsButton`, on by default) — shown in the control bar when captions exist; turns captions on (the last chosen language, else the first) / off, with an accent line under it while on. Key `captions` in `controlsOrder`; listed in the in-player shortcut list; stays visible when the crowded mobile top bar collapses.
+- **Micro-animations** (transform / opacity only, short, off with `prefers-reduced-motion`):
+  - play ↔ pause icon morphs between the triangle and the two bars;
+  - a play icon grows and fades in the center when the viewer starts playback (not on autoplay); the center play button pops in when the viewer pauses;
+  - settings: the gear turns while the menu is open, the panel scales in from the button, submenu rows slide in forward / back; thin themed scrollbar in menu panels;
+  - the controls slide a few pixels while hiding / showing;
+  - new fullscreen icon: four corner brackets that face out to enter and turn in (each corner rotates around its own center) in fullscreen; they spread slightly on hover and the icon pops on toggle;
+  - skip buttons turn in their direction and the number bumps;
+  - the quality badge pops when the playing quality changes; tooltips glide up into place;
+  - the LIVE dot pulses at the live edge (paused while the controls are hidden).
+- **`globalShortcuts`** (off by default) — keyboard shortcuts work anywhere on the page without clicking or focusing the player first. Text fields keep their keys, and Space / Enter stay with a focused button or link; with several players the key goes to the last one interacted with, else the most visible one.
+- **Haptics on Android** — a very short vibration on double-tap seek and when a touch drag on the seek bar ends (iOS does not allow it on the web).
 
 ### Changed
 

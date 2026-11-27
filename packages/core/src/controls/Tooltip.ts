@@ -191,6 +191,8 @@ export class TooltipController {
         // Ölçülebilmesi için önce (görünmez ama layout'ta) render ediliyor.
         this.el.style.visibility = 'hidden';
         this.el.style.opacity = '0';
+        // 4px aşağıdan süzülerek gelir (CSS .hp-tooltip translate geçişi).
+        this.el.style.translate = '0 4px';
         this.el.style.left = '0px';
         this.el.style.top = '0px';
 
@@ -200,6 +202,7 @@ export class TooltipController {
             if (this.isOccluded?.(this.el.getBoundingClientRect())) return;
             this.el.style.visibility = 'visible';
             this.el.style.opacity = '1';
+            this.el.style.translate = '0 0';
         });
     }
 

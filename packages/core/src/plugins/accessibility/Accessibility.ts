@@ -529,6 +529,7 @@ export class Accessibility {
             [['←', '→', 'J', 'L'], t.a11yKeySeek(this.ctx.seekStep())],
             [['↑', '↓'], t.a11yKeyVolume],
             [['M'], t.a11yKeyMute],
+            [['C'], t.a11yKeyCaptions],
             [['F'], t.a11yKeyFullscreen],
             [[',', '.'], t.a11yKeyFrame],
         ];

@@ -596,9 +596,181 @@ async function testLoadingNoFlicker(browser) {
     await context.close();
 }
 
+async function testMicroAnimations(browser) {
+    console.log('\n[12] Mikro animasyonlar: oynat ↔ duraklat, orta bildirim, ayarlar, kontrol kayması, sarma, CC, ipucu');
+    const subs = [
+        { src: '/sample.vtt', label: 'Türkçe', srclang: 'tr' },
+        { src: '/sample.en.vtt', label: 'English', srclang: 'en' },
+    ];
+    const { context, page } = await open(browser, { src: '/sample-30s.mp4', skipButtons: true, subtitles: subs, autoHideDelayMs: 400 });
+    const q = (sel) => `document.getElementById('player').shadowRoot.querySelector('${sel}')`;
+    const ev = (expr) => page.evaluate(expr);
+
+    // Oynat ↔ duraklat: iki parça, durumla clip-path değişir.
+    const clip = () => ev(`[...${q('[part="play-pause-button"] .hp-pp')}.children].map((s) => getComputedStyle(s).clipPath).join(' | ')`);
+    const pausedClip = await clip();
+    await el(page, (p) => p.play());
+    await page.waitForTimeout(350);
+    const playingClip = await clip();
+    ok(/polygon/.test(pausedClip) && pausedClip !== playingClip, 'oynat / duraklat ikonu iki parçalı, durumla şekil değişiyor');
+    // Programla (izleyici hareketi olmadan) oynatma: orta bildirim yok.
+    ok(!(await ev(`${q('[part="play-flash"]')}.dataset.anim`)), 'izleyici basmadan oynatınca orta bildirim çıkmıyor');
+    await el(page, (p) => p.pause());
+    await page.waitForTimeout(200);
+
+    // İzleyici oynat butonuna basınca orta bildirim; duraklatınca orta buton "pop".
+    const play = await ev(`(() => { const r = ${q('[part="play-pause-button"]')}.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await page.mouse.click(play.x, play.y);
+    await page.waitForTimeout(100);
+    const flash = await ev(`({ anim: ${q('[part="play-flash"]')}.dataset.anim, name: getComputedStyle(${q('[part="play-flash"]')}).animationName })`);
+    ok(!!flash.anim && /hp-flash/.test(flash.name), `izleyici oynatınca orta bildirim (${flash.name})`);
+    await page.mouse.click(play.x, play.y);
+    await page.waitForTimeout(100);
+    ok(!!(await ev(`${q('[part="center-play-button"]')}.dataset.anim`)), 'izleyici duraklatınca orta buton "pop" ile geldi');
+
+    // Ayarlar: açıkken dişli döner; alt menüye geçişte ileri, geri dönüşte geri kayma.
+    await page.mouse.move(450, 300);
+    await ev(`${q('[aria-label="Ayarlar"]')}.click()`);
+    await page.waitForTimeout(400);
+    const gear = await ev(`({ open: ${q('.hp-settings')}.hasAttribute('data-open'), rotate: getComputedStyle(${q('.hp-settings .hp-icon-settings')}).rotate, dir: ${q('.hp-settings .hp-chip-panel')}.dataset.dir })`);
+    ok(gear.open && gear.rotate === '60deg' && !gear.dir, `açılınca dişli döndü, ilk panel kaymadan (${JSON.stringify(gear)})`);
+    await ev(`[...document.getElementById('player').shadowRoot.querySelectorAll('.hp-settings button')].find((b) => /Altyazı/.test(b.textContent)).click()`);
+    await page.waitForTimeout(50);
+    const fwd = await ev(`${q('.hp-settings .hp-chip-panel')}.dataset.dir`);
+    await ev(`${q('.hp-settings .hp-chip-panel')}.querySelector('button').click()`);
+    await page.waitForTimeout(50);
+    const back = await ev(`${q('.hp-settings .hp-chip-panel')}.dataset.dir`);
+    ok(fwd === 'fwd' && back === 'back', `alt menüye ileri, geri dönüşte geri kayma (${fwd} / ${back})`);
+    await ev(`${q('[aria-label="Ayarlar"]')}.click()`);
+    await page.waitForTimeout(300);
+    ok(!(await ev(`${q('.hp-settings')}.hasAttribute('data-open')`)), 'kapanınca dişli geri döndü');
+
+    // Sarma: ok döner, sayı atar.
+    await ev(`${q('[part="skip-forward-button"]')}.click()`);
+    await page.waitForTimeout(60);
+    const skip = await ev(`getComputedStyle(${q('[part="skip-forward-button"] > .hp-icon')}).animationName`);
+    ok(/hp-skip/.test(skip), `ileri sarma butonu animasyonu (${skip})`);
+
+    // CC: altyazı varken görünür; tıklayınca açılır, C ile kapanır.
+    const cc = () => ev(`(() => { const b = ${q('[part="captions-button"]')}; return { shown: getComputedStyle(b).display !== 'none', active: b.hasAttribute('data-active'), pressed: b.getAttribute('aria-pressed'), line: getComputedStyle(b, '::after').scale, sub: document.getElementById('player').getSubtitles?.().find((s) => s.active)?.label ?? null }; })()`);
+    const c0 = await cc();
+    ok(c0.shown && !c0.active, `altyazı varken CC görünür, kapalı (${JSON.stringify(c0)})`);
+    await ev(`${q('[part="captions-button"]')}.click()`);
+    await page.waitForTimeout(250);
+    const c1 = await cc();
+    ok(c1.active && c1.pressed === 'true' && c1.sub === 'Türkçe' && c1.line === '1', `CC'ye basınca altyazı açıldı, vurgu çizgisi göründü (${JSON.stringify(c1)})`);
+    await page.focus('#player');
+    await page.keyboard.press('c');
+    await page.waitForTimeout(250);
+    const c2 = await cc();
+    ok(!c2.active && c2.sub === null, `C tuşu altyazıyı kapattı (${JSON.stringify(c2)})`);
+    await page.keyboard.press('c');
+    await page.waitForTimeout(150);
+    ok((await cc()).sub === 'Türkçe', 'C tekrar → son açılan altyazı geri geldi');
+
+    // İpucu: 4px aşağıdan süzülür (son durumda yerinde).
+    const ccBtn = await ev(`(() => { const r = ${q('[part="captions-button"]')}.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await page.mouse.move(ccBtn.x, ccBtn.y);
+    await page.waitForTimeout(800);
+    const tip = await ev(`({ t: ${q('[part="tooltip"]')}.style.translate, text: ${q('[part="tooltip"]')}.textContent })`);
+    ok(/^0(px)?( 0(px)?)?$/.test(tip.t) && /Altyazıyı kapat/.test(tip.text), `ipucu yerine süzüldü (${JSON.stringify(tip)})`);
+
+    // Canlı nabız: canlı uçtayken akar (rozeti görünür yapıp CSS'i ölç).
+    const pulse = await ev(`(() => { const b = ${q('.hp-live-badge')}; b.style.display = ''; b.removeAttribute('data-behind'); const d = b.querySelector('.hp-live-dot'); const r = { name: getComputedStyle(d, '::after').animationName }; b.setAttribute('data-behind', ''); r.behind = getComputedStyle(d, '::after').content; b.removeAttribute('data-behind'); b.style.display = 'none'; return r; })()`);
+    ok(pulse.name === 'hp-live-pulse' && pulse.behind === 'none', `canlı uçta nabız, gerideyken yok (${JSON.stringify(pulse)})`);
+
+    // Tam ekran geçişinde ikon "pop" (tam ekran izni yalnızca Chromium başsız modda güvenilir).
+    if (only(['chromium'], 'tam ekran izni yalnızca Chromium başsız modda güvenilir')) {
+        const fs = await ev(`(() => { const r = ${q('[aria-label="Tam ekran"]')}.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+        await page.mouse.click(fs.x, fs.y);
+        await page.waitForTimeout(400);
+        const anim = await ev(`${q('[data-ctrl="fullscreen"]')}.dataset.anim`);
+        ok(!!anim, `tam ekrana geçince ikon "pop" (${anim})`);
+        await page.evaluate(() => document.exitFullscreen?.().catch(() => {}));
+        await page.waitForTimeout(400);
+    }
+
+    // Kontroller gizlenince kontrol çubuğu 8px aşağı kayar.
+    await el(page, (p) => p.play());
+    await page.mouse.move(5, 590);
+    await page.waitForTimeout(1500);
+    const slide = await ev(`({ hidden: ${q('.hp-chrome')}.style.opacity, t: getComputedStyle(${q('[part="control-bar"]')}).translate })`);
+    ok(slide.hidden === '0' && slide.t === '0px 8px', `gizlenince kontrol çubuğu kaydı (${JSON.stringify(slide)})`);
+    await el(page, (p) => p.pause());
+
+    // Altyazısız kaynakta CC gizli.
+    await el(page, (p) => (p.options = { src: '/sample-30s.mp4' }));
+    await page.waitForTimeout(400);
+    ok(!(await cc()).shown, 'altyazı yokken CC gizli');
+    ok(page.__errors.length === 0, `sayfa hatası yok (${page.__errors.join(' | ')})`);
+    await context.close();
+
+    // Hareketi azalt: animasyonlar kapalı.
+    const reduced = await browser.newContext({ viewport: { width: 900, height: 600 }, reducedMotion: 'reduce' });
+    const rp = await reduced.newPage();
+    await rp.goto(`${BASE}/`);
+    await rp.waitForFunction(() => document.getElementById('player')?.shadowRoot?.querySelector('[part="play-flash"]'));
+    const rm = await rp.evaluate(() => {
+        const s = document.getElementById('player').shadowRoot;
+        const f = s.querySelector('[part="play-flash"]');
+        f.dataset.anim = 'a';
+        return getComputedStyle(f).animationName;
+    });
+    ok(rm === 'none', `"hareketi azalt" tercihinde animasyon yok (${rm})`);
+    await reduced.close();
+}
+
+async function testGlobalShortcuts(browser) {
+    console.log('\n[13] globalShortcuts: player\'a dokunmadan sayfadan kısayol; yazı alanı ve sayfa butonu korunur');
+    const { context, page } = await open(browser, { src: '/sample-30s.mp4' });
+    const paused = () => el(page, (p) => p.paused);
+    // Sayfaya odaklanma: player değil, gövde.
+    await page.evaluate(() => {
+        const input = document.createElement('input');
+        input.id = 'hp-test-input';
+        const btn = document.createElement('button');
+        btn.id = 'hp-test-btn';
+        btn.textContent = 'Sayfa butonu';
+        window.__btnClicks = 0;
+        btn.addEventListener('click', () => window.__btnClicks++);
+        document.body.prepend(input, btn);
+        document.activeElement?.blur();
+    });
+    await page.keyboard.press('k');
+    await page.waitForTimeout(200);
+    ok(await paused(), 'varsayılanda sayfadan basılan K player\'ı etkilemiyor');
+
+    await el(page, (p) => (p.options = { ...p.options, globalShortcuts: true }));
+    await page.waitForTimeout(200);
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.keyboard.press('k');
+    await page.waitForTimeout(300);
+    ok(!(await paused()), 'globalShortcuts: player\'a dokunmadan K oynattı');
+    await page.keyboard.press('k');
+    await page.waitForTimeout(200);
+    ok(await paused(), 'K tekrar → duraklattı');
+
+    // Yazı alanında tuşlar yazıya gider.
+    await page.focus('#hp-test-input');
+    await page.keyboard.type('km');
+    const typed = await page.evaluate(() => document.getElementById('hp-test-input').value);
+    ok(typed === 'km' && (await paused()), `yazı alanında kısayol yok (yazılan "${typed}")`);
+
+    // Odaktaki sayfa butonunda Space butona basar, oynatmaz.
+    await page.focus('#hp-test-btn');
+    await page.keyboard.press(' ');
+    await page.waitForTimeout(200);
+    const clicks = await page.evaluate(() => window.__btnClicks);
+    ok(clicks === 1 && (await paused()), `odaktaki butonda Space butona gitti (${clicks} tık), player oynamadı`);
+    ok(page.__errors.length === 0, `sayfa hatası yok (${page.__errors.join(' | ')})`);
+    await context.close();
+}
+
 (async () => {
     const browser = await launchBrowser();
     try {
+        await testGlobalShortcuts(browser);
+        await testMicroAnimations(browser);
         await testLoadingNoFlicker(browser);
         await testHiddenChromeIdle(browser);
         await testScrub(browser);

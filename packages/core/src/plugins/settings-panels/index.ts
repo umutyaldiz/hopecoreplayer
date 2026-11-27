@@ -20,6 +20,7 @@ const checkIcon = (): HTMLElement => {
 
 /** Ayarlar menüsü bu parçada çizilen panele geçer. */
 export function renderPanel(menu: SettingsMenu, id: string): void {
+    menu.beginRender(id);
     if (id === 'speed') speed(menu);
     else if (id === 'captions-settings') captionSettings(menu);
     else if (id === 'captions-size') captionsSize(menu);

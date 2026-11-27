@@ -594,6 +594,14 @@ async function testTouchQuality(browser) {
             const r = document.getElementById('player').shadowRoot.querySelector('[part="seek-bar"]').getBoundingClientRect();
             return { x: r.left, y: r.top + r.height / 2, w: r.width };
         });
+        // Titreşim sayacı (Android'de gerçek titreşim; burada sayılır).
+        await page.evaluate(() => {
+            window.__vib = 0;
+            navigator.vibrate = () => {
+                window.__vib++;
+                return true;
+            };
+        });
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: bar.x + bar.w * 0.2, y: bar.y, id: 1 }] });
         for (let i = 1; i <= 5; i++) {
             await page.waitForTimeout(40);
@@ -603,6 +611,7 @@ async function testTouchQuality(browser) {
         await page.waitForTimeout(1500);
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
         ok(dragging, 'parmakla sürüklerken seek bar sürükleme durumunda (thumb büyük)');
+        ok((await page.evaluate(() => window.__vib)) === 1, 'parmakla bırakınca tek kısa titreşim');
         await page.waitForTimeout(600);
         const resumed = await page.evaluate(() => !document.getElementById('player').shadowRoot.querySelector('video').paused);
         await page.waitForTimeout(3600);

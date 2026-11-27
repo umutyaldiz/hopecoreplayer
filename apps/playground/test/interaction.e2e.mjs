@@ -229,7 +229,8 @@ async function testAutoHide(browser) {
     const chromeOpacity = (page) =>
         page.evaluate(() => {
             const controlBar = document.getElementById('player').shadowRoot.querySelector('[part="control-bar"]');
-            return getComputedStyle(controlBar.parentElement).opacity;
+            // Hedef durum (geçişin ara karesi değil): kontrol katmanı 200 ms'de solar.
+            return controlBar.parentElement.style.opacity || '1';
         });
 
     await pageFast.evaluate(() => document.getElementById('player').shadowRoot.querySelector('video').play());

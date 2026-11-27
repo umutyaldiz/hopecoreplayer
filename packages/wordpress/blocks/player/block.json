@@ -2,7 +2,7 @@
 	"$schema": "https://schemas.wp.org/trunk/block.json",
 	"apiVersion": 3,
 	"name": "hopecoreplayer/player",
-	"version": "1.14.1",
+	"version": "1.15.0",
 	"title": "HopeCorePlayer",
 	"category": "media",
 	"icon": "video-alt3",

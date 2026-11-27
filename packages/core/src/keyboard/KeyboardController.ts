@@ -10,9 +10,53 @@ type FrameVideo = HTMLVideoElement & {
     cancelVideoFrameCallback?(id: number): void;
 };
 
+/** options.globalShortcuts açık player'lar — sayfadaki bir tuşu yalnızca biri alır. */
+const globalControllers = new Set<KeyboardController>();
+/** Son etkileşilen (tıklanan / odaklanan) player. */
+let lastActive: KeyboardController | null = null;
+
+/** Yazı yazılan / kendi tuşlarını kullanan alanlarda kısayol yok. */
+function isEditable(el: EventTarget | undefined): boolean {
+    if (!(el instanceof HTMLElement)) return false;
+    if (el.isContentEditable) return true;
+    if (el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return true;
+    if (el instanceof HTMLInputElement) return !['button', 'checkbox', 'radio', 'range', 'reset', 'submit', 'image', 'color', 'file'].includes(el.type);
+    return !!el.closest('[role="textbox"], [role="combobox"], [role="slider"], [role="spinbutton"]');
+}
+
+/** Ekranda görünen alan (px²). */
+function visibleArea(el: HTMLElement): number {
+    const r = el.getBoundingClientRect();
+    const w = Math.min(r.right, innerWidth) - Math.max(r.left, 0);
+    const h = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
+    return w > 0 && h > 0 ? w * h : 0;
+}
+
+/** Sayfa geneli kısayol: tuş bir player'ın içinden gelmediyse en son etkileşilen ya da en çok görünen player işler. */
+function onDocumentKeyDown(e: KeyboardEvent): void {
+    if (e.defaultPrevented || !globalControllers.size) return;
+    const path = e.composedPath();
+    // Player'ın içinden gelen tuşu player'ın kendi dinleyicisi işledi.
+    if (path.some((n) => n instanceof HTMLElement && n.localName === 'hope-player')) return;
+    if (isEditable(path[0])) return;
+    // Odaktaki bağlantı / buton Space ve Enter'ı kendisi kullanır.
+    const focused = path[0];
+    if ((e.key === ' ' || e.key === 'Enter') && focused instanceof HTMLElement && focused.closest('a[href], button, summary, [role="button"], [role="link"], [role="checkbox"], [role="menuitem"], [role="tab"], [role="switch"]')) return;
+    const live = [...globalControllers].filter((c) => c.host.isConnected);
+    let target = lastActive && live.includes(lastActive) ? lastActive : null;
+    if (!target) {
+        let best = 0;
+        for (const c of live) {
+            const area = visibleArea(c.host);
+            if (area > best) [best, target] = [area, c];
+        }
+    }
+    target?.handleKey(e);
+}
+
 /** Host'a bağlı klavye kısayolları; SeekBar/VolumePanel odaktayken kendi ok tuşlarını işler. */
 export class KeyboardController {
-    private readonly host: HTMLElement;
+    readonly host: HTMLElement;
     private readonly video: HTMLVideoElement;
     private readonly toggleFullscreen: () => void;
     /** ←/→ ve J/L ile sarma süresi (sn) — options.keyboardSeekStep. */
@@ -21,6 +65,8 @@ export class KeyboardController {
     onSeek: ((delta: number) => void) | null = null;
     /** Space/K'den önce sorulur — true dönerse işlenmiştir (ör. preroll beklemesini iptal). */
     interceptTogglePlay: (() => boolean) | null = null;
+    /** `C`: altyazıyı aç / kapat (altyazı yoksa `false` döner, tuş serbest kalır). */
+    onToggleCaptions: (() => boolean) | null = null;
     /** `options.frameRate`; verilmezse oynarken ölçülür. */
     frameRate: number | null = null;
     /** Oynarken ölçülen kare süresi (sn). */
@@ -34,8 +80,27 @@ export class KeyboardController {
         this.video = video;
         this.toggleFullscreen = toggleFullscreen;
         this.host.addEventListener('keydown', this.onKeyDown);
+        this.host.addEventListener('pointerdown', this.markActive);
+        this.host.addEventListener('focusin', this.markActive);
         video.addEventListener('playing', this.measure);
         video.addEventListener('loadstart', this.resetFrame);
+    }
+
+    private readonly markActive = (): void => {
+        lastActive = this;
+    };
+
+    /** `options.globalShortcuts`: player'a dokunmadan da sayfadaki tuşlar (yazı alanları hariç) bu player'ı yönetir. */
+    setGlobal(on: boolean): void {
+        if (on) globalControllers.add(this);
+        else globalControllers.delete(this);
+        if (globalControllers.size) document.addEventListener('keydown', onDocumentKeyDown);
+        else document.removeEventListener('keydown', onDocumentKeyDown);
+    }
+
+    /** @internal Sayfa geneli tuş (onDocumentKeyDown). */
+    handleKey(e: KeyboardEvent): void {
+        this.onKeyDown(e);
     }
 
     /** Bir karenin süresi (sn). */
@@ -127,6 +192,10 @@ export class KeyboardController {
                 this.toggleFullscreen();
                 e.preventDefault();
                 break;
+            case 'c':
+                if (e.ctrlKey || e.metaKey || e.altKey) break;
+                if (this.onToggleCaptions?.()) e.preventDefault();
+                break;
             case ',':
             case '.':
                 if (e.ctrlKey || e.metaKey || e.altKey || this.video.readyState < 1) break;
@@ -137,7 +206,11 @@ export class KeyboardController {
     };
 
     destroy(): void {
+        this.setGlobal(false);
+        if (lastActive === this) lastActive = null;
         this.host.removeEventListener('keydown', this.onKeyDown);
+        this.host.removeEventListener('pointerdown', this.markActive);
+        this.host.removeEventListener('focusin', this.markActive);
         this.video.removeEventListener('playing', this.measure);
         this.video.removeEventListener('loadstart', this.resetFrame);
         if (this.frameCb !== null) (this.video as FrameVideo).cancelVideoFrameCallback?.(this.frameCb);

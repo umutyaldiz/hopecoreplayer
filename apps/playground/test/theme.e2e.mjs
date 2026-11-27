@@ -258,7 +258,8 @@ async function testChromeStaysWhileHovered(browser) {
     const box = await page.evaluate(() => { const r = document.getElementById('player').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 3 }; });
     await page.mouse.move(box.x, box.y);
     await page.evaluate(async () => { const v = document.getElementById('player').shadowRoot.querySelector('video'); v.muted = true; await v.play().catch(() => {}); });
-    const chromeOpacity = () => page.evaluate(() => getComputedStyle(document.getElementById('player').shadowRoot.querySelector('[part="control-bar"]').parentElement).opacity);
+    // Hedef durum (geçişin ara karesi değil): kontrol katmanı 200 ms'de solar.
+    const chromeOpacity = () => page.evaluate(() => document.getElementById('player').shadowRoot.querySelector('[part="control-bar"]').parentElement.style.opacity || '1');
     await page.waitForTimeout(1900);
     ok((await chromeOpacity()) === '0', 'fare video üzerinde hareketsiz → kontroller gizlendi');
     await page.mouse.move(box.x + 20, box.y + 10);

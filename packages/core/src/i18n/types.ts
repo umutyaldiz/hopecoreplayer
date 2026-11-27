@@ -73,6 +73,9 @@ export interface HopeLocaleStrings {
     quality: string;
     captions: string;
     captionsOff: string;
+    /** CC butonu (altyazı kapalıyken / açıkken). */
+    captionsTurnOn: string;
+    captionsTurnOff: string;
     captionSize: string;
     captionSizeSmall: string;
     captionSizeNormal: string;
@@ -270,6 +273,7 @@ export interface HopeLocaleStrings {
     a11yKeySeek: (seconds: number) => string;
     a11yKeyVolume: string;
     a11yKeyMute: string;
+    a11yKeyCaptions: string;
     a11yKeyFullscreen: string;
     a11yKeyFrame: string;
     a11yKeyZoom: string;

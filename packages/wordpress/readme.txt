@@ -4,7 +4,7 @@ Tags: video player, hls, video ads, vast, audio player
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.14.1
+Stable tag: 1.15.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -92,10 +92,16 @@ The plugin bundles the player and does not contact other services by default. Th
 
 == Changelog ==
 
+= 1.15.0 =
+* Player 1.15.0: horizontal volume slider with a level indicator, captions (CC) button and C shortcut, smoother animations across the controls, optional page-wide keyboard shortcuts (globalShortcuts in Advanced JSON).
+
 = 1.14.1 =
 * First WordPress.org release, with player 1.14.1: block, shortcode, settings page, optional core Video block replacement.
 
 == Upgrade Notice ==
+
+= 1.15.0 =
+New volume slider, captions button and smoother controls.
 
 = 1.14.1 =
 First release.

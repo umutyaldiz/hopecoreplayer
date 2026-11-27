@@ -3,7 +3,7 @@
  * Plugin Name:       HopeCorePlayer – Video & Audio Player with Ads
  * Plugin URI:        https://umutyaldiz.com/hopecoreplayer
  * Description:       Fast, accessible video and audio player block with HLS / DASH, subtitles, chapters, playlists, sticky mini player and VAST / VMAP ads.
- * Version:           1.14.1
+ * Version:           1.15.0
  * Requires at least: 6.5
  * Requires PHP:      7.4
  * Author:            Umut Yaldız
@@ -17,7 +17,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'HOPECOREPLAYER_VERSION', '1.14.1' );
+define( 'HOPECOREPLAYER_VERSION', '1.15.0' );
 define( 'HOPECOREPLAYER_FILE', __FILE__ );
 define( 'HOPECOREPLAYER_DIR', plugin_dir_path( __FILE__ ) );
 define( 'HOPECOREPLAYER_URL', plugin_dir_url( __FILE__ ) );

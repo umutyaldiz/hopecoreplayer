@@ -4,6 +4,7 @@ import { SettingsMenu, type SettingsCaptionOption, type SettingsQualityOption } 
 import { formatTime } from '../utils/format-time';
 import { seekBy } from '../utils/seek-by';
 import { createIcon, setIconName } from '../icons/Icon';
+import { replayAnim } from '../utils/anim';
 import type { HopeLocaleStrings } from '../i18n/types';
 
 /** `title` bilerek set edilmiyor — tooltip'i Tooltip.ts gösteriyor, native tooltip üstüne binmesin. */
@@ -13,6 +14,17 @@ const COMPACT_MAX_WIDTH = 480;
 const LOADING_RING_DELAY_MS = 150;
 /** Göründüyse halka en az bu kadar (ms) kalır — açılıp hemen kapanarak yanıp sönmesin. */
 const LOADING_RING_MIN_MS = 400;
+
+/** Altyazı (CC) ikonu: yuvarlatılmış kutu + "CC". */
+const CC_SVG =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="2"/>' +
+    '<path d="M10.6 10.3a2.2 2.2 0 1 0 0 3.4M16.4 10.3a2.2 2.2 0 1 0 0 3.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+
+/** Tam ekran ikonu: dört köşe parantezi (giriş hâli; çıkışta CSS ile her köşe kendi merkezinde 180° döner). */
+const FULLSCREEN_SVG =
+    '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    '<path class="hp-fs-c hp-fs-tl" d="M4 9V4h5"/><path class="hp-fs-c hp-fs-tr" d="M15 4h5v5"/>' +
+    '<path class="hp-fs-c hp-fs-br" d="M20 15v5h-5"/><path class="hp-fs-c hp-fs-bl" d="M9 20H4v-5"/></svg>';
 
 /** Sarma butonu: yuvarlak ok ikonu + ortasında süre. */
 const LOADING_START_EVENTS = ['waiting', 'seeking'] as const;
@@ -188,6 +200,9 @@ export class ControlBar {
         leftGroup.appendChild(ring);
 
         const play = iconButton(labels.play, 'play', 'K');
+        // Oynat ↔ duraklat dönüşümü: üçgen iki yarıdan, duraklat iki çubuktan — clip-path geçişiyle (CSS .hp-pp).
+        play.icon.classList.add('hp-pp');
+        play.icon.append(document.createElement('span'), document.createElement('span'));
         this.playButton = play.btn;
         this.playIcon = play.icon;
         this.playButton.setAttribute('part', 'play-pause-button');
@@ -255,6 +270,17 @@ export class ControlBar {
         row.appendChild(rightGroup);
         this.rightGroup = rightGroup;
 
+        // Altyazı (CC) aç / kapat — yalnızca altyazı varken görünür; açıkken altında vurgu çizgisi.
+        const cc = iconButton(labels.captionsTurnOn, CC_SVG, 'C');
+        this.captionsButton = cc.btn;
+        this.captionsButton.setAttribute('part', 'captions-button');
+        this.captionsButton.setAttribute('aria-pressed', 'false');
+        this.captionsButton.classList.add('hp-cc');
+        this.captionsButton.dataset.ctrl = 'captions';
+        this.captionsButton.style.display = 'none';
+        this.captionsButton.addEventListener('click', () => this.onCaptionsToggle?.());
+        rightGroup.appendChild(this.captionsButton);
+
         this.settingsMenu = new SettingsMenu(video, playbackRates, labels);
         this.settingsMenu.el.dataset.ctrl = 'settings';
         rightGroup.appendChild(this.settingsMenu.el);
@@ -281,7 +307,9 @@ export class ControlBar {
         // Eklentiler butonlarını sonradan gösterip gizliyor (ör. Cast cihaz bulunca) — sayım güncel kalsın.
         new MutationObserver(() => this.updateOverflow()).observe(rightGroup, { childList: true, subtree: true, attributeFilter: ['style', 'hidden'] });
 
-        const fullscreen = iconButton(labels.fullscreenEnter, 'fullscreen-enter', 'F');
+        // Dört köşe parantez: tam ekrana girişte dışa, tam ekrandayken içe bakar (köşeler kendi merkezinde döner).
+        const fullscreen = iconButton(labels.fullscreenEnter, FULLSCREEN_SVG, 'F');
+        fullscreen.icon.classList.add('hp-fs-icon');
         this.fullscreenButton = fullscreen.btn;
         this.fullscreenIcon = fullscreen.icon;
         this.fullscreenButton.dataset.ctrl = 'fullscreen';
@@ -289,7 +317,7 @@ export class ControlBar {
         rightGroup.appendChild(this.fullscreenButton);
         this.natural = [
             ...[this.playButton, this.skipBack.btn, this.skipForward.btn, this.volumePanel.el, this.timeLabel].map((el) => ({ el, group: 'left' as const })),
-            ...[this.settingsMenu.el, this.pipButton, this.fullscreenButton].map((el) => ({ el, group: 'right' as const })),
+            ...[this.captionsButton, this.settingsMenu.el, this.pipButton, this.fullscreenButton].map((el) => ({ el, group: 'right' as const })),
         ];
         // PiP desteklenmiyorsa baştan gizli (applyButtonVisibility).
         if (!document.pictureInPictureEnabled) this.pipButton.style.display = 'none';
@@ -348,7 +376,8 @@ export class ControlBar {
     private updateOverflow(): void {
         const g = this.rightGroup;
         const visible = Array.from(g.children as HTMLCollectionOf<HTMLElement>).filter(
-            (c) => c !== this.moreBtn && c !== this.settingsMenu.el && !c.hidden && c.style.display !== 'none'
+            // Ayarlar ve altyazı (CC) daralmaz — mobilde en çok kullanılanlar.
+            (c) => c !== this.moreBtn && c !== this.settingsMenu.el && c !== this.captionsButton && !c.hidden && c.style.display !== 'none'
         ).length;
         const show = this.compact && visible > 1;
         const open = show && this.moreOpen;
@@ -412,8 +441,37 @@ export class ControlBar {
         this.pipButton.style.display = this.showPipButton && !this.audioMode && (document.pictureInPictureEnabled || this.docPipAvailable) ? '' : 'none';
     }
 
+    /** Altyazı (CC) butonu: `options.captionsButton`. */
+    readonly captionsButton: HTMLButtonElement;
+    onCaptionsToggle: (() => void) | null = null;
+    private captionsButtonEnabled = true;
+    private captionsAvailable = false;
+    private captionsOn = false;
+
+    setCaptionsButtonEnabled(enabled: boolean): void {
+        this.captionsButtonEnabled = enabled;
+        this.renderCaptionsButton();
+    }
+
+    /** Altyazı var mı / açık mı — buton görünürlüğü, vurgu çizgisi ve etiketi. */
+    setCaptionsState(available: boolean, on: boolean): void {
+        if (on !== this.captionsOn && this.captionsAvailable) replayAnim(this.captionsButton);
+        this.captionsAvailable = available;
+        this.captionsOn = on;
+        this.renderCaptionsButton();
+    }
+
+    private renderCaptionsButton(): void {
+        const b = this.captionsButton;
+        b.style.display = this.captionsButtonEnabled && this.captionsAvailable ? '' : 'none';
+        b.toggleAttribute('data-active', this.captionsOn);
+        b.setAttribute('aria-pressed', String(this.captionsOn));
+        setButtonLabel(b, this.captionsOn ? this.labels.captionsTurnOff : this.labels.captionsTurnOn);
+    }
+
     setFullscreenState(isFullscreen: boolean): void {
-        setIconName(this.fullscreenIcon, isFullscreen ? 'fullscreen-exit' : 'fullscreen-enter');
+        if (this.fullscreenIcon.hasAttribute('data-exit') !== isFullscreen) replayAnim(this.fullscreenButton);
+        this.fullscreenIcon.toggleAttribute('data-exit', isFullscreen);
         setButtonLabel(this.fullscreenButton, isFullscreen ? this.labels.fullscreenExit : this.labels.fullscreenEnter);
     }
 
@@ -445,12 +503,14 @@ export class ControlBar {
 
     private skip(delta: number): void {
         if (!delta || !this.seekingEnabled) return;
+        replayAnim(delta < 0 ? this.skipBack.btn : this.skipForward.btn);
         seekBy(this.video, delta);
         this.onSkip?.(delta);
     }
 
     refreshLabels(): void {
         this.renderPlayState();
+        this.renderCaptionsButton();
         this.renderSkipButtons();
         setButtonLabel(this.pipButton, this.labels.pip);
         // Etiket yenilensin diye durum bir an ters çevrilir; updateOverflow doğrusunu yazar.
