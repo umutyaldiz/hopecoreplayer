@@ -692,6 +692,10 @@ button.hp-chip:active {
     animation: hp-vol-wave 1.4s linear infinite paused;
     pointer-events: none;
 }
+/* %100: dalga üst kenarın dışına çıkar, buton tam dolu görünür. */
+.hp-volume button[data-level-fill][data-full]::after {
+    translate: 0 -7px;
+}
 .hp-volume button[data-level-fill][data-silent]::after {
     opacity: 0;
 }

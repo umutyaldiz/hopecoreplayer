@@ -478,6 +478,14 @@ async function testVolumePercent(browser) {
     await page.waitForTimeout(1600);
     const idle = await wave();
     ok(running === 'running' && idle === 'paused', `dalga yalnızca değişince akıyor (değişince ${running}, sonra ${idle})`);
+    // %100: tam dolu, dalga üst kenarın dışında.
+    await set(1, false);
+    await page.waitForTimeout(300);
+    const full = await page.evaluate(() => {
+        const b = document.getElementById('player').shadowRoot.querySelector('[part="volume-button"]');
+        return { full: b.hasAttribute('data-full'), translate: getComputedStyle(b, '::after').translate };
+    });
+    ok(full.full && /-7px/.test(full.translate), `%100'de dalga yok, tam dolu (${JSON.stringify(full)})`);
     await set(0.35, true);
     await page.waitForTimeout(150);
     const m = await read();

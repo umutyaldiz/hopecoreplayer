@@ -300,6 +300,7 @@ export class VolumePanel {
             this.button.style.setProperty('--hp-vol', String(v));
             const value = `${Math.round(v * 100)}%`;
             this.button.toggleAttribute('data-silent', v === 0);
+            this.button.toggleAttribute('data-full', v >= 0.995);
             if (this.button.dataset.tooltipValue !== value) {
                 const first = this.button.dataset.tooltipValue === undefined;
                 this.button.dataset.tooltipValue = value;
