@@ -425,7 +425,7 @@ async function testTapToPlayCompact(browser) {
     const tapState = (page) =>
         page.evaluate(() => {
             const root = document.getElementById('player').shadowRoot;
-            return { paused: root.querySelector('video').paused, chrome: getComputedStyle(root.querySelector('.hp-chrome')).opacity };
+            return { paused: root.querySelector('video').paused, chrome: root.querySelector('.hp-chrome').style.opacity || '1' }; // hedef durum (200 ms solma geçişinin ara karesi değil)
         });
     const setup = async (width, extra = {}) => {
         const { context, page } = await openPlayer(browser, { width, touch: true });

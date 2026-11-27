@@ -71,6 +71,10 @@ async function testPreviewEnds(browser) {
         let s = await state(page);
         ok(s.badge && /Önizleme · 0:0[12]/.test(s.badge), `önizleme rozeti: "${s.badge}"`);
         ok(await waitWall(page), 'süre dolunca duvar çıktı');
+        // Rozet duvarla aynı görevde gizlenmeyebilir (yavaş makine) — kısa süre bekle.
+        await page
+            .waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('[part="paywall-badge"]')?.hidden !== false, null, { timeout: 2000 })
+            .catch(() => {});
         s = await state(page);
         ok(s.paused && s.t <= 3.3 && s.t >= 2.6, `video durdu, sınırda (t=${s.t.toFixed(2)})`);
         ok(s.title === 'Devamını izlemek için abone olun' && s.buttons.join('|') === 'Abone ol|Giriş yap', `başlık ve butonlar: ${s.buttons.join(', ')}`);
