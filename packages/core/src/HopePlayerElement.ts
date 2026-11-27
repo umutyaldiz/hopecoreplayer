@@ -1133,6 +1133,7 @@ export class HopePlayerElement extends HTMLElement {
         this.controlBar.setOrder(options.controlsOrder ?? null);
         this.controlBar.setButtonsVisible({ pip: options.pipButton !== false, fullscreen: options.fullscreenButton !== false });
         this.controlBar.volumePanel.setOrientation(options.volumeSlider === 'vertical' ? 'vertical' : 'horizontal');
+        this.controlBar.volumePanel.setPercentVisible(options.volumePercent !== false);
         this.docPipOptions = options.documentPip && 'documentPictureInPicture' in window ? (options.documentPip === true ? {} : options.documentPip) : null;
         this.controlBar.setDocPip(this.docPipOptions !== null, this.docPip?.active ?? false);
         if (options.miniProgress && !this.miniProgress) {

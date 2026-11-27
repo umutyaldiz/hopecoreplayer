@@ -5,6 +5,8 @@ import type { HopeLocaleStrings } from '../i18n/types';
 const WHEEL_VOLUME_STEP = 0.05;
 /** Butondan panele geçerken gerçek (0px) bir boşluk olmasa bile, fare bir an için ikisinin de dışına çıkarsa paneli hemen kapatmamak için kısa bir tolerans. */
 const HIDE_DELAY_MS = 150;
+/** Seviye değişince buton dolgusundaki dalganın hareket süresi (ms). */
+const WAVE_MS = 1200;
 /** Ok tuşlarıyla ses adımı. */
 const KEY_VOLUME_STEP = 0.1;
 
@@ -37,6 +39,9 @@ export class VolumePanel {
     private readonly iconEl: HTMLElement;
     private readonly slider: HTMLDivElement;
     private readonly sliderFill: HTMLDivElement;
+    /** options.volumePercent: buton seviye kadar dolar, tooltip yüzdeyi yazar. */
+    private percent = false;
+    private waveTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly video: HTMLVideoElement;
     private readonly labels: HopeLocaleStrings;
     private readonly adHooks: VolumePanelAdHooks;
@@ -132,6 +137,17 @@ export class VolumePanel {
         this.slider.setAttribute('aria-orientation', orientation);
         // Dikey çubuk butonun üstünde ayrı bir cam panel; yatay çubuk kontrol grubunun içinde.
         this.slider.classList.toggle('hp-chip', orientation === 'vertical');
+        this.render();
+    }
+
+    /** `options.volumePercent` — buton içi seviye kadar dolar, tooltip'te "70%". */
+    setPercentVisible(visible: boolean): void {
+        this.percent = visible;
+        this.button.toggleAttribute('data-level-fill', visible);
+        if (!visible) {
+            delete this.button.dataset.tooltipValue;
+            delete this.slider.dataset.tooltipValue;
+        }
         this.render();
     }
 
@@ -280,6 +296,28 @@ export class VolumePanel {
         this.slider.style.setProperty('--hp-vol', String(v));
         this.slider.setAttribute('aria-valuenow', String(Math.round(v * 100)));
         this.slider.setAttribute('aria-valuetext', `${Math.round(v * 100)}%`);
+        if (this.percent) {
+            this.button.style.setProperty('--hp-vol', String(v));
+            const value = `${Math.round(v * 100)}%`;
+            this.button.toggleAttribute('data-silent', v === 0);
+            if (this.button.dataset.tooltipValue !== value) {
+                const first = this.button.dataset.tooltipValue === undefined;
+                this.button.dataset.tooltipValue = value;
+                this.slider.dataset.tooltipValue = value;
+                // Açık tooltip'in metni de güncellensin (buton ya da çubuk).
+                this.button.dispatchEvent(new Event('hp-tooltip-update', { bubbles: true }));
+                this.slider.dispatchEvent(new Event('hp-tooltip-update', { bubbles: true }));
+                // Seviye değişince dalga kısa bir süre hareket eder; sonra durur (sürekli animasyon yok).
+                if (!first) {
+                    this.button.setAttribute('data-changing', '');
+                    if (this.waveTimer) clearTimeout(this.waveTimer);
+                    this.waveTimer = setTimeout(() => {
+                        this.waveTimer = null;
+                        this.button.removeAttribute('data-changing');
+                    }, WAVE_MS);
+                }
+            }
+        }
 
         this.button.setAttribute('aria-label', v === 0 ? this.labels.unmute : this.labels.mute);
         // Rozet: sessizken ve oynarken (ya da reklam varken) — duraklatılmış bir kapak karesinde kalabalık etmesin.
@@ -311,6 +349,7 @@ export class VolumePanel {
 
     destroy(): void {
         if (this.hideTimer) clearTimeout(this.hideTimer);
+        if (this.waveTimer) clearTimeout(this.waveTimer);
         this.el.removeEventListener('mouseenter', this.openNow);
         this.el.removeEventListener('mouseleave', this.scheduleHide);
         this.el.removeEventListener('focusin', this.openNow);

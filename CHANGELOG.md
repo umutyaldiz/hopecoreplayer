@@ -17,6 +17,7 @@ During the initial 1.0.x line, new features were released as patch versions; tha
 ### Added
 
 - **`volumeSlider: 'horizontal' | 'vertical'`** — the volume slider can open next to the volume button (horizontal, the new default: it slides open on hover, with a thumb) or above it as before (vertical). Arrow keys, Home / End and the mouse wheel work in both.
+- **`volumePercent`** (on by default, `false` turns it off) — the volume button fills from the bottom up to the volume level, with a thin wave on the surface that flows briefly when the level changes and while hovered (GPU-only `transform`, paused otherwise, off with `prefers-reduced-motion`). The tooltips of the button and the volume slider show the percentage ("Mute · 70%", "Volume · 70%"), updated live while the level changes. Tooltips can now carry a value next to their label (`data-tooltip-value`).
 - **Animated volume icon** — the speaker shows one or two waves depending on the level, the waves grow slightly with the volume, a cross draws in when muted, and the icon gives a small bump when the level changes. Respects `prefers-reduced-motion`.
 
 ### Changed

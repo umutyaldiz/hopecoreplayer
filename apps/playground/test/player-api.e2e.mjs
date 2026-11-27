@@ -411,6 +411,81 @@ async function testVolumeSlider(browser) {
     }
 }
 
+async function testVolumePercent(browser) {
+    console.log('\n[8b] volumePercent: varsayılan açık (false kapatır); buton seviye kadar dolar, tooltip yüzdeyi yazar');
+    const { context, page } = await open(browser, { src: '/sample-30s.mp4' });
+    const read = () =>
+        page.evaluate(() => {
+            const s = document.getElementById('player').shadowRoot;
+            const b = s.querySelector('[part="volume-button"]');
+            const fill = getComputedStyle(b, '::after');
+            return { on: b.hasAttribute('data-level-fill'), value: b.dataset.tooltipValue ?? '', fill: fill.content !== 'none' ? b.style.getPropertyValue('--hp-vol') : '', tip: s.querySelector('[part="tooltip"]')?.textContent ?? '' };
+        });
+    const def = await read();
+    ok(def.on && /%$/.test(def.value), `varsayılanda açık (${def.value})`);
+    const setOpt = (on) =>
+        page.evaluate((on) => {
+            const el = document.getElementById('player');
+            el.options = { ...el.options, volumePercent: on };
+        }, on);
+    await setOpt(false);
+    await page.waitForFunction(() => !document.getElementById('player').shadowRoot.querySelector('[part="volume-button"]').hasAttribute('data-level-fill'));
+    const off = await read();
+    ok(!off.on && !off.value, 'volumePercent: false → dolgu / yüzde yok');
+    await setOpt(true);
+    await page.waitForFunction(() => document.getElementById('player').shadowRoot.querySelector('[part="volume-button"]').hasAttribute('data-level-fill'));
+    const set = (v, m) =>
+        page.evaluate(
+            ([v, m]) => {
+                const x = document.getElementById('player').shadowRoot.querySelector('video');
+                x.volume = v;
+                x.muted = m;
+            },
+            [v, m]
+        );
+    await set(0.7, false);
+    await page.waitForTimeout(100);
+    const a = await read();
+    ok(a.value === '70%' && Number(a.fill) === 0.7, `buton %70 dolu, değer 70% (${JSON.stringify(a)})`);
+    // Tooltip: üzerine gelince "… · 70%", açıkken ses değişince güncellenir.
+    const btn = await page.evaluate(() => {
+        const r = document.getElementById('player').shadowRoot.querySelector('[part="volume-button"]').getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    await page.mouse.move(btn.x, btn.y);
+    await page.waitForTimeout(800);
+    ok(/· 70%/.test((await read()).tip), `tooltip yüzdeyi yazıyor (${(await read()).tip})`);
+    await set(0.35, false);
+    await page.waitForTimeout(150);
+    const b = await read();
+    ok(/· 35%/.test(b.tip) && Number(b.fill) === 0.35, `ses değişince tooltip ve dolgu güncellendi (${b.tip})`);
+    // Ses çubuğunun üzerine gelince de tooltip'te yüzde.
+    const bar = await page.evaluate(() => {
+        const r = document.getElementById('player').shadowRoot.querySelector('[part="volume-slider"]').getBoundingClientRect();
+        return { x: r.left + r.width * 0.8, y: r.top + r.height / 2 };
+    });
+    await page.mouse.move(bar.x, bar.y);
+    await page.waitForTimeout(800);
+    const barTip = (await read()).tip;
+    ok(/· 35%/.test(barTip) && !/Sessize al|Mute/.test(barTip), `ses çubuğunun tooltip'inde de yüzde (${barTip})`);
+    // Dalga: ses değişince akar, ~1,2 sn sonra (fare üzerinde değilken) durur — sürekli animasyon yok.
+    const wave = () =>
+        page.evaluate(() => getComputedStyle(document.getElementById('player').shadowRoot.querySelector('[part="volume-button"]'), '::after').animationPlayState);
+    await page.mouse.move(5, 5);
+    await set(0.6, false);
+    await page.waitForTimeout(100);
+    const running = await wave();
+    await page.waitForTimeout(1600);
+    const idle = await wave();
+    ok(running === 'running' && idle === 'paused', `dalga yalnızca değişince akıyor (değişince ${running}, sonra ${idle})`);
+    await set(0.35, true);
+    await page.waitForTimeout(150);
+    const m = await read();
+    ok(m.value === '0%' && Number(m.fill) === 0, 'sessizde 0% ve boş');
+    ok(page.__errors.length === 0, `sayfa hatası yok (${page.__errors.join(' | ')})`);
+    await context.close();
+}
+
 async function testSettingsInstant(browser) {
     console.log('\n[9] Ayarlar: menü açılınca hız paneli parçası önceden yüklenir, "Hız"a basınca panel hemen açılır');
     const { context, page } = await open(browser, { src: '/sample-30s.mp4' });
@@ -521,6 +596,7 @@ async function testLoadingNoFlicker(browser) {
         await testScrub(browser);
         await testSettingsInstant(browser);
         await testVolumeSlider(browser);
+        await testVolumePercent(browser);
         await testTimeVolumeSeek(browser);
         await testQualitySubtitlesDubbing(browser);
         if (only(['chromium', 'firefox'], 'Playwright WebKit derlemesinde HLS yok')) await testHlsQuality(browser);

@@ -659,6 +659,57 @@ button.hp-chip:active {
     scale: 1.2;
 }
 
+/* options.volumePercent: buton içi alttan ses seviyesi kadar dolar (yüzde tooltip'te). */
+.hp-volume button[data-level-fill] {
+    --hp-vol-fill: color-mix(in srgb, var(--hp-color-accent, #fff) 34%, transparent);
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+}
+/* Tek parça dolgu: üstte dalga (maske, 16px'lik desen), altında düz gövde — iki parça olmadığı için dikiş yok.
+   Seviye `translate` ile, dalga hareketi `transform` ile (ikisi de GPU katmanında); yalnızca fare üzerindeyken ve seviye
+   değişince kısa süre akar, yoksa durur. */
+.hp-volume button[data-level-fill]::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: -1;
+    width: calc(100% + 16px);
+    height: calc(var(--hp-ctrl-btn-size) + 6px);
+    background: var(--hp-vol-fill);
+    -webkit-mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 6' preserveAspectRatio='none'%3E%3Cpath d='M0 3 Q4 0 8 3 T16 3 V6 H0Z'/%3E%3C/svg%3E") 0 0 / 16px 6px repeat-x,
+        linear-gradient(#000, #000) 0 5.5px / 100% 100% no-repeat;
+    mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 6' preserveAspectRatio='none'%3E%3Cpath d='M0 3 Q4 0 8 3 T16 3 V6 H0Z'/%3E%3C/svg%3E") 0 0 / 16px 6px repeat-x,
+        linear-gradient(#000, #000) 0 5.5px / 100% 100% no-repeat;
+    /* Dalganın orta çizgisi tam seviyede. */
+    translate: 0 calc((1 - var(--hp-vol, 0)) * var(--hp-ctrl-btn-size) - 3px);
+    transition:
+        translate 160ms ease,
+        opacity 160ms ease;
+    animation: hp-vol-wave 1.4s linear infinite paused;
+    pointer-events: none;
+}
+.hp-volume button[data-level-fill][data-silent]::after {
+    opacity: 0;
+}
+.hp-volume:hover button[data-level-fill]::after,
+.hp-volume button[data-level-fill][data-changing]::after {
+    animation-play-state: running;
+}
+@keyframes hp-vol-wave {
+    to {
+        transform: translateX(-16px);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .hp-volume button[data-level-fill]::after {
+        animation: none;
+    }
+}
+
 /* ── Ses ikonu: dalgalar seviyeyle görünür / büyür; sessizde söner, çarpı çizilir; seviye değişince "atar" ── */
 .hp-vol-icon svg path {
     fill: none;

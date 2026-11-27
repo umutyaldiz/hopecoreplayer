@@ -48,6 +48,7 @@ export class TooltipController {
         mountEl.addEventListener('focusin', this.onFocusIn);
         mountEl.addEventListener('focusout', this.onFocusOut);
         mountEl.addEventListener('pointerdown', this.hideNow);
+        mountEl.addEventListener('hp-tooltip-update', this.onUpdate);
     }
 
     destroy(): void {
@@ -58,6 +59,7 @@ export class TooltipController {
         this.mountEl.removeEventListener('focusin', this.onFocusIn);
         this.mountEl.removeEventListener('focusout', this.onFocusOut);
         this.mountEl.removeEventListener('pointerdown', this.hideNow);
+        this.mountEl.removeEventListener('hp-tooltip-update', this.onUpdate);
         this.el.remove();
     }
 
@@ -85,6 +87,20 @@ export class TooltipController {
         if (target.offsetParent === null && target !== document.activeElement) return null;
         return target;
     }
+
+    /** Etiket + varsa değer (`data-tooltip-value`, ör. ses "70%"). */
+    private text(target: HTMLElement, label: string): string {
+        const value = target.dataset.tooltipValue;
+        return value ? `${label} · ${value}` : label;
+    }
+
+    /** Görünen tooltip'in hedefi değerini değiştirdi (ör. ses ayarlanırken) — metin ve konum tazelenir. */
+    private readonly onUpdate = (e: Event): void => {
+        const target = e.target as HTMLElement;
+        if (target !== this.currentTarget) return;
+        this.labelEl.textContent = this.text(target, target.getAttribute('aria-label') ?? '');
+        if (this.el.style.visibility === 'visible') this.position(target);
+    };
 
     private readonly onMouseOver = (e: MouseEvent): void => {
         const target = this.matchTarget(e.target);
@@ -162,7 +178,7 @@ export class TooltipController {
         if (!label) return;
         this.currentTarget = target;
 
-        this.labelEl.textContent = label;
+        this.labelEl.textContent = this.text(target, label);
         const shortcut = target.dataset.shortcut;
         if (shortcut) {
             this.keyEl.textContent = shortcut;

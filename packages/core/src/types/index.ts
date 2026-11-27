@@ -1784,6 +1784,8 @@ export interface HopePlayerOptions {
     pipButton?: boolean;
     /** Ses çubuğu: `'horizontal'` (varsayılan, butonun yanında açılır) ya da `'vertical'` (butonun üstünde). Dokunmatikte buton yalnızca sessize alır. */
     volumeSlider?: 'horizontal' | 'vertical';
+    /** Ses seviyesi göstergesi: buton içi alttan seviye kadar dolar, tooltip'te "Sessize al · 70%". Varsayılan true; `false` kapatır. */
+    volumePercent?: boolean;
     /**
      * Document Picture-in-Picture (Chrome / Edge 116+): PiP penceresinde player'ın kendi kontrolleri, altyazı, menüler
      * ve reklam katmanı. Desteklemeyen tarayıcıda normal PiP. Varsayılan kapalı.
